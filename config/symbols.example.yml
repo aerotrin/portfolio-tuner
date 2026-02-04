@@ -1,0 +1,84 @@
+# Symbol Configuration for Portfolio Tuner
+
+# HOW TO USE THIS FILE
+# - Add or remove symbols in each group's symbols: list as needed.
+# - Only use ticker symbols supported by your data provider (Financial Modeling Prep).
+#   See: https://site.financialmodelingprep.com/developer/docs/stable/search-symbol to look up symbols.
+# - Include only symbols you have access to with your subscription.
+# - To specify an exchange, add its code to the symbol (e.g., .TO for Toronto; only .TO is supported).
+# - To comment out (disable) a symbol, start the line with #.
+# - Keep in mind: more symbols = slower refreshes.
+# - Check your subscription's API limits before adding many symbols.
+
+# Required ------------------------------
+benchmarks:
+  label: Benchmarks
+  symbols:
+    - ^GSPC
+    - ^IXIC
+    - ^DJI
+
+snapshot:
+  label: Market Snapshot
+  symbols:
+    - ^GSPC
+    - ^IXIC
+    - ^DJI
+    - ^VIX
+    - GCUSD
+    - SIUSD
+    - BZUSD
+
+# Select market ETFs labelled by theme. Do not add stocks here.
+base_market_etfs:
+  - label: Index
+    symbols:
+      - VOO
+      - QQQ
+      - DIA
+      - VTI
+      - IJH
+      - IJR
+      - VEA
+      - VWO
+
+  - label: Commodity
+    symbols:
+      - USO
+      - BNO
+      - UNG
+      - UGA
+      - CPER
+      - SLV
+      - GLD
+
+  - label: Crypto
+    symbols:
+      - IBIT
+      - ETHA
+  
+  - label: US Sectors
+    symbols:
+      - XLI
+      - XLV
+      - XLF
+      - XLRE
+      - XLE
+      - XLU
+      - XLK
+      - XLB
+      - XLP
+      - XLY
+      - XLC
+
+# Select market stocks labelled by theme. Do not add ETFs here.
+base_market_stocks:
+  - label: Magnificent 7
+    symbols:
+      - AAPL
+      - MSFT
+      - META
+      - GOOG
+      - AMZN
+      - TSLA
+      - NVDA

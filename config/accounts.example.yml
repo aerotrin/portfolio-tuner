@@ -1,0 +1,30 @@
+# Accounts Configuration for Portfolio Tuner
+
+# HOW TO USE THIS FILE
+# 
+# - List each of your brokerage or investment accounts in the 'accounts' section below.
+# - Each account must have:
+#     - 'number' (as a quoted string, e.g. "12345678")
+#     - 'owner' (full name)
+#     - 'type' (account type, e.g. TFSA, RRSP, Investment, Cash)
+#     - 'status' (either 'Registered' or 'Non-Registered')
+#     - 'benchmark' (symbol of a benchmark, must be present in symbols/benchmarks group)
+# 
+# - You can list as many accounts as you like by copying the sample entries and updating with your details.
+# - Only include accounts for which you want to track holdings in the dashboard.
+# - Do not use real account numbers if sharing this file!
+# - Application must be restarted after changing this file
+
+
+accounts:
+  - number: "12345678" # Always enclose account number in quotes
+    owner: Kendall Roy
+    type: Investment
+    status: Non-Registered # Only 'Registered' or 'Non-Registered' are supported
+    benchmark: ^IXIC # Must be a symbol that exists in the symbols/benchmarks group
+
+  - number: "87654321"
+    owner: Logan Roy
+    type: RRSP
+    status: Registered
+    benchmark: ^DJI

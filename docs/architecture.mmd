@@ -1,0 +1,31 @@
+graph TB
+    subgraph Frontend
+        UI[Streamlit UI]
+        Client[API Client]
+    end
+
+    subgraph Backend
+        API[FastAPI Backend]
+    end
+
+    subgraph DataStorage
+        DB[(SQLite Database)]
+    end
+
+    subgraph ExternalServices
+        FMP[Financial Modeling Prep API]
+        EODHD[EOD Historical Data]
+    end
+
+    subgraph MonorepoRoot
+        Config[config/ accounts and symbols]
+        Examples[examples/ sample data]
+    end
+
+    UI <-->|Account and Security Data| Client
+    Client <-->|HTTP Requests| API
+    API <-->|Read/Write| DB
+    API <-->|Fetch Market Data| FMP
+    API <-->|Fetch Market Data| EODHD
+    UI -->|CONFIG_DIR| Config
+    API -->|Optional| Examples
