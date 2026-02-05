@@ -1,8 +1,7 @@
 [project]
 name = "portfolio-tuner-backend"
 version = "1.0.0"
-description = "Portfolio Tuner Backend"
-readme = "README.md"
+description = "Portfolio Tuner Backend API"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.118.0",

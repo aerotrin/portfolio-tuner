@@ -1,10 +1,6 @@
-## About Portfolio Tuner
-
 Portfolio Tuner is a personal portfolio analytics and market-data exploration tool designed to help users visualize holdings, performance, and risk metrics using publicly available market data.
 
----
-
-## Important Notice – Not Financial Advice
+### Important Notice – Not Financial Advice
 
 Portfolio Tuner is provided for **informational and educational purposes only**. It is **not intended to be, and should not be construed as, financial, investment, tax, legal, or accounting advice**, nor as a recommendation or solicitation to buy, sell, or hold any security, asset, or financial instrument.
 
@@ -18,14 +14,11 @@ By using Portfolio Tuner, you acknowledge that you have read, understood, and ag
 
 If you require financial, investment, tax, or legal advice, you should consult a qualified and licensed professional.
 
----
-
-## Data Sources
+### Data Sources
 
 Market data is provided by third-party APIs including Financial Modeling Prep (FMP) and EODHD. Data may be delayed, incomplete, or inaccurate.
 
 Use of third-party data sources is subject to the **terms and licensing conditions of the respective providers**. Portfolio Tuner does not redistribute market data and requires users to supply their own API credentials. Users are solely responsible for ensuring that their use of any third-party data complies with applicable licensing terms, including any restrictions on commercial use.
 
-
-## Copyright
-© 2026 Aerotrin Software. All rights reserved.
+### Copyright
+© 2026 Jason Naipaul (Aerotrin Software). All rights reserved.

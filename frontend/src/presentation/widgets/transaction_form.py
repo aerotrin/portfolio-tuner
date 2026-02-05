@@ -8,7 +8,7 @@ from src.shared.dto import Currency, TransactionCreate, TransactionKind
 
 @st.dialog("Record Transaction", width="medium")
 def transaction_form(
-    account: str, account_name: str, holdings: pd.DataFrame, fx_rate: float
+    account: str, account_name: str, holdings: pd.DataFrame | None, fx_rate: float
 ) -> TransactionCreate | None:
     st.subheader(f"Add Transaction to {account_name} Account")
 
@@ -24,13 +24,17 @@ def transaction_form(
     if transaction_type == TransactionKind.BUY:
         symbol = st.selectbox(
             "Symbol",
-            holdings.index,
+            holdings.index if holdings is not None else [],
             index=None,
             accept_new_options=True,
             key="tx_symbol_buy",
         )
     elif transaction_type == TransactionKind.SELL:
-        symbol = st.selectbox("Symbol", holdings.index, key="tx_symbol_sell")
+        symbol = st.selectbox(
+            "Symbol",
+            holdings.index if holdings is not None else [],
+            key="tx_symbol_sell",
+        )
 
     # Defaults for quote-driven fields
     name: str = ""
@@ -59,7 +63,11 @@ def transaction_form(
             except ValueError:
                 currency_default = Currency.CAD
 
-        if symbol in holdings.index and transaction_type == TransactionKind.SELL:
+        if (
+            holdings is not None
+            and symbol in holdings.index
+            and transaction_type == TransactionKind.SELL
+        ):
             quantity_default = int(holdings.loc[symbol, "open_qty"])
             max_qty = quantity_default
 
@@ -180,7 +188,7 @@ def transaction_form(
             st.markdown(
                 "**Based on current portfolio value:**\n"
                 + "\n".join(
-                    f"- **{k}**: ${v * portfolio_value:,.2f} CAD"
+                    f"- **{k}**: ${v * portfolio_value:,.2f} CAD ({((v * portfolio_value) / (price * exchange_rate) if price > 0 and exchange_rate > 0 else 0):,.0f} shares)"
                     for k, v in TRADE_SIZING_GUIDE.items()
                 )
             )

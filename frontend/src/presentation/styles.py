@@ -9,6 +9,7 @@ from src.presentation.settings import (
     NO_STYLE,
     RED,
     RED_BG,
+    SPARKLINE_WIDTH,
     TAKE_PROFIT_LIMIT,
 )
 
@@ -17,7 +18,7 @@ QUOTE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
     "sparkline": st.column_config.AreaChartColumn(
-        "Price (1Y)", width="medium", color="auto"
+        "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "close": st.column_config.NumberColumn("Last", format="accounting"),
     "change": st.column_config.NumberColumn("Change", format="%+.2f"),
@@ -66,7 +67,7 @@ POSITIONS_TABLE_CONFIG = {
     "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
     "sparkline": st.column_config.AreaChartColumn(
-        "Price (1Y)", width="medium", color="auto"
+        "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "close": st.column_config.NumberColumn("Last", format="accounting"),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
@@ -163,9 +164,6 @@ def positions_table_styler(df: pd.DataFrame) -> Styler:
 PERFORMANCE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "sparkline": st.column_config.AreaChartColumn(
-        "Price (1Y)", width="medium", color="auto"
-    ),
     "trend": st.column_config.ProgressColumn(
         "Trend 5D",
         format=" ",
@@ -173,6 +171,9 @@ PERFORMANCE_TABLE_CONFIG = {
         max_value=1.0,
         width="small",
         color="auto",
+    ),
+    "sparkline": st.column_config.AreaChartColumn(
+        "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Return 1M", format="percent"),
@@ -182,7 +183,6 @@ PERFORMANCE_TABLE_CONFIG = {
     "volatility": st.column_config.NumberColumn("Volatility", format="percent"),
     "sharpe": st.column_config.NumberColumn("Sharpe", format="%.3f"),
     "sortino": st.column_config.NumberColumn("Sortino", format="%.3f"),
-    "merton": st.column_config.NumberColumn("Merton", format="%.3f"),
     "max_drawdown": st.column_config.NumberColumn("MDD", format="percent"),
     "max_drawdown_date": st.column_config.DateColumn("MDD Date", format="YYYY-MM-DD"),
     "exchange": st.column_config.TextColumn("Exchange"),

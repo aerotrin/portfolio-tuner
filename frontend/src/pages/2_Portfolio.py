@@ -264,28 +264,27 @@ with tabs[2]:
 
 
 with tabs[0]:
-    if not account_symbols:
-        st.info("No open positions found for account.")
-    else:
-        assert holdings_quotes_positions is not None
-        render_holdings_intraday(holdings_quotes_positions)
-        st.divider()
+    render_holdings_intraday(holdings_quotes_positions)
 
-        render_positions(holdings_quotes_positions)
-        record_transaction = st.button(
-            "Record Transaction", icon=":material/edit:", type="secondary"
+    st.divider()
+
+    render_positions(holdings_quotes_positions)
+
+    record_transaction = st.button(
+        "Record Transaction", icon=":material/edit:", type="secondary"
+    )
+    if record_transaction:
+        transaction_form(
+            account_number,
+            account_name,
+            holdings_quotes_positions,
+            rates["fx_rate"],
         )
-        if record_transaction:
-            transaction_form(
-                account_number,
-                account_name,
-                holdings_quotes_positions,
-                rates["fx_rate"],
-            )
 
-        st.divider()
+    st.divider()
 
-        render_holdings_allocation(holdings_quotes_positions)
+    render_holdings_allocation(holdings_quotes_positions)
+
 
 with tabs[1]:
     if not account_symbols:

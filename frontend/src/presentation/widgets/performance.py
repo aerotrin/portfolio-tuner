@@ -257,9 +257,13 @@ def render_market_movers(
         )
 
 
-def render_holdings_intraday(holdings_intraday: pd.DataFrame) -> None:
+def render_holdings_intraday(holdings_intraday: pd.DataFrame | None) -> None:
     """Intraday view for current account holdings."""
     st.markdown("#### :material/show_chart: Intraday")
+
+    if holdings_intraday is None:
+        st.info("No holdings found")
+        return
 
     fig = render_treemap_intraday(
         holdings_intraday, top_label="Holdings", has_weight=True
@@ -276,10 +280,10 @@ def render_holdings_intraday(holdings_intraday: pd.DataFrame) -> None:
         )
 
 
-def render_holdings_allocation(holdings_intraday: pd.DataFrame) -> None:
+def render_holdings_allocation(holdings_intraday: pd.DataFrame | None) -> None:
     """Allocation breakdown for current holdings."""
     st.markdown("#### :material/pie_chart: Allocation")
-    # Get cash weight and add to the allocation chart with symbol "CASH"
+
     cash_value = st.session_state["portfolio_summary"]["cash_balance"]
     cash_weight = st.session_state["portfolio_summary"]["cash_pct"]
     cash_row = {
@@ -294,7 +298,9 @@ def render_holdings_allocation(holdings_intraday: pd.DataFrame) -> None:
         "industry": "N/A Cash",
         "weight": cash_weight,
     }
-    allocation_df = holdings_intraday.copy()
+    allocation_df = (
+        holdings_intraday.copy() if holdings_intraday is not None else pd.DataFrame()
+    )
     cash_df = pd.DataFrame([cash_row])
     cash_df.index = ["CASH"]
     allocation_df = pd.concat([allocation_df, cash_df])
@@ -359,9 +365,13 @@ def render_footer(metrics: pd.DataFrame, bars: pd.DataFrame) -> None:
         )
 
 
-def render_positions(holdings_intraday: pd.DataFrame) -> None:
+def render_positions(holdings_intraday: pd.DataFrame | None) -> None:
     """Positions breakdown for current holdings (size + table)."""
     st.markdown("#### :material/table_rows: Positions")
+
+    if holdings_intraday is None:
+        st.info("No holdings found")
+        return
 
     # Metrics
     with st.container(border=True, horizontal=True):

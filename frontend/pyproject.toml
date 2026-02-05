@@ -1,8 +1,7 @@
 [project]
 name = "portfolio-tuner-frontend"
-version = "1.0.0"
-description = "Streamlit frontend dashboard for portfolio-tuner API - portfolio analytics, market data visualization, and holdings management"
-readme = "README.md"
+version = "1.2.1"
+description = "Streamlit frontend dashboard for Portfolio Tuner API"
 requires-python = ">=3.13"
 dependencies = [
     "humanize>=4.14.0",
