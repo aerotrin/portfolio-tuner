@@ -73,35 +73,45 @@ def render_risk_chart(
     # ----------------------------
     # Main scatter: period vol vs period return
     # ----------------------------
+    point_selector = alt.selection_point(
+        name="symbols",
+        fields=["symbol"],
+    )  # TODO: Feature is coming in v1.55. See https://github.com/streamlit/streamlit/issues/8643
+
     base = alt.Chart(securities_plot)
 
-    securities_circles = base.mark_circle().encode(
-        x=alt.X(
-            "volatility_period:Q",
-            title=f"Volatility ({horizon_label})",
-            axis=alt.Axis(format=".0%"),
-        ),
-        y=alt.Y(
-            f"{horizon_metric}:Q",
-            title=f"{horizon_label} Return",
-            axis=alt.Axis(format=".0%"),
-        ),
-        color=alt.Color("symbol:N", title="Symbol", legend=None),
-        size=alt.Size("sharpe_period:Q", title="Sharpe", legend=None),
-        tooltip=[
-            alt.Tooltip("symbol:N"),
-            alt.Tooltip("name:N"),
-            alt.Tooltip(
-                f"{horizon_metric}:Q", title=f"{horizon_label} return", format=".0%"
+    securities_circles = (
+        base.mark_circle()
+        .encode(
+            x=alt.X(
+                "volatility_period:Q",
+                title=f"Volatility ({horizon_label})",
+                axis=alt.Axis(format=".0%"),
             ),
-            alt.Tooltip(
-                "volatility_period:Q", title=f"Vol ({horizon_label})", format=".0%"
+            y=alt.Y(
+                f"{horizon_metric}:Q",
+                title=f"{horizon_label} Return",
+                axis=alt.Axis(format=".0%"),
             ),
-            alt.Tooltip("volatility:Q", title="Vol (annualized)", format=".0%"),
-            alt.Tooltip(
-                "sharpe_period:Q", title=f"Sharpe ({horizon_label})", format=".2f"
-            ),
-        ],
+            color=alt.Color("symbol:N", title="Symbol", legend=None),
+            size=alt.Size("sharpe_period:Q", title="Sharpe", legend=None),
+            tooltip=[
+                alt.Tooltip("symbol:N"),
+                alt.Tooltip("name:N"),
+                alt.Tooltip(
+                    f"{horizon_metric}:Q", title=f"{horizon_label} return", format=".0%"
+                ),
+                alt.Tooltip(
+                    "volatility_period:Q", title=f"Vol ({horizon_label})", format=".0%"
+                ),
+                alt.Tooltip("volatility:Q", title="Vol (annualized)", format=".0%"),
+                alt.Tooltip(
+                    "sharpe_period:Q", title=f"Sharpe ({horizon_label})", format=".2f"
+                ),
+            ],
+            fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3)),
+        )
+        .add_params(point_selector)
     )
 
     securities_labels = base.mark_text(dx=10, dy=0, align="left", fontSize=10).encode(
@@ -221,4 +231,4 @@ def render_risk_chart(
 
         layers += [bench_circle, bench_label, vline, hline]
 
-    return alt.layer(*layers).properties(height=HEIGHT_RISK_RETURN_CHART)
+    return alt.layer(*layers).properties(height=HEIGHT_RISK_RETURN_CHART).interactive()

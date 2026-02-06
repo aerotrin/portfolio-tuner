@@ -103,3 +103,39 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
                 chart_type="area",
                 height=HEIGHT_MARKET_SNAPSHOT,
             )
+
+
+def render_portfolio_kpis(df: pd.DataFrame) -> None:
+    """Render the portfolio KPIs."""
+    st.metric(
+        "Current P/L CAD",
+        f"${df['gain'].sum():,.2f}",
+        f"{df['intraday_change'].sum():+,.2f}",
+    )
+    st.metric(
+        "Day Best Performer CAD",
+        f"{df['symbol'][df['intraday_change'].idxmax()]}",
+        f"{df['intraday_change'].max():+,.2f}",
+    )
+    st.metric(
+        "Day Worst Performer CAD",
+        f"{df['symbol'][df['intraday_change'].idxmin()]}",
+        f"{df['intraday_change'].min():+,.2f}",
+    )
+    st.metric(
+        "Total FX Exposure",
+        f"${df['fx_exposure'].sum():,.2f}",
+    )
+    st.metric("No. of Holdings", f"{len(df)}")
+    st.metric(
+        "Average Days Open",
+        f"{df['days_held'].mean():.0f}",
+    )
+
+
+def render_health_bar(df: pd.DataFrame) -> None:
+    """Render the health bar."""
+    g = df["gain_pct"].gt(0).sum()
+    l = df["gain_pct"].lt(0).sum()
+    health_bar = "🟩" * g + "🟥" * l
+    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {g}, ↓ {l})")

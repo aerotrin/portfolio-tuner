@@ -3,25 +3,20 @@ import logging
 import pandas as pd
 import streamlit as st
 
+
 from src.presentation.widgets.kpis import (
     render_account_summary,
     render_market_snapshot,
     render_status_strip,
 )
-from src.presentation.widgets.performance import (
-    render_correlation_matrix,
-    render_holdings_allocation,
-    render_holdings_intraday,
-    render_holdings_performance,
-    render_positions,
-)
-from src.presentation.widgets.reports import (
+from src.presentation.tabs.intraday import render_portfolio_intraday
+from src.presentation.tabs.performance import render_performance_view
+from src.presentation.tabs.reports import (
     render_cash_flows_table,
     render_closed_lots_table,
     render_reports_header,
     render_transactions_table,
 )
-from src.presentation.widgets.transaction_form import transaction_form
 from src.services.streamlit_data import (
     load_account_records,
     load_account_summary,
@@ -251,7 +246,7 @@ if account_symbols:
 
 
 # --- Tabs (Reports first; Positions and Performance use prebuilt holdings data when present)
-tabs = st.tabs(["Positions", "Performance", "Reports"])
+tabs = st.tabs(["Open Positions", "Performance", "Reports"])
 
 with tabs[2]:
     if not transactions.empty:
@@ -264,27 +259,9 @@ with tabs[2]:
 
 
 with tabs[0]:
-    render_holdings_intraday(holdings_quotes_positions)
-
-    st.divider()
-
-    render_positions(holdings_quotes_positions)
-
-    record_transaction = st.button(
-        "Record Transaction", icon=":material/edit:", type="secondary"
+    render_portfolio_intraday(
+        holdings_quotes_positions, account_number, account_name, rates["fx_rate"]
     )
-    if record_transaction:
-        transaction_form(
-            account_number,
-            account_name,
-            holdings_quotes_positions,
-            rates["fx_rate"],
-        )
-
-    st.divider()
-
-    render_holdings_allocation(holdings_quotes_positions)
-
 
 with tabs[1]:
     if not account_symbols:
@@ -297,14 +274,16 @@ with tabs[1]:
             and portfolio_close_norm is not None
             and portfolio_correlation_matrix is not None
         )
-        render_holdings_performance(
-            holdings_metrics,
-            holdings_close_norm,
-            portfolio_metrics,
-            portfolio_close_norm,
-            benchmark_metrics,
-            benchmark_close_norm,
-            risk_free_rate=rates["rf_rate"],
-        )
 
-        render_correlation_matrix(portfolio_correlation_matrix)
+        render_performance_view(
+            metrics_eod=holdings_metrics,
+            close_norm_eod=holdings_close_norm,
+            benchmark_metrics_eod=benchmark_metrics,
+            benchmark_close_norm_eod=benchmark_close_norm,
+            risk_free_rate=rates["rf_rate"],
+            key_prefix="holdings",
+            portfolio_metrics_eod=portfolio_metrics,
+            portfolio_close_norm_eod=portfolio_close_norm,
+            correlation_matrix=portfolio_correlation_matrix,
+            use_group_filter=False,
+        )

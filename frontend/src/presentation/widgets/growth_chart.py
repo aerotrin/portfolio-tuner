@@ -1,6 +1,6 @@
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
 import streamlit as st
 
 
@@ -66,6 +66,16 @@ def render_growth_chart(*args: pd.DataFrame) -> go.Figure:
             rangeslider=dict(visible=False),
             type="date",
         )
+    )
+
+    # Add gridlines
+    fig.update_yaxes(
+        showgrid=True,
+    )
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=1,
+        dtick="M3",
     )
 
     return fig

@@ -4,12 +4,9 @@ from typing import Any
 import streamlit as st
 
 from src.presentation.settings import MOVER_SHOW_COUNT
+from src.presentation.tabs.intraday import render_market_intraday
+from src.presentation.tabs.performance import render_performance_view
 from src.presentation.widgets.kpis import render_market_snapshot, render_status_strip
-from src.presentation.widgets.performance import (
-    render_market_intraday,
-    render_market_movers,
-    render_market_performance,
-)
 from src.services.streamlit_data import (
     load_security_data_eod,
     load_security_data_intraday,
@@ -260,21 +257,17 @@ with tabs[0]:  # ETF Movers
         key_prefix="market-etf",
     )
 
-    render_market_movers(
-        etfs_quotes,
-        type="ETF",
-    )
-
 
 with tabs[1]:  # ETF Performance
-    render_market_performance(
-        etfs_metrics,
-        market_close_norm,
-        benchmark_metrics,
-        benchmark_close_norm,
+    render_performance_view(
+        metrics_eod=etfs_metrics,
+        close_norm_eod=market_close_norm,
+        benchmark_metrics_eod=benchmark_metrics,
+        benchmark_close_norm_eod=benchmark_close_norm,
         risk_free_rate=rates["rf_rate"],
-        groups=etf_groups,
         key_prefix="market-etf",
+        use_group_filter=True,
+        groups=etf_groups,
     )
 
 with tabs[2]:  # Stock Movers
@@ -285,18 +278,15 @@ with tabs[2]:  # Stock Movers
         key_prefix="market-stock",
     )
 
-    render_market_movers(
-        stocks_quotes,
-        type="stock",
-    )
 
 with tabs[3]:  # Stock Performance
-    render_market_performance(
-        stocks_metrics,
-        market_close_norm,
-        benchmark_metrics,
-        benchmark_close_norm,
+    render_performance_view(
+        metrics_eod=stocks_metrics,
+        close_norm_eod=market_close_norm,
+        benchmark_metrics_eod=benchmark_metrics,
+        benchmark_close_norm_eod=benchmark_close_norm,
         risk_free_rate=rates["rf_rate"],
-        groups=stock_groups,
         key_prefix="market-stock",
+        use_group_filter=True,
+        groups=stock_groups,
     )

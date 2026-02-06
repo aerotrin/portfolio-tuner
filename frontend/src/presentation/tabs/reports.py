@@ -185,9 +185,6 @@ def render_cash_flows_table(
         else:
             st.info("No income records found.")
 
-        # TODO: Split into Canadian Dividend Income and T5 Foreign Income and Taxes Paid
-        # For latter: Gross Foreign Income (3A); Foreign Tax Paid (6A)
-
         # --- Inflows/Outflows ------------------------------------------------------------------
         st.markdown("###### Inflows/Outflows")
         sub_df = df_filtered[df_filtered["transaction_type"].isin(CASH_TRANSACTIONS)]

@@ -29,7 +29,6 @@ QUOTE_TABLE_CONFIG = {
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
     "exchange": st.column_config.TextColumn("Exchange"),
-    # "currency": st.column_config.TextColumn("Currency"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
 }
 
@@ -79,30 +78,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
     "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
-    # "intraday_contribution": st.column_config.NumberColumn(
-    #     "Day P/L Contrib. %", format="percent"
-    # ),
-    # "pnl_contribution": st.column_config.NumberColumn(
-    #     "P/L Contrib. %", format="percent"
-    # ),
-    # "distance_to_breakeven": st.column_config.NumberColumn(
-    #     "B/E Dist %", format="percent"
-    # ),
     "security_type": st.column_config.TextColumn("Type"),
-    # "option_osi": st.column_config.TextColumn("Option OSI"),
-    # "option_strike": st.column_config.NumberColumn(
-    #     "Option Strike", format="accounting"
-    # ),
-    # "option_expiry": st.column_config.DateColumn("Option Expiry", format="YYYY-MM-DD"),
-    # "option_value": st.column_config.NumberColumn("Option Value", format="accounting"),
-    # "option_change": st.column_config.NumberColumn(
-    #     "Option Change", format="accounting"
-    # ),  # not implemented yet
-    # "option_change_pct": st.column_config.NumberColumn(
-    #     "Option Change %", format="percent"
-    # ),  # not implemented yet
-    # "option_dte": st.column_config.NumberColumn("Option DTE", format="%.3f"),
-    # "fx_rate": st.column_config.NumberColumn("FX Rate", format="%.3f"),
     "open_date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
     "last_updated": st.column_config.DatetimeColumn("Last Updated", format="localized"),
@@ -110,16 +86,18 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
 
 
 POSITIONS_OPTION_TABLE_CONFIG = {
-    "holding_category": st.column_config.TextColumn("Contract"),
-    "symbol": st.column_config.TextColumn("Symbol"),
+    "option_osi": st.column_config.TextColumn("OSI"),
     "name": st.column_config.TextColumn("Name", width="medium"),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "holding_category": st.column_config.TextColumn("Right"),
     "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "option_value": st.column_config.NumberColumn("Value ⚠️", format="accounting"),
+    "option_value": st.column_config.NumberColumn(
+        "Intrinsic Value ⚠️", format="accounting"
+    ),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
@@ -131,26 +109,7 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     "close": st.column_config.NumberColumn("Last", format="accounting"),
     "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
     "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
-    # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
-    "option_osi": st.column_config.TextColumn("OSI"),
-    # "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
-    # "intraday_contribution": st.column_config.NumberColumn(
-    #     "Day P/L Contrib. %", format="percent"
-    # ),
-    # "pnl_contribution": st.column_config.NumberColumn(
-    #     "P/L Contrib. %", format="percent"
-    # ),
-    # "distance_to_breakeven": st.column_config.NumberColumn(
-    #     "B/E Dist %", format="percent"
-    # ),
     "security_type": st.column_config.TextColumn("Type"),
-    # "option_change": st.column_config.NumberColumn(
-    #     "Option Change", format="accounting"
-    # ),  # not implemented yet
-    # "option_change_pct": st.column_config.NumberColumn(
-    #     "Option Change %", format="percent"
-    # ),  # not implemented yet
-    # "fx_rate": st.column_config.NumberColumn("FX Rate", format="%.3f"),
     "open_date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
     "last_updated": st.column_config.DatetimeColumn("Last Updated", format="localized"),
@@ -244,18 +203,6 @@ PERFORMANCE_TABLE_CONFIG = {
     "exchange": st.column_config.TextColumn("Exchange"),
     "currency": st.column_config.TextColumn("Currency"),
     "last_updated": st.column_config.DatetimeColumn("Last Updated"),
-    # "type": st.column_config.TextColumn("Type"),
-    # "marketCap": st.column_config.NumberColumn("Market Cap", format="compact"),
-    # "beta": st.column_config.NumberColumn("Beta", format="%.3f"),
-    # "lastDividend": st.column_config.NumberColumn("Last Dividend", format="accounting"),
-    # "averageVolume": st.column_config.NumberColumn("Avg Volume", format="compact"),
-    # "yearHigh": st.column_config.NumberColumn("52 Wk High", format="accounting"),
-    # "yearLow": st.column_config.NumberColumn("52 Wk Low", format="accounting"),
-    # "country": st.column_config.TextColumn("Country"),
-    # "sector": st.column_config.TextColumn("Sector"),
-    # "industry": st.column_config.TextColumn("Industry"),
-    # "isin": st.column_config.TextColumn("ISIN"),
-    # "cusip": st.column_config.TextColumn("CUSIP"),
 }
 
 
@@ -388,7 +335,6 @@ CASH_FLOWS_TABLE_CONFIG = {
     "transaction_type": st.column_config.TextColumn("Type"),
     "market": st.column_config.TextColumn("Market"),
     "description": st.column_config.TextColumn("Description"),
-    # "quantity": st.column_config.NumberColumn("Quantity", format="compact"),
     "currency": st.column_config.TextColumn("Currency"),
     "amount": st.column_config.NumberColumn("Amount", format="accounting"),
 }
