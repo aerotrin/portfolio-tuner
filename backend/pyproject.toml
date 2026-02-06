@@ -1,6 +1,6 @@
 [project]
 name = "portfolio-tuner-backend"
-version = "1.0.1"
+version = "1.0.2"
 description = "Portfolio Tuner Backend API"
 requires-python = ">=3.13"
 dependencies = [

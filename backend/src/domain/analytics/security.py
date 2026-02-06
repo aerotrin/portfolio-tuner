@@ -27,7 +27,7 @@ def compute_portfolio_timeseries_indicators(
         return [pd.DataFrame()]
     close_matrix = _calc_portfolio_weighted_close(securities, weights)
 
-    daily = close_matrix.pct_change()
+    daily = close_matrix.pct_change(fill_method=None)
     ema10 = close_matrix.ewm(span=10, adjust=False).mean()
     ema50 = close_matrix.ewm(span=50, adjust=False).mean()
     ema100 = close_matrix.ewm(span=100, adjust=False).mean()
@@ -70,7 +70,11 @@ def _calc_portfolio_weighted_close(
         W = W.reshape(1, -1)  # ensure 2D array
     if W.shape[1] != len(C.columns):  # number of assets, n match number of weights
         raise ValueError("weights columns must equal number of assets")
-    W = W / W.sum(axis=1, keepdims=True)  # row-normalize weights
+    row_sums = W.sum(axis=1, keepdims=True)
+    # Avoid divide-by-zero: use safe divisor then set zero-sum rows to equal weights
+    safe_sums = np.where(row_sums > 0, row_sums, 1.0)
+    W = W / safe_sums
+    W = np.where(row_sums > 0, W, 1.0 / W.shape[1])
     M = (W @ C.T.values).T  # (p × n) @ (n × d) → (p × d); transpose back to (d × p)
 
     n_portfolios = W.shape[0]  # p
@@ -97,7 +101,7 @@ def _calc_asset_close_matrix(securities: List["Security"]) -> pd.DataFrame:
 
 def compute_correlation_matrix(securities: List["Security"]) -> pd.DataFrame:
     C = _calc_asset_close_matrix(securities)
-    R = C.pct_change()
+    R = C.pct_change(fill_method=None)
     R = R.dropna(how="all")
     return R.corr()
 
@@ -114,7 +118,7 @@ def compute_timeseries_indicators(df: pd.DataFrame) -> pd.DataFrame:
         {
             "symbol": df["symbol"],
             "close": close,
-            "daily_return": close.pct_change(),
+            "daily_return": close.pct_change(fill_method=None),
             "ema10": close.ewm(span=10, adjust=False).mean(),
             "ema50": close.ewm(span=50, adjust=False).mean(),
             "ema100": close.ewm(span=100, adjust=False).mean(),
