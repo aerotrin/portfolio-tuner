@@ -152,8 +152,8 @@ class Portfolio:
                             option_change_pct = 0.0
                         else:
                             option_expired = False
-                            option_value = float(close) - float(
-                                position.option_strike or 0.0
+                            option_value = max(
+                                float(close) - float(position.option_strike or 0.0), 0.0
                             )  # TODO: change to option_price when available
                             option_change = (
                                 0.0  # TODO: change to option_change when available
@@ -192,8 +192,8 @@ class Portfolio:
                             option_change_pct = 0.0
                         else:
                             option_expired = False
-                            option_value = float(position.option_strike or 0.0) - float(
-                                close
+                            option_value = max(
+                                float(position.option_strike or 0.0) - float(close), 0.0
                             )  # TODO: change to option_price when available
                             option_change = (
                                 0.0  # TODO: change to option_change when available
