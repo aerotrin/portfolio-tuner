@@ -29,7 +29,7 @@ class QuoteDB(Base):
     currency = mapped_column(String)
     volume = mapped_column(Float)
     change = mapped_column(Float)
-    changePercent = mapped_column(Float)
+    change_percent = mapped_column(Float)
     previousClose = mapped_column(Float)
     timestamp = mapped_column(DateTime)
 

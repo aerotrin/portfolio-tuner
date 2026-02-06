@@ -55,10 +55,15 @@ def _prep_transactions(transactions: pd.DataFrame) -> pd.DataFrame:
 
 
 def _none_if_na(value):
-    """Normalize pandas NaN/NaT/None to plain None for JSON-safe serialization."""
+    """Normalize pandas NaN/NaT/None and string 'None' to plain None for JSON-safe serialization."""
     try:
         # pd.isna handles: None, NaN, NaT
-        return None if pd.isna(value) else value
+        if pd.isna(value):
+            return None
+        # str(None) yields "None" when keys are built with str(); normalize it
+        if value == "None":
+            return None
+        return value
     except Exception:
         logger.error(f"Error in _none_if_na: {value}", exc_info=True)
         return value

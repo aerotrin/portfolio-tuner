@@ -149,8 +149,8 @@ class Holding(BaseModel):
     currency: str
     volume: float
     change: float
-    changePercent: float
-    previousClose: float
+    change_percent: float
+    previous_close: float
     timestamp: datetime = Field(default_factory=datetime.now)
     holding_category: Category
     security_type: SecurityType
@@ -159,18 +159,20 @@ class Holding(BaseModel):
     option_osi: Optional[str] = None
     option_strike: Optional[float] = None
     option_expiry: Optional[date] = None
+    option_value: Optional[float] = None
+    option_change: Optional[float] = None
+    option_change_pct: Optional[float] = None
     option_dte: Optional[int] = None
     option_expired: Optional[bool] = None
     open_qty: int
-    acb_per_sh: float
     breakeven_price: float
     book_value: float = 0.0
     market_value: float = 0.0
     gain: float
     gain_pct: float
     weight: float
-    intraday_gain: float
-    intraday_gain_pct: float
+    intraday_change: float
+    intraday_change_pct: float
     distance_to_breakeven: float
     fx_exposure: float
     pnl_contribution: float

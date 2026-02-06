@@ -370,7 +370,7 @@ class FMPClient(MarketDataProvider):
             currency="USD",
             volume=item.get("volume", 0.0),
             change=item.get("change", 0.0),
-            changePercent=item.get("changePercentage", 0.0) / 100.0,
+            change_percent=item.get("changePercentage", 0.0) / 100.0,
             previousClose=item.get("previousClose", ""),
             timestamp=item.get("timestamp", datetime.now()),
         )

@@ -21,6 +21,8 @@ from src.domain.entities.security import (
 
 logger = logging.getLogger(__name__)
 
+MULTIPLIER = 100
+
 
 class CorrelationEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True, from_attributes=True)
@@ -105,15 +107,38 @@ class Portfolio:
                 security = self.securities[position.symbol]
                 if security:
                     close = security.quote.close
+                    change = security.quote.change
+                    change_percent = security.quote.change_percent
+
+                    option_value = None
+                    option_change = None
+                    option_change_pct = None
+
                     currency = security.quote.currency
-                    days_held = (date.today() - position.open_date).days
                     fx_rate = self.fx_rate if currency == "USD" else 1.0
 
-                    # market value calculations
+                    days_held = (date.today() - position.open_date).days
                     option_dte = None
                     option_expired = None
+
+                    # value calculations
+                    intraday_change = 0.0
+                    intraday_change_pct = 0.0
+                    market_value = 0.0
+                    breakeven_price = 0.0
+                    distance_to_breakeven = 0.0
                     if position.category == Category.EQUITY:
                         market_value = close * position.open_qty * fx_rate
+                        breakeven_price = (
+                            position.acb_per_sh / fx_rate if fx_rate > 0.0 else 0.0
+                        )
+                        distance_to_breakeven = (
+                            (close - breakeven_price) / breakeven_price
+                            if breakeven_price != 0.0
+                            else 0.0
+                        )
+                        intraday_change = change * position.open_qty * fx_rate
+                        intraday_change_pct = change_percent
                     elif position.category == Category.CALL_OPTION:
                         option_dte = (
                             (position.option_expiry - date.today()).days
@@ -122,15 +147,38 @@ class Portfolio:
                         )
                         if option_dte and option_dte < 0:
                             option_expired = True
-                            market_value = 0.0
+                            option_value = 0.0
+                            option_change = 0.0
+                            option_change_pct = 0.0
                         else:
                             option_expired = False
-                            market_value = (
-                                (float(close) - float(position.option_strike or 0.0))
-                                * position.open_qty
-                                * 100
-                                * fx_rate
+                            option_value = float(close) - float(
+                                position.option_strike or 0.0
+                            )  # TODO: change to option_price when available
+                            option_change = (
+                                0.0  # TODO: change to option_change when available
                             )
+                            option_change_pct = (
+                                0.0  # TODO: change to option_change_pct when available
+                            )
+
+                            market_value = (
+                                option_value * position.open_qty * MULTIPLIER * fx_rate
+                            )
+                            breakeven_price = (
+                                position.acb_per_sh / (fx_rate * MULTIPLIER)
+                                if fx_rate > 0.0
+                                else 0.0
+                            )
+                            distance_to_breakeven = (
+                                (option_value - breakeven_price) / breakeven_price
+                                if breakeven_price != 0.0
+                                else 0.0
+                            )
+                            intraday_change = (
+                                option_change * position.open_qty * MULTIPLIER * fx_rate
+                            )
+                            intraday_change_pct = option_change_pct
                     elif position.category == Category.PUT_OPTION:
                         option_dte = (
                             (position.option_expiry - date.today()).days
@@ -139,17 +187,42 @@ class Portfolio:
                         )
                         if option_dte and option_dte < 0:
                             option_expired = True
-                            market_value = 0.0
+                            option_value = 0.0
+                            option_change = 0.0
+                            option_change_pct = 0.0
                         else:
                             option_expired = False
-                            market_value = (
-                                (float(position.option_strike or 0.0) - float(close))
-                                * position.open_qty
-                                * 100
-                                * fx_rate
+                            option_value = float(position.option_strike or 0.0) - float(
+                                close
+                            )  # TODO: change to option_price when available
+                            option_change = (
+                                0.0  # TODO: change to option_change when available
                             )
+                            option_change_pct = (
+                                0.0  # TODO: change to option_change_pct when available
+                            )
+
+                            market_value = (
+                                option_value * position.open_qty * MULTIPLIER * fx_rate
+                            )
+                            breakeven_price = (
+                                position.acb_per_sh / (fx_rate * MULTIPLIER)
+                                if fx_rate > 0.0
+                                else 0.0
+                            )
+                            distance_to_breakeven = (
+                                (option_value - breakeven_price) / breakeven_price
+                                if breakeven_price != 0.0
+                                else 0.0
+                            )
+                            intraday_change = (
+                                option_change * position.open_qty * MULTIPLIER * fx_rate
+                            )
+                            intraday_change_pct = option_change_pct
                     else:
                         market_value = position.book_value  # Fixed income
+                        breakeven_price = 0.0
+                        distance_to_breakeven = 0.0
 
                     # total gain
                     gain = market_value - position.book_value
@@ -157,28 +230,6 @@ class Portfolio:
                     gain_pct = (
                         (market_value - position.book_value) / position.book_value
                         if position.book_value != 0.0
-                        else 0.0
-                    )
-
-                    # intraday change
-                    intraday_gain = (
-                        (close - security.quote.previousClose)
-                        * position.open_qty
-                        * fx_rate
-                    )
-
-                    intraday_gain_pct = security.quote.changePercent
-
-                    # other metrics
-                    breakeven_price = (
-                        position.acb_per_sh / fx_rate
-                        if fx_rate != 0.0
-                        else position.acb_per_sh
-                    )
-
-                    distance_to_breakeven = (
-                        (close - breakeven_price) / breakeven_price
-                        if breakeven_price != 0.0
                         else 0.0
                     )
 
@@ -199,8 +250,8 @@ class Portfolio:
                         currency=currency,
                         volume=security.quote.volume,
                         change=security.quote.change,
-                        changePercent=security.quote.changePercent,
-                        previousClose=security.quote.previousClose,
+                        change_percent=security.quote.change_percent,
+                        previous_close=security.quote.previousClose,
                         timestamp=security.quote.timestamp,
                         holding_category=position.category,
                         security_type=security.profile.type,
@@ -209,18 +260,20 @@ class Portfolio:
                         open_date=position.open_date,
                         option_expiry=position.option_expiry,
                         option_strike=position.option_strike,
+                        option_value=option_value,
+                        option_change=option_change,
+                        option_change_pct=option_change_pct,
                         option_dte=option_dte,
                         option_expired=option_expired,
                         open_qty=position.open_qty,
-                        acb_per_sh=position.acb_per_sh,
                         breakeven_price=breakeven_price,
                         book_value=position.book_value,
                         market_value=market_value,
                         gain=gain,
                         gain_pct=gain_pct,
                         weight=0.0,
-                        intraday_gain=intraday_gain,
-                        intraday_gain_pct=intraday_gain_pct,
+                        intraday_change=intraday_change,
+                        intraday_change_pct=intraday_change_pct,
                         distance_to_breakeven=distance_to_breakeven,
                         fx_exposure=fx_exposure,
                         pnl_contribution=0.0,
@@ -245,14 +298,16 @@ class Portfolio:
         self.return_on_value = (
             self.unrealized_gain / self.total_value if self.total_value else 0.0
         )
-        self.pnl_intraday = sum(h.intraday_gain for h in self.holdings.values())
+        self.pnl_intraday = sum(h.intraday_change for h in self.holdings.values())
 
         # Calculate weight by market value of each holding in the portfolio
         if self.total_value > 0:
             for holding in self.holdings.values():
                 holding.weight = holding.market_value / self.total_value
                 holding.pnl_contribution = holding.gain / self.total_value
-                holding.intraday_contribution = holding.intraday_gain / self.total_value
+                holding.intraday_contribution = (
+                    holding.intraday_change / self.total_value
+                )
 
     def _build_indicators(self) -> None:
         weights = [h.weight for h in self.holdings.values()]

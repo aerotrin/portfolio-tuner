@@ -103,7 +103,7 @@ class EODHDClient(MarketDataProvider):
             currency=self.stock_dir_tsx[s]["Currency"],
             volume=data.get("volume", 0.0),
             change=data.get("change", 0.0),
-            changePercent=data.get("change_p", 0.0) / 100.0,
+            change_percent=data.get("change_p", 0.0) / 100.0,
             previousClose=data.get("previousClose", 0.0),
             timestamp=data.get("timestamp", datetime.now()),
         )

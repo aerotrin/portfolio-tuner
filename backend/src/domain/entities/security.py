@@ -57,7 +57,7 @@ class Quote(BaseModel):
     currency: str = Field()
     volume: float = Field()
     change: float = Field()
-    changePercent: float = Field()
+    change_percent: float = Field()
     previousClose: float = Field()
     timestamp: datetime = Field()
 
