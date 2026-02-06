@@ -58,4 +58,4 @@ RED = "#F44336"  # softer red for dark mode
 GREEN_BG = "rgba(76,175,80,0.08)"
 RED_BG = "rgba(244,67,54,0.08)"
 NO_STYLE = ""  # fallback style
-SPARKLINE_WIDTH = 120
+SPARKLINE_WIDTH = 150

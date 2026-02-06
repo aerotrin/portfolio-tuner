@@ -22,9 +22,9 @@ QUOTE_TABLE_CONFIG = {
     ),
     "close": st.column_config.NumberColumn("Last", format="accounting"),
     "change": st.column_config.NumberColumn("Change", format="%+.2f"),
-    "changePercent": st.column_config.NumberColumn("Change %", format="percent"),
+    "change_percent": st.column_config.NumberColumn("Change %", format="percent"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
-    "previousClose": st.column_config.NumberColumn("Prev. Close", format="accounting"),
+    "previous_close": st.column_config.NumberColumn("Prev. Close", format="accounting"),
     "open": st.column_config.NumberColumn("Open", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
@@ -37,7 +37,7 @@ QUOTE_TABLE_CONFIG = {
 def quote_table_styler(df: pd.DataFrame) -> Styler:
     VALUE_COLS = [
         "change",
-        "changePercent",
+        "change_percent",
     ]
 
     def style_row(row):
@@ -60,7 +60,7 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
     return df.style.apply(style_row, axis=1)
 
 
-POSITIONS_TABLE_CONFIG = {
+POSITIONS_EQUITY_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
@@ -72,8 +72,8 @@ POSITIONS_TABLE_CONFIG = {
     "close": st.column_config.NumberColumn("Last", format="accounting"),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "changePercent": st.column_config.NumberColumn("Day %", format="percent"),
-    "intraday_gain": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
+    "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
+    "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
@@ -89,11 +89,67 @@ POSITIONS_TABLE_CONFIG = {
     #     "B/E Dist %", format="percent"
     # ),
     "security_type": st.column_config.TextColumn("Type"),
-    "option_osi": st.column_config.TextColumn("Option OSI"),
-    "option_strike": st.column_config.NumberColumn("Option Strike", format="%.3f"),
-    "option_expiry": st.column_config.DateColumn("Option Expiry", format="YYYY-MM-DD"),
-    "option_dte": st.column_config.NumberColumn("Option DTE", format="%.3f"),
-    # "acb_per_sh": st.column_config.NumberColumn("Unit ACB CAD", format="accounting"),
+    # "option_osi": st.column_config.TextColumn("Option OSI"),
+    # "option_strike": st.column_config.NumberColumn(
+    #     "Option Strike", format="accounting"
+    # ),
+    # "option_expiry": st.column_config.DateColumn("Option Expiry", format="YYYY-MM-DD"),
+    # "option_value": st.column_config.NumberColumn("Option Value", format="accounting"),
+    # "option_change": st.column_config.NumberColumn(
+    #     "Option Change", format="accounting"
+    # ),  # not implemented yet
+    # "option_change_pct": st.column_config.NumberColumn(
+    #     "Option Change %", format="percent"
+    # ),  # not implemented yet
+    # "option_dte": st.column_config.NumberColumn("Option DTE", format="%.3f"),
+    # "fx_rate": st.column_config.NumberColumn("FX Rate", format="%.3f"),
+    "open_date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
+    "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
+    "last_updated": st.column_config.DatetimeColumn("Last Updated", format="localized"),
+}
+
+
+POSITIONS_OPTION_TABLE_CONFIG = {
+    "holding_category": st.column_config.TextColumn("Contract"),
+    "symbol": st.column_config.TextColumn("Symbol"),
+    "name": st.column_config.TextColumn("Name", width="medium"),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
+    "sparkline": st.column_config.AreaChartColumn(
+        "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
+    ),
+    "option_value": st.column_config.NumberColumn("Value ⚠️", format="accounting"),
+    "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
+    "currency": st.column_config.TextColumn("Currency"),
+    "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
+    "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
+    "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
+    "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
+    "option_expiry": st.column_config.DateColumn("Expiry", format="YYYY-MM-DD"),
+    "option_strike": st.column_config.NumberColumn("Strike", format="accounting"),
+    "close": st.column_config.NumberColumn("Last", format="accounting"),
+    "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
+    "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
+    # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
+    "option_osi": st.column_config.TextColumn("OSI"),
+    # "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
+    # "intraday_contribution": st.column_config.NumberColumn(
+    #     "Day P/L Contrib. %", format="percent"
+    # ),
+    # "pnl_contribution": st.column_config.NumberColumn(
+    #     "P/L Contrib. %", format="percent"
+    # ),
+    # "distance_to_breakeven": st.column_config.NumberColumn(
+    #     "B/E Dist %", format="percent"
+    # ),
+    "security_type": st.column_config.TextColumn("Type"),
+    # "option_change": st.column_config.NumberColumn(
+    #     "Option Change", format="accounting"
+    # ),  # not implemented yet
+    # "option_change_pct": st.column_config.NumberColumn(
+    #     "Option Change %", format="percent"
+    # ),  # not implemented yet
     # "fx_rate": st.column_config.NumberColumn("FX Rate", format="%.3f"),
     "open_date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
@@ -103,8 +159,8 @@ POSITIONS_TABLE_CONFIG = {
 
 def positions_table_styler(df: pd.DataFrame) -> Styler:
     VALUE_COLS = [
-        "changePercent",
-        "intraday_gain",
+        "change_percent",
+        "intraday_change",
     ]
 
     POSITION_COLS = [

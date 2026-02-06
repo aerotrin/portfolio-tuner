@@ -205,10 +205,10 @@ def create_mover_groups(
                 )
             )
 
-        # Top gainers (by changePercent descending)
+        # Top gainers (by change_percent descending)
         gainers = (
-            sub_quotes[sub_quotes["changePercent"] > 0]
-            .sort_values(by="changePercent", ascending=False)
+            sub_quotes[sub_quotes["change_percent"] > 0]
+            .sort_values(by="change_percent", ascending=False)
             .head(MOVER_SHOW_COUNT)
             .index.tolist()
         )
@@ -220,10 +220,10 @@ def create_mover_groups(
                 )
             )
 
-        # Top losers (by changePercent ascending)
+        # Top losers (by change_percent ascending)
         losers = (
-            sub_quotes[sub_quotes["changePercent"] < 0]
-            .sort_values(by="changePercent", ascending=True)
+            sub_quotes[sub_quotes["change_percent"] < 0]
+            .sort_values(by="change_percent", ascending=True)
             .head(MOVER_SHOW_COUNT)
             .index.tolist()
         )

@@ -97,7 +97,7 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
             c[i].metric(
                 f"{row['name']}",
                 value=f"${row['close']:,.2f}",
-                delta=f"{row['changePercent']:+.2%}",
+                delta=f"{row['change_percent']:+.2%}",
                 border=True,
                 chart_data=row["sparkline"],
                 chart_type="area",

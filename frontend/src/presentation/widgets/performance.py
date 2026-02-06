@@ -7,7 +7,8 @@ import streamlit as st
 from src.presentation.settings import MOVER_SHOW_COUNT, RETURN_HORIZONS, HEIGHT_TREEMAP
 from src.presentation.styles import (
     PERFORMANCE_TABLE_CONFIG,
-    POSITIONS_TABLE_CONFIG,
+    POSITIONS_EQUITY_TABLE_CONFIG,
+    POSITIONS_OPTION_TABLE_CONFIG,
     QUOTE_TABLE_CONFIG,
     performance_table_styler,
     positions_table_styler,
@@ -46,7 +47,7 @@ def render_treemap_intraday(
         + "<br>"
         + df["change"].map("{:+,.2f}".format)
         + " "
-        + df["changePercent"].map("{:.2%}".format)
+        + df["change_percent"].map("{:.2%}".format)
         + "<br>"
         + df["volume"].map("Vol. {:,.0f}".format)
         + "<br>"
@@ -56,7 +57,7 @@ def render_treemap_intraday(
     base_config = {
         "data_frame": df,
         "path": [px.Constant(top_label), df.index],
-        "color": "changePercent",
+        "color": "change_percent",
         "color_continuous_scale": "RdYlGn",
         "color_continuous_midpoint": 0,
         "custom_data": ["display_text"],
@@ -98,17 +99,30 @@ def render_treemap_positions(df: pd.DataFrame) -> go.Figure:
 
     height = _size_treemap(df.shape[0])
 
-    df["display_text"] = (
+    common = (
         df["market_value"].map("{:,.2f} CAD".format)
         + "<br>"
         + df["gain"].map("{:+,.2f}".format)
         + " "
-        + df["gain_pct"].map("{:.2%}".format)
+        + df["gain_pct"].map("{:+.2%}".format)
         + "<br>"
+    )
+    equity_text = (
+        common
         + df["open_qty"].astype(str)
-        + " shares"
-        + "<br>"
-        + df["days_held"].map("{:,.0f} days open".format)
+        + " shares<br>"
+        + df["days_held"].map("{:,.0f} days held".format)
+    )
+
+    contracts_text = (
+        common
+        + df["open_qty"].astype(str)
+        + " contracts<br>"
+        + df["option_dte"].map("{:,.0f} DTE".format)
+    )
+
+    df["display_text"] = np.where(
+        df["holding_category"] == "Equity", equity_text, contracts_text
     )
 
     fig = px.treemap(
@@ -213,13 +227,13 @@ def render_market_movers(
 
     volume_df = sub_df.sort_values(by="volume", ascending=False).head(MOVER_SHOW_COUNT)
     up_df = (
-        sub_df[sub_df["changePercent"] > 0]
-        .sort_values(by="changePercent", ascending=False)
+        sub_df[sub_df["change_percent"] > 0]
+        .sort_values(by="change_percent", ascending=False)
         .head(MOVER_SHOW_COUNT)
     )
     down_df = (
-        sub_df[sub_df["changePercent"] < 0]
-        .sort_values(by="changePercent", ascending=True)
+        sub_df[sub_df["change_percent"] < 0]
+        .sort_values(by="change_percent", ascending=True)
         .head(MOVER_SHOW_COUNT)
     )
 
@@ -310,7 +324,7 @@ def render_holdings_allocation(holdings_intraday: pd.DataFrame | None) -> None:
         st.markdown("##### By Instrument")
         st.bar_chart(
             allocation_df,
-            x="security_type",
+            x="holding_category",
             y_label="Held as",
             y="market_value",
             x_label="Market Value CAD",
@@ -378,17 +392,17 @@ def render_positions(holdings_intraday: pd.DataFrame | None) -> None:
         st.metric(
             "Current P/L CAD",
             f"${holdings_intraday['gain'].sum():,.2f}",
-            f"{holdings_intraday['intraday_gain'].sum():+,.2f}",
+            f"{holdings_intraday['intraday_change'].sum():+,.2f}",
         )
         st.metric(
             "Day Best Performer CAD",
-            f"{holdings_intraday['symbol'][holdings_intraday['intraday_gain'].idxmax()]}",
-            f"{holdings_intraday['intraday_gain'].max():+,.2f}",
+            f"{holdings_intraday['symbol'][holdings_intraday['intraday_change'].idxmax()]}",
+            f"{holdings_intraday['intraday_change'].max():+,.2f}",
         )
         st.metric(
             "Day Worst Performer CAD",
-            f"{holdings_intraday['symbol'][holdings_intraday['intraday_gain'].idxmin()]}",
-            f"{holdings_intraday['intraday_gain'].min():+,.2f}",
+            f"{holdings_intraday['symbol'][holdings_intraday['intraday_change'].idxmin()]}",
+            f"{holdings_intraday['intraday_change'].min():+,.2f}",
         )
         st.metric(
             "Total FX Exposure",
@@ -411,13 +425,33 @@ def render_positions(holdings_intraday: pd.DataFrame | None) -> None:
     st.caption(f"{health_bar}   |   {len(holdings_intraday)} positions (↑ {g}, ↓ {l})")
 
     # Table
-    st.dataframe(
-        positions_table_styler(holdings_intraday),
-        hide_index=True,
-        column_order=POSITIONS_TABLE_CONFIG.keys(),
-        column_config=POSITIONS_TABLE_CONFIG,
-        key="table-holdings-open",
-    )
+    equity_df = holdings_intraday[holdings_intraday["holding_category"] == "Equity"]
+    if not equity_df.empty:
+        st.markdown("###### Stocks & ETFs")
+        st.dataframe(
+            positions_table_styler(equity_df),
+            hide_index=True,
+            column_order=POSITIONS_EQUITY_TABLE_CONFIG.keys(),
+            column_config=POSITIONS_EQUITY_TABLE_CONFIG,
+            key="table-holdings-open",
+        )
+
+    option_df = holdings_intraday[
+        holdings_intraday["holding_category"].isin(["Call Option", "Put Option"])
+    ]
+    st.markdown("###### Options")
+    if not option_df.empty:
+        st.dataframe(
+            positions_table_styler(option_df),
+            hide_index=True,
+            column_order=POSITIONS_OPTION_TABLE_CONFIG.keys(),
+            column_config=POSITIONS_OPTION_TABLE_CONFIG,
+            key="table-holdings-open-option-osi",
+        )
+
+        st.caption(
+            "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
+        )
 
 
 def _render_performance_view(
