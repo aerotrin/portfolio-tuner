@@ -23,7 +23,7 @@ class SecurityType(Enum):
 
 
 class Profile(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
 
     symbol: str = Field(default="")
     name: Optional[str] = Field(default=None)
