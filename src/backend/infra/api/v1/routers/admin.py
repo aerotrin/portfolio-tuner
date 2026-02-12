@@ -168,6 +168,7 @@ def _raise_http_error(exc: Exception) -> None:
 def get_global_rates(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get current rates (i.e. risk-free rate, CAD/USD exchange rate)."""
     try:
         rates = market_man.get_global_rates()
         if rates is None:
@@ -188,7 +189,7 @@ async def import_account(
     file: UploadFile = File(...),
     account_man: AccountManager = Depends(get_account_manager),
 ):
-    """Import transactions from an uploaded xlsx file. Must contain a sheet with a name that matches the account's number. Pass account_id (UUID)."""
+    """Import account transactions from an uploaded xlsx file."""
     if file.filename and not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -214,6 +215,7 @@ async def import_account(
 def refresh_rates(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Refresh global rates from external data providers."""
     try:
         market_man.refresh_global_rates()
         return  # 202 Accepted
@@ -226,6 +228,7 @@ def refresh_security(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Refresh market data (quote, bars, profile) for a single security by symbol."""
     try:
         market_man.refresh_security(symbol)
         return  # 202 Accepted
@@ -321,9 +324,7 @@ async def refresh_securities_async(
     intraday: bool = False,
     bg_task: BackgroundTasks = None,
 ):
-    """
-    Trigger a background refresh of securities. Added cooldown prevents hammering.
-    """
+    """Trigger a batch refresh of market data for multiple securities by symbol."""
     global _LAST_REFRESH
 
     if bg_task is None:
@@ -388,6 +389,7 @@ async def refresh_securities_async(
     response_model=RefreshJobResponse,
 )
 def get_refresh_job(job_id: str):
+    """Get the status, progress, and result of a batch securities refresh job."""
     job = _JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")

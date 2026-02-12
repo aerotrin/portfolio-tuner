@@ -97,6 +97,7 @@ def _raise_http_error(exc: Exception) -> None:
 def get_available_symbols(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """List all security symbols that have cached data in the system."""
     try:
         symbols = market_man.get_available_symbols()
         return symbols
@@ -112,6 +113,7 @@ def get_security_quote(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get the latest quote (price, volume, etc.) for a security by symbol."""
     try:
         quote = market_man.get_security_quote(symbol) or market_man.fetch_quote(symbol)
 
@@ -137,6 +139,7 @@ def get_security_profile(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get the company profile (name, sector, description, etc.) for a security."""
     try:
         profile = market_man.get_security_profile(symbol)
         if not profile:
@@ -161,6 +164,7 @@ def get_security_bars(
     end_date: date | None = Query(default=None, description="YYYY-MM-DD"),
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get OHLCV historical bars for a security. Provide both start_date and end_date, or neither."""
     # If one date is supplied, require the other (prevents ambiguous range behavior)
     if (start_date is None) ^ (end_date is None):
         raise HTTPException(
@@ -187,6 +191,7 @@ def get_security_metrics(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get performance metrics (returns, volatility, etc.) for a security."""
     try:
         metrics = market_man.get_security_metrics(symbol)
         if not metrics:
@@ -209,6 +214,7 @@ def get_security_indicators(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get timeseries indicators (e.g. price history) for a security."""
     try:
         indicators = market_man.get_security_indicators(symbol)
         if not indicators:
@@ -231,6 +237,7 @@ def get_security_batch_quotes(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get quotes for multiple securities in a batch request."""
     try:
         return market_man.get_security_quotes(payload.symbols)
     except Exception as e:
@@ -245,6 +252,7 @@ def get_security_batch_profiles(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get profiles for multiple securities in a batch request."""
     try:
         return market_man.get_security_profiles(payload.symbols)
     except Exception as e:
@@ -259,6 +267,7 @@ def get_security_batch_bars(
     payload: BatchBarsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get OHLCV bars for multiple securities in a batch request."""
     if (payload.start_date is None) ^ (payload.end_date is None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -293,6 +302,7 @@ def get_security_batch_metrics(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get performance metrics for multiple securities in a batch request."""
     try:
         return market_man.get_security_batch_metrics(payload.symbols)
     except Exception as e:
@@ -307,6 +317,7 @@ def get_security_batch_indicators(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
+    """Get timeseries indicators for multiple securities in a batch request."""
     try:
         return market_man.get_security_batch_indicators(payload.symbols)
     except Exception as e:

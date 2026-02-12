@@ -83,3 +83,8 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(admin_routers.router, prefix=config.api_prefix)
 app.include_router(accounts_routers.router, prefix=config.api_prefix)
 app.include_router(securities_routers.router, prefix=config.api_prefix)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
