@@ -5,14 +5,14 @@ from typing import Callable, cast
 
 import pytest
 
-from backend.domain.entities.account import (
+from src.backend.domain.entities.account import (
     Category,
     Currency,
     OpenLot,
     Transaction,
     TransactionKind,
 )
-from backend.domain.entities.security import (
+from src.backend.domain.entities.security import (
     Bar,
     GlobalRates,
     Profile,
