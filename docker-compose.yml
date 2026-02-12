@@ -3,8 +3,8 @@ version: "3.8"
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/backend/Dockerfile
     container_name: portfolio-tuner-backend
     ports:
       - "8000:8000"
@@ -24,13 +24,12 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
-
     restart: unless-stopped
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/frontend/Dockerfile
     container_name: portfolio-tuner-frontend
     ports:
       - "8501:8501"
@@ -38,10 +37,7 @@ services:
       - .env
     environment:
       BACKEND_URL: http://backend:8000
-      CONFIG_DIR: /app/config
       DEBUG: false
-    volumes:
-      - ./config:/app/config:ro
     depends_on:
       backend:
         condition: service_healthy

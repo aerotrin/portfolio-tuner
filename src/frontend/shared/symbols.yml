@@ -1,0 +1,522 @@
+# Symbol Configuration for Portfolio Tuner
+
+# HOW TO USE THIS FILE
+# - Add or remove symbols in each group's symbols: list as needed.
+# - Only use ticker symbols supported by your data provider (Financial Modeling Prep).
+#   See: https://site.financialmodelingprep.com/developer/docs/stable/search-symbol to look up symbols.
+# - Include only symbols you have access to with your subscription.
+# - To specify an exchange, add its code to the symbol (e.g., .TO for Toronto; only .TO is supported).
+# - To comment out (disable) a symbol, start the line with #.
+# - Keep in mind: more symbols = slower refreshes.
+# - Check your subscription's API limits before adding many symbols.
+
+# Required ------------------------------
+benchmarks:
+  label: Benchmarks
+  symbols:
+    - ^GSPC
+    - ^IXIC
+    - ^DJI
+    - XIC.TO  # substitute for ^GSPTSE
+    - ^VIX
+    # - ^RUT
+    # - ^GSPTSE
+    # - ^FTSE
+    # - ^N225
+    # - ^HSI
+    # - ^STOXX50E
+
+snapshot:
+  label: Market Snapshot
+  symbols:
+    - ^GSPC
+    - ^IXIC
+    - ^DJI
+    - XIC.TO  # substitute for ^GSPTSE
+    - ^VIX
+    - GCUSD
+    - SIUSD
+    - BZUSD
+
+# Select market ETFs labelled by theme. Do not add stocks here.
+base_market_etfs:
+  - label: Core
+    symbols:
+      - SPY
+      - VFV.TO
+      - XDIV
+      - VTI
+      - QQQ
+      - SPYV
+      - HDV
+      - RSP
+      - IJH
+      - IJR
+      - DIA
+      - XIC.TO
+      - XIU.TO
+      - XMD.TO
+      - XCS.TO
+      - VDY.TO
+      - VEA
+      - VWO
+
+  - label: Commodity
+    symbols:
+      - GLD
+      - SLV
+      - DBC
+      - USO
+      - UNG
+      - DBB
+      - DBA
+      - URA
+      - URNM
+      # - BNO
+      # - TAGS
+      # - REMX
+      # - LIT
+      # - CPER
+      # - PPLT
+      # - PALL
+      # - CORN
+      # - WEAT
+      # - SOYB
+      # - CANE
+
+  - label: Crypto
+    symbols:
+      - IBIT
+      - ETHA
+
+  - label: Forex
+    symbols:
+      - FXA
+      - FXB
+      - FXC
+      - FXE
+      - FXF
+      - FXY
+      - UDN
+      - UUP
+
+  - label: US Sectors
+    symbols:
+      - XLI
+      - XLV
+      - XLF
+      - XLRE
+      - XLE
+      - XLU
+      - XLK
+      - XLB
+      - XLP
+      - XLY
+      - XLC
+
+  - label: US Industries
+    symbols:
+      - XSD
+      - XSW
+      - XTL
+      - XRT
+      - XHB
+      - XBI
+      - XPH
+      - XHE
+      - XHS
+      - XOP
+      - XES
+      - XAR
+      - XTN
+      - XME
+      - KBE
+      - KRE
+      - KCE
+      - KIE
+  
+  - label: Canada Sectors
+    symbols:
+      - XEG.TO
+      - XST.TO
+      - XRE.TO
+      - XMA.TO
+      - XIT.TO
+      - XFN.TO
+      - XUT.TO
+
+  - label: Developed Market
+    symbols:
+      - EWA
+      - EWO
+      - EWK
+      - EDEN
+      - IEUR
+      - EZU
+      - EFNL
+      - EWQ
+      - EWG
+      - EWH
+      - EIRL
+      - EIS
+      - EWI
+      - EWJ
+      - EWN
+      - ENZL
+      - ENOR
+      - IPAC
+      - EWS
+      - EWP
+      - EWD
+      - EWL
+      - EWUS
+      - EWU
+
+  - label: Emerging Market
+    symbols:
+      - EWZ
+      - ECH
+      - MCHI
+      - FXI
+      - ECNS
+      - TCHI
+      - EEMA
+      - INDA
+      - INDY
+      - SMIN
+      - EIDO
+      - KWT
+      - ILF
+      - EWM
+      - EWW
+      - EPU
+      - EPHE
+      - EPOL
+      - QAT
+      - KSA
+      - EZA
+      - EWY
+      - EWT
+      - THD
+      - TUR
+      - UAE
+      - XEC.TO
+      - XEM.TO
+      - XCH.TO
+      - XID.TO
+
+# Select market stocks labelled by theme. Do not add ETFs here.
+base_market_stocks:
+  - label: Magnificent 7
+    symbols:
+      - AAPL
+      - MSFT
+      - META
+      - GOOG
+      - AMZN
+      - TSLA
+      - NVDA
+
+  - label: NASDAQ 100
+    symbols:
+      - AAPL
+      - ABNB
+      - ADBE
+      - ADI
+      - ADP
+      - ADSK
+      - AEP
+      - AMAT
+      - AMD
+      - AMGN  
+      - AMZN
+      - APP
+      - ARM
+      - ASML
+      - AVGO
+      - AXON
+      - AZN
+      - BIIB
+      - BKNG
+      - BKR
+      - CCEP
+      - CDNS
+      - CDW
+      - CEG
+      - CHTR
+      - CMCSA
+      - COST
+      - CPRT
+      - CRWD
+      - CSCO
+      - CSGP
+      - CSX
+      - CTAS
+      - CTSH
+      - DASH
+      - DDOG
+      - DXCM
+      - EA
+      - EXC
+      - FANG
+      - FAST
+      - FTNT
+      - GEHC
+      - GFS
+      - GILD
+      - GOOG
+      - GOOGL 
+      - HON
+      - IDXX
+      - INTC
+      - INTU
+      - ISRG
+      - KDP
+      - KHC
+      - KLAC
+      - LIN
+      - LRCX
+      - LULU
+      - MAR
+      - MCHP
+      - MDLZ
+      - MELI
+      - META
+      - MNST
+      - MRVL
+      - MSFT
+      - MSTR
+      - MU
+      - NFLX
+      - NVDA
+      - NXPI
+      - ODFL
+      - "ON"
+      - ORLY
+      - PANW
+      - PAYX
+      - PCAR
+      - PDD
+      - PEP
+      - PLTR
+      - PYPL
+      - QCOM
+      - REGN
+      - ROP
+      - ROST
+      - SBUX
+      - SHOP
+      - SNPS
+      - TEAM
+      - TMUS
+      - TRI
+      - TSLA
+      - TTD
+      - TTWO
+      - TXN
+      - VRSK
+      - VRTX
+      - WBD
+      - WDAY
+      - XEL
+      - ZS
+
+  - label: S&P 100
+    symbols:
+      - AAPL
+      - ABBV
+      - ABT
+      - ACN
+      - ADBE
+      - AIG
+      - AMD
+      - AMGN
+      - AMT
+      - AMZN
+      - AVGO
+      - AXP
+      - BA
+      - BAC
+      - BK
+      - BKNG
+      - BLK
+      - BMY
+      - BRK-B
+      - C
+      - CAT
+      - CL
+      - CMCSA
+      - COF
+      - COP
+      - COST
+      - CRM
+      - CSCO
+      - CVS
+      - CVX
+      - DE
+      - DHR
+      - DIS
+      - DUK
+      - EMR
+      - FDX
+      - GD
+      - GE
+      - GILD
+      - GM
+      - GOOG
+      - GOOGL
+      - GS
+      - HD
+      - HON
+      - IBM
+      - INTC
+      - INTU
+      - ISRG
+      - JNJ
+      - JPM
+      - KO
+      - LIN
+      - LLY
+      - LMT
+      - LOW
+      - MA
+      - MCD
+      - MDLZ
+      - MDT
+      - MET
+      - META
+      - MMM
+      - MO
+      - MRK
+      - MS
+      - MSFT
+      - NEE
+      - NFLX
+      - NKE
+      - NOW
+      - NVDA
+      - ORCL
+      - PEP
+      - PFE
+      - PG
+      - PLTR
+      - PM
+      - PYPL
+      - QCOM
+      - RTX
+      - SBUX
+      - SCHW
+      - SO
+      - SPG
+      - T
+      - TGT
+      - TMO
+      - TMUS
+      - TSLA
+      - TXN
+      - UBER
+      - UNH
+      - UNP
+      - UPS
+      - USB
+      - V
+      - VZ
+      - WFC
+      - WMT
+      - XOM
+
+  - label: Dow 30
+    symbols:
+      - AAPL
+      - AMGN
+      - AMZN
+      - AXP
+      - BA
+      - CAT
+      - CRM
+      - CSCO
+      - CVX
+      - DIS
+      - GS
+      - HD
+      - HON
+      - IBM
+      - JNJ
+      - JPM
+      - KO
+      - MCD
+      - MMM
+      - MRK
+      - MSFT
+      - NKE
+      - NVDA
+      - PG
+      - SHW
+      - TRV
+      - UNH
+      - V
+      - VZ
+      - WMT
+
+  - label: TSX 60
+    symbols:
+      - ABX.TO
+      - AEM.TO
+      - AQN.TO
+      - ATD.TO
+      - BAM.TO
+      - BCE.TO
+      - BIP-UN.TO
+      - BMO.TO
+      - BN.TO
+      - BNS.TO
+      - CAE.TO
+      - CAR-UN.TO
+      - CCL-B.TO
+      - CCO.TO
+      - CM.TO
+      - CNQ.TO
+      - CNR.TO
+      - CP.TO
+      - CSU.TO
+      - CTC-A.TO
+      - CVE.TO
+      - DOL.TO
+      - EMA.TO
+      - ENB.TO
+      - FM.TO
+      - FNV.TO
+      - FSV.TO
+      - FTS.TO
+      - GIB-A.TO
+      - GIL.TO
+      - H.TO
+      - IFC.TO
+      - IMO.TO
+      - K.TO
+      - L.TO
+      - MFC.TO
+      - MG.TO
+      - MRU.TO
+      - NA.TO
+      - NTR.TO
+      - OTEX.TO
+      - POW.TO
+      - PPL.TO
+      - QSR.TO
+      - RCI-B.TO
+      - RY.TO
+      - SAP.TO
+      - SHOP.TO
+      - SLF.TO
+      - SU.TO
+      - T.TO
+      - TD.TO
+      - TECK-B.TO
+      - TOU.TO
+      - TRI.TO
+      - TRP.TO
+      - WCN.TO
+      - WN.TO
+      - WPM.TO
+      - WSP.TO

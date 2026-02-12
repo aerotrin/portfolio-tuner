@@ -181,9 +181,8 @@ cython_debug/
 .cursorindexingignore
 
 # Portfolio tuner
-config/accounts.yml
-config/symbols.yml
 uv.lock
 .uv/
-backend/data/
+src/data
 *.bat
+engineering/

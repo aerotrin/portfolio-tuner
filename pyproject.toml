@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["frontend", "backend"]
+members = ["src/frontend", "src/backend"]
