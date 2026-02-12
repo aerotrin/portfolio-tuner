@@ -97,6 +97,7 @@ class TimeseriesIndicator(BaseModel):
     macd_signal_9: float = Field()
     macd_histogram: float = Field()
     rsi: float = Field()
+    rsi_signal_5: float = Field()
 
 
 class PerformanceMetric(BaseModel):

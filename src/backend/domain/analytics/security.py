@@ -34,6 +34,7 @@ def compute_portfolio_timeseries_indicators(
     macd_signal_9 = macd_12_26.ewm(span=9, adjust=False).mean()
     macd_histogram = macd_12_26 - macd_signal_9
     rsi = _calc_rsi(close_matrix, RSI_WINDOW)
+    rsi_signal_5 = rsi.rolling(window=5).mean()
     close_norm = close_matrix / close_matrix.iloc[0] * HYP_GROWTH_START
 
     out = []
@@ -50,6 +51,7 @@ def compute_portfolio_timeseries_indicators(
         df["macd_signal_9"] = macd_signal_9[portfolio]
         df["macd_histogram"] = macd_histogram[portfolio]
         df["rsi"] = rsi[portfolio]
+        df["rsi_signal_5"] = rsi_signal_5[portfolio]
         df["close_norm"] = close_norm[portfolio]
         out.append(df)
 
@@ -73,6 +75,7 @@ def compute_timeseries_indicators(df: pd.DataFrame) -> pd.DataFrame:
     macd_signal_9 = macd_12_26.ewm(span=9, adjust=False).mean()
     macd_histogram = macd_12_26 - macd_signal_9
     rsi = _calc_rsi(close, RSI_WINDOW)
+    rsi_signal_5 = rsi.rolling(window=5).mean()
     close_norm = close / close.iloc[0] * HYP_GROWTH_START
 
     out = pd.DataFrame(
@@ -87,6 +90,7 @@ def compute_timeseries_indicators(df: pd.DataFrame) -> pd.DataFrame:
             "macd_signal_9": macd_signal_9,
             "macd_histogram": macd_histogram,
             "rsi": rsi,
+            "rsi_signal_5": rsi_signal_5,
             "close_norm": close_norm,
         }
     )
@@ -160,7 +164,7 @@ def compute_performance_metrics(
         return pd.DataFrame()
     daily: pd.Series = df["daily_return"]
     close: pd.Series = df["close"]
-    rsi: pd.Series = df["rsi"]
+    rsi_signal_5: pd.Series = df["rsi_signal_5"]
 
     short_term_returns = _calc_short_term_returns(daily, SHORT_TERM_WINDOWS)
     annualized_return = _calc_annualized_return(daily, TRADING_DAYS)
@@ -168,7 +172,7 @@ def compute_performance_metrics(
     sharpe = _calc_sharpe_daily(daily, rf_rate, TRADING_DAYS)
     sortino = _calc_sortino(daily, rf_rate, TRADING_DAYS)
     max_drawdown, max_drawdown_date = _calc_max_drawdown(daily)
-    rsi_slope = _calc_rsi_slope(rsi)
+    rsi_slope = _calc_rsi_slope(rsi_signal_5)
     flags = _calc_flags(close, NEAR_HIGH_LOW_PCT, TRADING_DAYS)
     symbol_val: Any = df["symbol"].iloc[0]
     out = {
@@ -345,8 +349,8 @@ def _calc_max_drawdown(ret: pd.Series) -> Tuple[float, Optional[pd.Timestamp]]:
     return (mdd, mdd_date)
 
 
-def _calc_rsi_slope(rsi: pd.Series) -> float:
+def _calc_rsi_slope(rsi_signal_5: pd.Series) -> float:
     """1-bar RSI slope in normalized units [-1, 1]."""
-    if len(rsi) < 2:
+    if len(rsi_signal_5) < 2:
         return np.nan
-    return float((rsi.iloc[-1] - rsi.iloc[-2]) / 100.0)
+    return float((rsi_signal_5.iloc[-1] - rsi_signal_5.iloc[-2]) / 100.0)
