@@ -1,9 +1,13 @@
 from datetime import date, datetime
 from types import SimpleNamespace
 
-from backend.application.use_cases.portfolio import PortfolioManager
-from backend.domain.entities.account import OpenLot
-from backend.domain.entities.security import GlobalRates, PerformanceMetric, TimeseriesIndicator
+from src.backend.application.use_cases.portfolio import PortfolioManager
+from src.backend.domain.entities.account import OpenLot
+from src.backend.domain.entities.security import (
+    GlobalRates,
+    PerformanceMetric,
+    TimeseriesIndicator,
+)
 
 
 class FakeMarketDataManager:
@@ -26,7 +30,9 @@ class FakeAccountManager:
 
     def build_account(self, account_number: str, account_name: str | None = None):
         self.calls.append((account_number, account_name))
-        return SimpleNamespace(open_positions=self.positions, cash_balance=self.cash_balance)
+        return SimpleNamespace(
+            open_positions=self.positions, cash_balance=self.cash_balance
+        )
 
 
 def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatch):
@@ -61,7 +67,9 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
             captured["securities"] = securities
             captured["rates"] = rates
 
-    monkeypatch.setattr("backend.application.use_cases.portfolio.Portfolio", CapturingPortfolio)
+    monkeypatch.setattr(
+        "src.backend.application.use_cases.portfolio.Portfolio", CapturingPortfolio
+    )
 
     manager = PortfolioManager(market_man=fake_market, account_man=fake_account)
     manager.build_portfolio_from_account("ACC-1", account_name="Main")
@@ -118,8 +126,14 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
         correlation_matrix={"labels": ["AAPL"], "values": [[1.0]]},
     )
 
-    manager = PortfolioManager(market_man=FakeMarketDataManager(), account_man=FakeAccountManager([]))
-    monkeypatch.setattr(manager, "build_portfolio_from_account", lambda *_args, **_kwargs: stub_portfolio)
+    manager = PortfolioManager(
+        market_man=FakeMarketDataManager(), account_man=FakeAccountManager([])
+    )
+    monkeypatch.setattr(
+        manager,
+        "build_portfolio_from_account",
+        lambda *_args, **_kwargs: stub_portfolio,
+    )
 
     summary = manager.get_portfolio_summary("ACC-1")
     assert summary.id == "ACC-1"
@@ -127,12 +141,17 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
     assert manager.get_portfolio_holdings("ACC-1") is stub_portfolio.holdings
     assert manager.get_portfolio_indicators("ACC-1") == [indicator]
     assert manager.get_portfolio_metrics("ACC-1") == metric
-    assert manager.get_portfolio_correlation_matrix("ACC-1") == {"labels": ["AAPL"], "values": [[1.0]]}
+    assert manager.get_portfolio_correlation_matrix("ACC-1") == {
+        "labels": ["AAPL"],
+        "values": [[1.0]],
+    }
 
 
 def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
     fake_market = FakeMarketDataManager()
-    manager = PortfolioManager(market_man=fake_market, account_man=FakeAccountManager([]))
+    manager = PortfolioManager(
+        market_man=fake_market, account_man=FakeAccountManager([])
+    )
 
     captured = {}
 
@@ -156,7 +175,8 @@ def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
             }
 
     monkeypatch.setattr(
-        "backend.application.use_cases.portfolio.PortfolioSimulator", FakePortfolioSimulator
+        "src.backend.application.use_cases.portfolio.PortfolioSimulator",
+        FakePortfolioSimulator,
     )
 
     result = manager.run_simulated_portfolio(symbols=["AAPL", "MSFT"], n_p=123)

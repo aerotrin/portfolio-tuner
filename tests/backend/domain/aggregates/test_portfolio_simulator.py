@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backend.domain.aggregates.portfolio_simulator import PortfolioSimulator
-from backend.domain.aggregates.security import Security
-from backend.domain.entities.security import Bar, GlobalRates, Profile, Quote
+from src.backend.domain.aggregates.portfolio_simulator import PortfolioSimulator
+from src.backend.domain.aggregates.security import Security
+from src.backend.domain.entities.security import Bar, GlobalRates, Profile, Quote
 
 
 def _build_security(symbol: str, prices: list[float], rates: GlobalRates) -> Security:
@@ -73,7 +73,12 @@ def test_run_simulator_produces_expected_artifacts() -> None:
     assert simulator.weight_matrix.shape == (n_p, len(securities))
     assert len(simulator.timeseries) == n_p
     assert not simulator.performance.empty
-    assert list(simulator.performance.index) == ["PORTF", "PORTF_1", "PORTF_2", "PORTF_3"]
+    assert list(simulator.performance.index) == [
+        "PORTF",
+        "PORTF_1",
+        "PORTF_2",
+        "PORTF_3",
+    ]
 
 
 def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None:

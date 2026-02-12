@@ -3,10 +3,15 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 import pytest
 
-from backend.domain.aggregates.portfolio import Portfolio
-from backend.domain.aggregates.security import Security
-from backend.domain.entities.account import Category, OpenLot
-from backend.domain.entities.security import GlobalRates, Profile, Quote, SecurityType
+from src.backend.domain.aggregates.portfolio import Portfolio
+from src.backend.domain.aggregates.security import Security
+from src.backend.domain.entities.account import Category, OpenLot
+from src.backend.domain.entities.security import (
+    GlobalRates,
+    Profile,
+    Quote,
+    SecurityType,
+)
 
 
 def _make_security(
@@ -51,7 +56,7 @@ def _make_security(
 
 
 def _stub_portfolio_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
-    import backend.domain.aggregates.portfolio as portfolio_module
+    import src.backend.domain.aggregates.portfolio as portfolio_module
 
     monkeypatch.setattr(
         portfolio_module,
@@ -86,10 +91,12 @@ def _stub_portfolio_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_portfolio_build_holdings_summary_and_contributions(monkeypatch: pytest.MonkeyPatch):
+def test_portfolio_build_holdings_summary_and_contributions(
+    monkeypatch: pytest.MonkeyPatch,
+):
     _stub_portfolio_analytics(monkeypatch)
 
-    import backend.domain.aggregates.portfolio as portfolio_module
+    import src.backend.domain.aggregates.portfolio as portfolio_module
 
     monkeypatch.setattr(
         portfolio_module,
@@ -98,10 +105,18 @@ def test_portfolio_build_holdings_summary_and_contributions(monkeypatch: pytest.
     )
 
     securities = {
-        "EQUSD": _make_security("EQUSD", "USD", close=50.0, change=2.0, change_percent=0.04),
-        "EQCAD": _make_security("EQCAD", "CAD", close=20.0, change=-1.0, change_percent=-0.05),
-        "CALLUSD": _make_security("CALLUSD", "USD", close=50.0, change=1.0, change_percent=0.02),
-        "PUTCAD": _make_security("PUTCAD", "CAD", close=20.0, change=-0.5, change_percent=-0.02),
+        "EQUSD": _make_security(
+            "EQUSD", "USD", close=50.0, change=2.0, change_percent=0.04
+        ),
+        "EQCAD": _make_security(
+            "EQCAD", "CAD", close=20.0, change=-1.0, change_percent=-0.05
+        ),
+        "CALLUSD": _make_security(
+            "CALLUSD", "USD", close=50.0, change=1.0, change_percent=0.02
+        ),
+        "PUTCAD": _make_security(
+            "PUTCAD", "CAD", close=20.0, change=-0.5, change_percent=-0.02
+        ),
     }
 
     positions = [
@@ -205,7 +220,7 @@ def test_portfolio_build_holdings_summary_and_contributions(monkeypatch: pytest.
 def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     _stub_portfolio_analytics(monkeypatch)
 
-    import backend.domain.aggregates.portfolio as portfolio_module
+    import src.backend.domain.aggregates.portfolio as portfolio_module
 
     monkeypatch.setattr(
         portfolio_module,
@@ -218,10 +233,18 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     )
 
     securities = {
-        "EQUSD": _make_security("EQUSD", "USD", close=50.0, change=2.0, change_percent=0.04),
-        "EQCAD": _make_security("EQCAD", "CAD", close=20.0, change=-1.0, change_percent=-0.05),
-        "CALLUSD": _make_security("CALLUSD", "USD", close=50.0, change=1.0, change_percent=0.02),
-        "PUTCAD": _make_security("PUTCAD", "CAD", close=20.0, change=-0.5, change_percent=-0.02),
+        "EQUSD": _make_security(
+            "EQUSD", "USD", close=50.0, change=2.0, change_percent=0.04
+        ),
+        "EQCAD": _make_security(
+            "EQCAD", "CAD", close=20.0, change=-1.0, change_percent=-0.05
+        ),
+        "CALLUSD": _make_security(
+            "CALLUSD", "USD", close=50.0, change=1.0, change_percent=0.02
+        ),
+        "PUTCAD": _make_security(
+            "PUTCAD", "CAD", close=20.0, change=-0.5, change_percent=-0.02
+        ),
     }
     positions = [
         OpenLot(

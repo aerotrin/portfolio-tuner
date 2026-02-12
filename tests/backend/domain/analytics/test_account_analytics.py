@@ -1,17 +1,11 @@
 from datetime import date
-import enum
 
 import pandas as pd
 import pytest
 
-if not hasattr(enum, "StrEnum"):
-    class StrEnum(str, enum.Enum):
-        pass
 
-    enum.StrEnum = StrEnum
-
-from backend.domain.analytics.account import _prep_transactions, run_records_parser
-from backend.domain.entities.account import Category
+from src.backend.domain.analytics.account import _prep_transactions, run_records_parser
+from src.backend.domain.entities.account import Category
 
 
 BASE_COLUMNS = {

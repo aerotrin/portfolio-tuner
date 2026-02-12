@@ -1,2 +1,5 @@
 [tool.uv.workspace]
 members = ["src/frontend", "src/backend"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]

@@ -2,8 +2,8 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from backend.application.use_cases.account import AccountManager
-from backend.domain.entities.account import (
+from src.backend.application.use_cases.account import AccountManager
+from src.backend.domain.entities.account import (
     AccountCreateRequest,
     AccountEntity,
     AccountPatchRequest,
@@ -19,7 +19,9 @@ class FakeAccountDataImporter:
         self.transactions = transactions or []
         self.calls: list[tuple[str, bytes]] = []
 
-    def import_account(self, account_number: str, file_content: bytes) -> list[Transaction]:
+    def import_account(
+        self, account_number: str, file_content: bytes
+    ) -> list[Transaction]:
         self.calls.append((account_number, file_content))
         return self.transactions
 
@@ -70,7 +72,9 @@ class FakeAccountDataRepository:
 
     def delete_transaction(self, account_number: str, transaction_id: str):
         self.transactions[account_number] = [
-            tx for tx in self.transactions.get(account_number, []) if tx.id != transaction_id
+            tx
+            for tx in self.transactions.get(account_number, [])
+            if tx.id != transaction_id
         ]
 
 
@@ -112,7 +116,9 @@ def sample_transactions() -> list[Transaction]:
     ]
 
 
-def test_build_account_and_summary_and_view_accessors(sample_transactions: list[Transaction]):
+def test_build_account_and_summary_and_view_accessors(
+    sample_transactions: list[Transaction],
+):
     repo = FakeAccountDataRepository()
     repo.transactions["ACC-1"] = sample_transactions
     manager = AccountManager(importer=FakeAccountDataImporter(), db=repo)
@@ -164,14 +170,18 @@ def test_create_account_rejects_duplicate_account_number():
 
 
 def test_patch_account_rejects_missing_account_id():
-    manager = AccountManager(importer=FakeAccountDataImporter(), db=FakeAccountDataRepository())
+    manager = AccountManager(
+        importer=FakeAccountDataImporter(), db=FakeAccountDataRepository()
+    )
 
     with pytest.raises(KeyError, match="not found"):
         manager.patch_account("missing", AccountPatchRequest(owner="Updated"))
 
 
 def test_delete_account_rejects_missing_account_id():
-    manager = AccountManager(importer=FakeAccountDataImporter(), db=FakeAccountDataRepository())
+    manager = AccountManager(
+        importer=FakeAccountDataImporter(), db=FakeAccountDataRepository()
+    )
 
     with pytest.raises(KeyError, match="not found"):
         manager.delete_account("missing")
@@ -208,7 +218,9 @@ def test_patch_account_rejects_duplicate_number():
 
 
 def test_get_account_returns_none_for_missing_id():
-    manager = AccountManager(importer=FakeAccountDataImporter(), db=FakeAccountDataRepository())
+    manager = AccountManager(
+        importer=FakeAccountDataImporter(), db=FakeAccountDataRepository()
+    )
     assert manager.get_account("missing") is None
 
 

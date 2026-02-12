@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backend.domain.analytics.security import (
+from src.backend.domain.analytics.security import (
     _calc_annualized_return,
     _calc_flags,
     _calc_max_drawdown,
@@ -17,7 +17,11 @@ from backend.domain.analytics.security import (
     compute_performance_metrics,
     compute_timeseries_indicators,
 )
-from backend.domain.constants import RISK_FREE_RATE, SHORT_TERM_WINDOWS, TRADING_DAYS
+from src.backend.domain.constants import (
+    RISK_FREE_RATE,
+    SHORT_TERM_WINDOWS,
+    TRADING_DAYS,
+)
 
 
 def _make_bars(symbol: str = "AAA", closes: list[float] | None = None) -> pd.DataFrame:
@@ -144,12 +148,16 @@ def test_calc_sharpe_daily_flat_returns_zero_std() -> None:
 def test_calc_sortino_downside_free_returns_and_empty() -> None:
     upside_only = pd.Series([0.01] * 30)
 
-    assert np.isnan(_calc_sortino(upside_only, rf_rate_annual=0.0, trading_days=TRADING_DAYS))
+    assert np.isnan(
+        _calc_sortino(upside_only, rf_rate_annual=0.0, trading_days=TRADING_DAYS)
+    )
     assert np.isnan(_calc_sortino(pd.Series(dtype=float), 0.0, TRADING_DAYS))
 
 
 def test_calc_max_drawdown_regular_and_empty_or_all_nan() -> None:
-    ret = pd.Series([0.1, -0.2, 0.05], index=pd.date_range("2024-01-01", periods=3, freq="D"))
+    ret = pd.Series(
+        [0.1, -0.2, 0.05], index=pd.date_range("2024-01-01", periods=3, freq="D")
+    )
 
     mdd, mdd_date = _calc_max_drawdown(ret)
     assert mdd == pytest.approx(-0.2)
@@ -165,7 +173,9 @@ def test_calc_max_drawdown_regular_and_empty_or_all_nan() -> None:
 
 
 def test_calc_flags_and_rsi_slope_edge_cases() -> None:
-    empty_flags = _calc_flags(pd.Series(dtype=float), near_hi_lo_pct=0.025, trading_days=TRADING_DAYS)
+    empty_flags = _calc_flags(
+        pd.Series(dtype=float), near_hi_lo_pct=0.025, trading_days=TRADING_DAYS
+    )
     assert pd.isna(empty_flags["near_52wk_hi"])
     assert pd.isna(empty_flags["near_52wk_lo"])
 
@@ -181,7 +191,9 @@ def test_calc_flags_and_rsi_slope_edge_cases() -> None:
 def _sec(symbol: str, closes: list[float]) -> SimpleNamespace:
     idx = pd.date_range("2024-01-01", periods=len(closes), freq="D")
     indicators_df = pd.DataFrame({"close": closes}, index=idx)
-    return SimpleNamespace(quote=SimpleNamespace(symbol=symbol), indicators_df=indicators_df)
+    return SimpleNamespace(
+        quote=SimpleNamespace(symbol=symbol), indicators_df=indicators_df
+    )
 
 
 def test_calc_portfolio_weighted_close_1d_and_2d_weights() -> None:
@@ -208,7 +220,9 @@ def test_calc_portfolio_weighted_close_1d_and_2d_weights() -> None:
     assert out_2d.iloc[1, 1] == pytest.approx(165.0)
 
 
-def test_calc_portfolio_weighted_close_zero_sum_row_fallback_and_shape_mismatch() -> None:
+def test_calc_portfolio_weighted_close_zero_sum_row_fallback_and_shape_mismatch() -> (
+    None
+):
     securities = [
         _sec("AAA", [100, 100]),
         _sec("BBB", [200, 200]),
