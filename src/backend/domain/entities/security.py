@@ -1,11 +1,11 @@
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SecurityType(Enum):
+class SecurityType(StrEnum):
     INDEX = "Index"
     COMMODITY = "Commodity"
     CRYPTO = "Crypto"
@@ -22,8 +22,11 @@ class SecurityType(Enum):
     UNKNOWN = "Unknown"
 
 
+# Read/Write from/to ORM models - use from_attributes=True
+
+
 class Profile(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)  # FTRK-404
 
     symbol: str = Field(default="")
     name: Optional[str] = Field(default=None)

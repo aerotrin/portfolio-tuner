@@ -47,7 +47,7 @@ class TaxStatus(StrEnum):
 
 
 class AccountEntity(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
+    model_config = ConfigDict(use_enum_values=True)
 
     id: str
     number: str
