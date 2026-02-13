@@ -256,8 +256,6 @@ if account_symbols:
     portfolio_metrics = add_sparkline(portfolio_metrics, portfolio_closes)
     portfolio_metrics = add_last_indicators(portfolio_metrics, portfolio_indicators)
 
-    print(portfolio_metrics)
-
 
 # --- Tabs (Reports first; Positions and Performance use prebuilt holdings data when present)
 tabs = st.tabs(["Open Positions", "Performance", "Reports"])

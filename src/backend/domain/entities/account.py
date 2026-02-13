@@ -75,7 +75,7 @@ class Currency(StrEnum):
 TaxStatus = Literal["Registered", "Non-Registered"]
 
 
-# Persistent account (metadata stored in DB)
+# Read/Write from/to ORM models - allow use of enum values and from_attributes
 class AccountEntity(BaseModel):
     model_config = ConfigDict(use_enum_values=True, from_attributes=True)
 
@@ -107,7 +107,7 @@ class AccountPatchRequest(BaseModel):
     benchmark: Optional[str] = None
 
 
-# Input/Output entities
+# Read/Write from/to ORM models - allow use of enum values and from_attributes
 class Transaction(BaseModel):
     model_config = ConfigDict(use_enum_values=True, from_attributes=True)
 
@@ -144,9 +144,6 @@ class TransactionCreateDTO(BaseModel):
     amount: float
 
 
-# Output only entities
-
-
 class AccountSummaryDTO(BaseModel):
     number: str
     name: str | None
@@ -157,8 +154,6 @@ class AccountSummaryDTO(BaseModel):
 
 
 class OpenLot(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     symbol: str
     option_osi: Optional[str] = None
     category: Category
@@ -171,9 +166,6 @@ class OpenLot(BaseModel):
 
 
 class Holding(BaseModel):
-    # Contains all Quote fields
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     symbol: str
     name: str
     exchange: Optional[str] = None
@@ -216,8 +208,6 @@ class Holding(BaseModel):
 
 
 class ClosedLot(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     symbol: str
     option_osi: Optional[str] = None
     category: Category
@@ -238,8 +228,6 @@ class ClosedLot(BaseModel):
 
 
 class CashFlow(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     transaction_date: date
     settlement_date: Optional[date] = None
     category: Category

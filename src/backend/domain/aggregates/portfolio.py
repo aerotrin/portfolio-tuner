@@ -25,24 +25,18 @@ MULTIPLIER = 100
 
 
 class CorrelationEntry(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     row: str
     col: str
     value: float
 
 
 class CorrelationMatrixDTO(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     symbols: Optional[list[str]] = None
     entries: Optional[list[CorrelationEntry]] = None
     as_of: Optional[datetime] = None
 
 
 class PortfolioSummaryDTO(BaseModel):
-    model_config = ConfigDict(use_enum_values=True, from_attributes=True)
-
     id: str
     book_value: float
     market_value: float
