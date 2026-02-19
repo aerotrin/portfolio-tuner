@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 from backend.domain.entities.account import TransactionKind
 from backend.domain.entities.security import SecurityType
@@ -29,6 +29,7 @@ class UserDB(Base):
 
 class QuoteDB(Base):
     __tablename__ = "quotes"
+    __table_args__ = (UniqueConstraint("symbol", name="uq_quotes_symbol"),)
     id = mapped_column(Integer, primary_key=True)
     symbol = mapped_column(String, nullable=False)
     name = mapped_column(String)
@@ -47,6 +48,10 @@ class QuoteDB(Base):
 
 class BarDB(Base):
     __tablename__ = "bars"
+    __table_args__ = (
+        Index("ix_bars_symbol", "symbol"),
+        Index("ix_bars_symbol_date", "symbol", "date"),
+    )
     id = mapped_column(Integer, primary_key=True)
     symbol = mapped_column(String, nullable=False)
     date = mapped_column(DateTime)
@@ -67,6 +72,7 @@ class GlobalRatesDB(Base):
 
 class ProfileDB(Base):
     __tablename__ = "profiles"
+    __table_args__ = (UniqueConstraint("symbol", name="uq_profiles_symbol"),)
     id = mapped_column(Integer, primary_key=True)
     symbol = mapped_column(String, nullable=False)
     name = mapped_column(String)
@@ -89,6 +95,7 @@ class ProfileDB(Base):
 
 class TransactionDB(Base):
     __tablename__ = "transactions"
+    __table_args__ = (Index("ix_transactions_account_number", "account_number"),)
     id = mapped_column(String, primary_key=True)
     account_id = mapped_column(
         String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False

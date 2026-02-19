@@ -34,15 +34,14 @@ class PortfolioManager:
         account = self.account_man.build_account(account_number, account_name)
         positions = account.open_positions
         symbols = [p.symbol for p in positions]
-        securities = {
-            symbol: self.market_man.build_security(symbol) for symbol in symbols
-        }
+        rates = self.market_man.get_global_rates()
+        securities = self.market_man.build_securities_batch(symbols, rates=rates)
         portfolio = Portfolio(
             id=account_number,
             cash=account.cash_balance,
             positions=positions,
             securities=securities,
-            rates=self.market_man.get_global_rates(),
+            rates=rates,
         )
         return portfolio
 
@@ -53,7 +52,8 @@ class PortfolioManager:
         n_p: int = 5000,
     ) -> dict[str, Any]:
         rates = self.market_man.get_global_rates()
-        securities = [self.market_man.build_security(symbol) for symbol in symbols]
+        securities_map = self.market_man.build_securities_batch(symbols, rates=rates)
+        securities = [securities_map[s] for s in symbols if s in securities_map]
         simulator = PortfolioSimulator(securities, rates, n_p)
         simulator.run_simulator()
         return simulator.find_optimal_portfolio()

@@ -12,11 +12,11 @@ from src.backend.domain.entities.security import (
 
 class FakeMarketDataManager:
     def __init__(self):
-        self.build_security_calls: list[str] = []
+        self.build_securities_batch_calls: list[list[str]] = []
 
-    def build_security(self, symbol: str):
-        self.build_security_calls.append(symbol)
-        return SimpleNamespace(symbol=symbol)
+    def build_securities_batch(self, symbols, start_date=None, end_date=None, rates=None):
+        self.build_securities_batch_calls.append(list(symbols))
+        return {symbol: SimpleNamespace(symbol=symbol) for symbol in symbols}
 
     def get_global_rates(self):
         return GlobalRates(rf_rate=4.5, fx_rate=1.34)
@@ -75,7 +75,7 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     manager.build_portfolio_from_account("ACC-1", account_name="Main")
 
     assert fake_account.calls == [("ACC-1", "Main")]
-    assert fake_market.build_security_calls == ["AAPL", "MSFT"]
+    assert fake_market.build_securities_batch_calls == [["AAPL", "MSFT"]]
     assert captured["id"] == "ACC-1"
     assert captured["cash"] == 250.0
     assert captured["positions"] == positions
@@ -181,7 +181,7 @@ def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
 
     result = manager.run_simulated_portfolio(symbols=["AAPL", "MSFT"], n_p=123)
 
-    assert fake_market.build_security_calls == ["AAPL", "MSFT"]
+    assert fake_market.build_securities_batch_calls == [["AAPL", "MSFT"]]
     assert captured["n_p"] == 123
     assert captured["ran"] is True
     assert result["id"] == "PORTF_42"

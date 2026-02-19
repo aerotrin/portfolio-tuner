@@ -29,16 +29,8 @@ class SqliteMarketDataRepository(MarketDataRepository):
 
     def upsert_global_rates(self, global_rates: GlobalRates) -> None:
         try:
-            self.delete_global_rates()
-            self.session.add(GlobalRatesDB(**global_rates.model_dump()))
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
-
-    def delete_global_rates(self) -> None:
-        try:
             self.session.query(GlobalRatesDB).delete()
+            self.session.add(GlobalRatesDB(**global_rates.model_dump()))
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -46,7 +38,7 @@ class SqliteMarketDataRepository(MarketDataRepository):
 
     def upsert_quote(self, quote: Quote) -> None:
         try:
-            self.delete_quote(quote.symbol)
+            self.session.query(QuoteDB).filter(QuoteDB.symbol == quote.symbol).delete()
             self.session.add(QuoteDB(**quote.model_dump()))
             self.session.commit()
         except Exception:
@@ -65,14 +57,6 @@ class SqliteMarketDataRepository(MarketDataRepository):
             return []
         return [Quote.model_validate(row) for row in rows]
 
-    def delete_quote(self, symbol: str) -> None:
-        try:
-            self.session.query(QuoteDB).filter(QuoteDB.symbol == symbol).delete()
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
-
     def read_bars(
         self,
         symbol: str,
@@ -89,18 +73,27 @@ class SqliteMarketDataRepository(MarketDataRepository):
             return []
         return [Bar.model_validate(bar) for bar in rows]
 
+    def read_batch_bars(
+        self,
+        symbols: list[str],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> dict[str, List[Bar]]:
+        filters = [BarDB.symbol.in_(symbols)]
+        if start_date:
+            filters.append(BarDB.date >= start_date)
+        if end_date:
+            filters.append(BarDB.date <= end_date)
+        rows = self.session.query(BarDB).filter(*filters).all()
+        result: dict[str, List[Bar]] = {symbol: [] for symbol in symbols}
+        for row in rows:
+            result[row.symbol].append(Bar.model_validate(row))
+        return result
+
     def upsert_bars(self, bars: List[Bar]) -> None:
         try:
-            self.delete_bars(bars[0].symbol)
+            self.session.query(BarDB).filter(BarDB.symbol == bars[0].symbol).delete()
             self.session.add_all([BarDB(**bar.model_dump()) for bar in bars])
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
-
-    def delete_bars(self, symbol: str) -> None:
-        try:
-            self.session.query(BarDB).filter(BarDB.symbol == symbol).delete()
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -120,16 +113,10 @@ class SqliteMarketDataRepository(MarketDataRepository):
 
     def upsert_profile(self, profile: Profile) -> None:
         try:
-            self.delete_profile(profile.symbol)
+            self.session.query(ProfileDB).filter(
+                ProfileDB.symbol == profile.symbol
+            ).delete()
             self.session.add(ProfileDB(**profile.model_dump()))
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
-
-    def delete_profile(self, symbol: str) -> None:
-        try:
-            self.session.query(ProfileDB).filter(ProfileDB.symbol == symbol).delete()
             self.session.commit()
         except Exception:
             self.session.rollback()
