@@ -201,14 +201,43 @@ class MarketDataManager:
                         pass
 
     # --- Aggregate building helpers ---
-    def build_security(self, symbol: str) -> Security:
+    def build_security(self, symbol: str, rates: Optional[GlobalRates] = None) -> Security:
         quote = self.get_security_quote(symbol)
         bars = self.get_security_bars(symbol)
         profile = self.get_security_profile(symbol)
-        rates = self.get_global_rates()
+        if rates is None:
+            rates = self.get_global_rates()
         if quote is None or bars is None or profile is None or rates is None:
             raise ValueError(f"Security data missing for symbol: {symbol}")
         return Security(quote=quote, bars=bars, profile=profile, rates=rates)
+
+    def build_securities_batch(
+        self,
+        symbols: list[str],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        rates: Optional[GlobalRates] = None,
+    ) -> dict[str, Security]:
+        if not symbols:
+            return {}
+        if rates is None:
+            rates = self.get_global_rates()
+        quotes = {q.symbol: q for q in self.db.read_quotes(symbols)}
+        bars_map = self.db.read_batch_bars(symbols, start_date, end_date)
+        profiles = {p.symbol: p for p in self.db.read_profiles(symbols)}
+        result = {}
+        for symbol in symbols:
+            quote = quotes.get(symbol)
+            profile = profiles.get(symbol)
+            if quote is None or profile is None or rates is None:
+                raise ValueError(f"Security data missing for symbol: {symbol}")
+            result[symbol] = Security(
+                quote=quote,
+                bars=bars_map.get(symbol, []),
+                profile=profile,
+                rates=rates,
+            )
+        return result
 
     # --- Read / view-model use cases ---
 
@@ -242,10 +271,7 @@ class MarketDataManager:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> dict[str, list[Bar]]:
-        return {
-            symbol: self.db.read_bars(symbol, start_date, end_date)
-            for symbol in symbols
-        }
+        return self.db.read_batch_bars(symbols, start_date, end_date)
 
     def get_security_profile(self, symbol: str) -> Profile | None:
         return self.db.read_profile(symbol)
@@ -257,7 +283,8 @@ class MarketDataManager:
         return self.build_security(symbol).metrics
 
     def get_security_batch_metrics(self, symbols: list[str]) -> list[PerformanceMetric]:
-        return [self.build_security(symbol).metrics for symbol in symbols]
+        securities = self.build_securities_batch(symbols)
+        return [securities[symbol].metrics for symbol in symbols if symbol in securities]
 
     def get_security_indicators(self, symbol: str) -> List[TimeseriesIndicator]:
         return self.build_security(symbol).indicators
@@ -265,4 +292,5 @@ class MarketDataManager:
     def get_security_batch_indicators(
         self, symbols: list[str]
     ) -> dict[str, list[TimeseriesIndicator]]:
-        return {symbol: self.build_security(symbol).indicators for symbol in symbols}
+        securities = self.build_securities_batch(symbols)
+        return {symbol: securities[symbol].indicators for symbol in symbols if symbol in securities}
