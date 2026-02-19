@@ -65,10 +65,20 @@ class APIClient:
             params={"symbol": symbol},
         )
 
-    def refresh_securities(self, symbols: list[str], intraday: bool = False):
+    def refresh_securities(
+        self,
+        symbols: list[str],
+        intraday: bool = False,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
         return self._post(
             "/admin/refresh-securities",
-            params={"intraday": intraday},
+            params={
+                "intraday": intraday,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
             json=symbols,
         )
 

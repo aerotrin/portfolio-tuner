@@ -98,8 +98,10 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=True,
+            intraday=False,
             active_page=active_page,
+            start_date=start_date,
+            end_date=end_date,
         )
 
 # --- Auto job status checking ------------------------------------------------
@@ -110,7 +112,12 @@ render_refresh_job_ui(active_page)
 missing_symbols = sorted(set(page_symbols) - set(available_symbols))
 if missing_symbols:
     start_refresh_job(
-        symbols=missing_symbols, blocking=True, intraday=False, active_page=active_page
+        symbols=missing_symbols,
+        blocking=True,
+        intraday=False,
+        active_page=active_page,
+        start_date=start_date,
+        end_date=end_date,
     )
 
 # --- Load portfolio data ---------------------------------------------------

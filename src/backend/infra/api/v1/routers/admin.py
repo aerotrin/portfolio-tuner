@@ -245,6 +245,8 @@ async def _run_refresh_job(
     app,
     symbols: list[str],
     intraday: bool,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> None:
     """Runs in a background task after the HTTP response is sent."""
     job = _JOBS.get(job_id)
@@ -254,6 +256,18 @@ async def _run_refresh_job(
 
     job.status = "running"
     job.started_at = datetime.now(timezone.utc)
+
+    try:
+        bars_start_date = (
+            datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        )
+        bars_end_date = (
+            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        )
+    except Exception as e:
+        bars_start_date = None
+        bars_end_date = None
+        logger.error("Invalid date format for start_date or end_date: %s", e)
 
     SessionLocal = app.state.SessionLocal
     db = SessionLocal()
@@ -292,8 +306,8 @@ async def _run_refresh_job(
             )
             await market_man.refresh_securities_async(
                 symbols,
-                start_date=None,
-                end_date=None,
+                start_date=bars_start_date,
+                end_date=bars_end_date,
                 max_concurrency=config.max_concurrency,
                 on_progress=on_progress,
             )
@@ -322,6 +336,8 @@ async def refresh_securities_async(
     request: Request,
     symbols: list[str] = Body(...),
     intraday: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
     bg_task: BackgroundTasks = None,
 ):
     """Trigger a batch refresh of market data for multiple securities by symbol."""
@@ -364,13 +380,17 @@ async def refresh_securities_async(
         app,
         list(symbols),
         intraday,
+        start_date=start_date,
+        end_date=end_date,
     )
 
     logger.info(
-        "Scheduled %s securities refresh job_id=%s for %d symbols",
+        "Scheduled %s securities refresh job_id=%s for %d symbols from %s to %s",
         "intraday" if intraday else "EOD",
         job_id,
         len(symbols),
+        start_date,
+        end_date,
     )
 
     return RefreshSecuritiesResponse(
