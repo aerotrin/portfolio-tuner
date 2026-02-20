@@ -18,7 +18,7 @@ from frontend.shared.dto import (
 
 @dataclass
 class AccountFormValues:
-    owner: str
+    name: str
     type: str
     currency: Currency
     tax_status: TaxStatus
@@ -36,7 +36,7 @@ def _account_form(
         st.stop()
 
     d = defaults or AccountFormValues(
-        owner="",
+        name="",
         type="",
         currency=Currency.CAD,
         tax_status=TaxStatus.NON_REGISTERED,
@@ -44,7 +44,7 @@ def _account_form(
     )
 
     with st.form(f"{key_prefix}_form", clear_on_submit=False, border=False):
-        owner = st.text_input("Owner", value=d.owner, key=f"{key_prefix}_owner")
+        name = st.text_input("Name of Account Holder", value=d.name, key=f"{key_prefix}_name")
         account_type = st.text_input("Type", value=d.type, key=f"{key_prefix}_type")
 
         currency = st.radio(
@@ -73,7 +73,7 @@ def _account_form(
         submitted = st.form_submit_button("Save", type="primary")
 
     return AccountFormValues(
-        owner, account_type, currency, status, benchmark
+        name, account_type, currency, status, benchmark
     ), submitted
 
 
@@ -97,9 +97,9 @@ def create_account_dialog(benchmark_symbols: Sequence[str]) -> None:
         st.toast("Account number must contain digits only.", icon="⚠️")
         return
 
-    owner = values.owner.strip()
-    if not owner:
-        st.toast("Owner is required.", icon="⚠️")
+    name = values.name.strip()
+    if not name:
+        st.toast("Name of Account Holder is required.", icon="⚠️")
         return
 
     account_type = values.type.strip()
@@ -109,7 +109,8 @@ def create_account_dialog(benchmark_symbols: Sequence[str]) -> None:
 
     payload = AccountCreateRequest(
         number=number,
-        owner=owner,
+        name=name,
+        owner="",
         type=account_type,
         currency=values.currency,
         tax_status=values.tax_status,
@@ -134,7 +135,7 @@ def edit_account_dialog(
         return
 
     defaults = AccountFormValues(
-        owner=acct.owner or "",
+        name=acct.name or "",
         type=acct.type or "",
         currency=acct.currency or Currency.CAD,
         tax_status=acct.tax_status or TaxStatus.NON_REGISTERED,
@@ -153,9 +154,9 @@ def edit_account_dialog(
     # Build PATCH payload with only changed fields
     patch = AccountPatchRequest()
 
-    new_owner, old_owner = values.owner.strip(), defaults.owner.strip()
-    if new_owner != old_owner:
-        patch.owner = new_owner
+    new_name, old_name = values.name.strip(), defaults.name.strip()
+    if new_name != old_name:
+        patch.name = new_name
 
     new_type, old_type = values.type.strip(), defaults.type.strip()
     if new_type != old_type:

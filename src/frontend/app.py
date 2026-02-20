@@ -334,7 +334,7 @@ with st.sidebar:
 
     st.session_state["account_number"] = selected.number
     st.session_state["account_status"] = selected.tax_status
-    st.session_state["account_owner"] = selected.owner
+    st.session_state["account_owner"] = selected.name
     st.session_state["account_type"] = selected.type
     st.session_state["account_id"] = selected.id
 
