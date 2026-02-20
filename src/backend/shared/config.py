@@ -45,5 +45,8 @@ class Config(BaseSettings):
     eodhd_timeout_sec: float = 10.0
     eodhd_default_days_back: int = 365
 
+    # Supabase auth (ES256 / P-256 asymmetric signing)
+    supabase_jwt_public_key: str = Field(default="")
+
 
 config = Config()

@@ -4,6 +4,7 @@ from typing import Any
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
+from supabase import create_client
 
 from frontend.presentation.widgets.account_dialogs import (
     create_account_dialog,
@@ -74,6 +75,57 @@ def apply_compact_css() -> None:
 
 
 apply_compact_css()
+
+
+# -----------------------------------------------------------------------------
+# Authentication
+# -----------------------------------------------------------------------------
+def _get_supabase_client():
+    if "supabase" not in st.session_state:
+        st.session_state["supabase"] = create_client(
+            config.supabase_url, config.supabase_key
+        )
+    return st.session_state["supabase"]
+
+
+def _show_login() -> None:
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        st.title("Portfolio Tuner")
+        st.subheader("Sign In")
+        with st.form("login_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button(
+                "Sign In", type="primary", use_container_width=True
+            )
+        if submitted:
+            try:
+                sb = _get_supabase_client()
+                res = sb.auth.sign_in_with_password(
+                    {"email": email, "password": password}
+                )
+                st.session_state["jwt_token"] = res.session.access_token
+                st.session_state["authenticated"] = True
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Login failed: {exc}")
+
+
+if not st.session_state.get("authenticated"):
+    _show_login()
+    st.stop()
+
+# Sync the current access token on every rerun so token rotation is picked up.
+# gotrue refreshes the token internally; get_session() returns the live token.
+_current_session = _get_supabase_client().auth.get_session()
+if _current_session:
+    st.session_state["jwt_token"] = _current_session.access_token
+else:
+    # Session has fully expired — force re-login
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
 
 # -----------------------------------------------------------------------------
 # Disclaimer
@@ -407,6 +459,23 @@ with st.sidebar:
         st.divider()
         st.subheader("Debug Options")
         st.toggle("Show Session State", key="show_session_state_toggle")
+
+    st.divider()
+    if st.button(
+        "Logout",
+        icon=":material/logout:",
+        type="secondary",
+        key="logout_button",
+        use_container_width=True,
+    ):
+        sb = _get_supabase_client()
+        try:
+            sb.auth.sign_out()
+        except Exception:
+            pass
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # -----------------------------------------------------------------------------
 # Run Navigation (pages render after sidebar state is established)

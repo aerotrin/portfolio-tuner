@@ -27,11 +27,12 @@ from backend.infra.db.repo import (
     SqliteAccountDataRepository,
     SqliteMarketDataRepository,
 )
+from backend.infra.api.v1.dependencies.auth import verify_token
 from backend.shared.config import config
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 # ---------------------------------------------------------------------------
 # Cooldown configuration

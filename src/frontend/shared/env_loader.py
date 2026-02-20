@@ -26,6 +26,10 @@ class Config(BaseSettings):
     connect_timeout: int = 5  # seconds
     read_timeout: int = 30  # seconds
 
+    # Supabase auth
+    supabase_url: str = ""
+    supabase_key: str = ""
+
     @property
     def api_url(self) -> str:
         return f"{self.backend_url}{self.api_prefix}"

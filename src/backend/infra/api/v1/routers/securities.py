@@ -15,9 +15,10 @@ from backend.domain.entities.security import (
     Quote,
     TimeseriesIndicator,
 )
+from backend.infra.api.v1.dependencies.auth import verify_token
 from backend.infra.db.repo import SqliteMarketDataRepository
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 
 # -----------------------------

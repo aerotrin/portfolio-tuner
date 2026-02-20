@@ -1,31 +1,43 @@
-graph TB
-    subgraph Frontend
-        UI[Streamlit UI]
-        Client[API Client]
+flowchart LR
+    User(["👤 User"])
+
+    subgraph Frontend ["Streamlit Frontend"]
+        WebApp["Web App"]
     end
 
-    subgraph Backend
-        API[FastAPI Backend]
+    subgraph Backend ["Python Backend"]
+        API["FastAPI HTTP API"]
+        Workers["Workers"]
+        Domain["Use-cases + Domain"]
+        Adapters["Adapters"]
     end
 
-    subgraph DataStorage
-        DB[(SQLite Database)]
+    subgraph MarketData ["Market Data APIs"]
+        FMP["FMP (Primary)"]
+        YFinance["yfinance (Backup)"]
     end
 
-    subgraph ExternalServices
-        FMP[Financial Modeling Prep API]
-        EODHD[EOD Historical Data]
+    subgraph PlatformBackend ["Supabase Platform Backend"]
+        Auth["Authentication"]
+        Postgres[("PostgreSQL Database")]
+        Storage["Storage"]
+        EdgeFn["Edge Functions"]
     end
 
-    subgraph MonorepoRoot
-        Config[config/ accounts and symbols]
-        Examples[examples/ sample data]
-    end
+    GAuth(["Google OAuth"])
+    OpenAI(["OpenAI <br> AI Insights"])
+    Stripe(["Stripe <br> Payments"])
 
-    UI <-->|Account and Security Data| Client
-    Client <-->|HTTP Requests| API
-    API <-->|Read/Write| DB
-    API <-->|Fetch Market Data| FMP
-    API <-->|Fetch Market Data| EODHD
-    UI -->|CONFIG_DIR| Config
-    API -->|Optional| Examples
+    User --> WebApp
+    GAuth --> Auth
+    WebApp <-- JWT token --> Auth
+    WebApp -- JWT token --> API
+    
+    API -- JWT --> Postgres
+    Workers -- Service Role --> Postgres
+    
+    Adapters --> FMP
+    Adapters --> YFinance
+    Adapters --> OpenAI
+    
+    EdgeFn --> Stripe

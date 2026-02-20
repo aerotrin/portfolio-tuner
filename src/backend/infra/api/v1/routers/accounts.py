@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.application.use_cases.portfolio import PortfolioManager
+from backend.infra.api.v1.dependencies.auth import verify_token
 from backend.domain.aggregates.portfolio import (
     CorrelationMatrixDTO,
     PortfolioSummaryDTO,
@@ -30,7 +31,7 @@ from backend.infra.db.repo import (
     SqliteMarketDataRepository,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 
 # -----------------------------
