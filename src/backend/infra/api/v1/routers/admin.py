@@ -24,10 +24,11 @@ from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.domain.entities.security import GlobalRates
 from backend.infra.db.repo import (
-    SqliteAccountDataRepository,
-    SqliteMarketDataRepository,
+    PgAccountDataRepository,
+    PgMarketDataRepository,
 )
 from backend.infra.api.v1.dependencies.auth import verify_token
+from backend.infra.api.v1.dependencies.db import get_admin_db
 from backend.shared.config import config
 
 logger = logging.getLogger(__name__)
@@ -97,29 +98,20 @@ class RefreshSecuritiesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
-def get_db(request: Request):
-    SessionLocal = request.app.state.SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def get_account_manager(
     request: Request,
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_admin_db),
 ) -> AccountManager:
     importer = request.app.state.records_importer
-    repo = SqliteAccountDataRepository(session)
+    repo = PgAccountDataRepository(session)
     return AccountManager(importer=importer, db=repo)
 
 
 def get_market_data_manager(
     request: Request,
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_admin_db),
 ) -> MarketDataManager:
-    repo = SqliteMarketDataRepository(session)
+    repo = PgMarketDataRepository(session)
     return MarketDataManager(
         ds_us=request.app.state.fmp_client,
         ds_ca=request.app.state.eodhd_client,
@@ -259,7 +251,7 @@ async def _run_refresh_job(
     SessionLocal = app.state.SessionLocal
     db = SessionLocal()
     try:
-        repo = SqliteMarketDataRepository(db)
+        repo = PgMarketDataRepository(db)
         market_man = MarketDataManager(
             ds_us=app.state.fmp_client,
             ds_ca=app.state.eodhd_client,

@@ -39,6 +39,7 @@ class AccountManager:
         account = AccountEntity(
             id=str(uuid.uuid4()),
             number=req.number,
+            name=req.name,
             owner=req.owner,
             type=req.type,
             currency=req.currency,
@@ -65,6 +66,7 @@ class AccountManager:
         updated = AccountEntity(
             id=account.id,
             number=req.number if req.number is not None else account.number,
+            name=req.name if req.name is not None else account.name,
             owner=req.owner if req.owner is not None else account.owner,
             type=req.type if req.type is not None else account.type,
             currency=req.currency if req.currency is not None else account.currency,

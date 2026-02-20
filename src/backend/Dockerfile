@@ -11,9 +11,6 @@ pip install --no-cache-dir -e .
 
 COPY src/backend ./backend
 
-# SQLite parent dir must exist
-RUN mkdir -p /data
-
 ENV PYTHONPATH=/usr/src
 
 EXPOSE 8000

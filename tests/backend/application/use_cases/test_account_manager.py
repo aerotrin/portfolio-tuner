@@ -146,6 +146,7 @@ def test_create_account_rejects_duplicate_account_number():
     existing = AccountEntity(
         id="existing",
         number="001",
+        name="Jane Doe",
         owner="Jane",
         type="TFSA",
         currency=Currency.CAD,
@@ -158,6 +159,7 @@ def test_create_account_rejects_duplicate_account_number():
 
     req = AccountCreateRequest(
         number="001",
+        name="John Smith",
         owner="John",
         type="RRSP",
         currency=Currency.CAD,
@@ -175,7 +177,7 @@ def test_patch_account_rejects_missing_account_id():
     )
 
     with pytest.raises(KeyError, match="not found"):
-        manager.patch_account("missing", AccountPatchRequest(owner="Updated"))
+        manager.patch_account("missing", AccountPatchRequest(name="Updated"))
 
 
 def test_delete_account_rejects_missing_account_id():
@@ -192,6 +194,7 @@ def test_patch_account_rejects_duplicate_number():
     first = AccountEntity(
         id="a1",
         number="001",
+        name="Jane Doe",
         owner="Jane",
         type="TFSA",
         currency=Currency.CAD,
@@ -202,6 +205,7 @@ def test_patch_account_rejects_duplicate_number():
     second = AccountEntity(
         id="a2",
         number="002",
+        name="John Smith",
         owner="John",
         type="RRSP",
         currency=Currency.USD,

@@ -1,7 +1,6 @@
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
-from backend.domain.entities.account import TransactionKind
-from backend.domain.entities.security import SecurityType
 
 
 class Base(DeclarativeBase):
@@ -12,7 +11,8 @@ class AccountDB(Base):
     __tablename__ = "accounts"
     id = mapped_column(String(36), primary_key=True)
     number = mapped_column(String, unique=True, nullable=False)
-    owner = mapped_column(String, nullable=False)
+    name = mapped_column(String, nullable=True)
+    owner = mapped_column(PG_UUID(as_uuid=False), nullable=False)
     type = mapped_column(String, nullable=False)
     currency = mapped_column(String, nullable=False)
     tax_status = mapped_column(String, nullable=False)
@@ -77,7 +77,7 @@ class ProfileDB(Base):
     symbol = mapped_column(String, nullable=False)
     name = mapped_column(String)
     date = mapped_column(DateTime)
-    type = mapped_column(Enum(SecurityType))
+    type = mapped_column(String)
     exchange = mapped_column(String)
     currency = mapped_column(String)
     marketCap = mapped_column(Float)
@@ -103,7 +103,7 @@ class TransactionDB(Base):
     account_number = mapped_column(String, nullable=False)
     transaction_date = mapped_column(DateTime, nullable=False)
     settlement_date = mapped_column(DateTime, nullable=True)
-    transaction_type = mapped_column(Enum(TransactionKind), nullable=False)
+    transaction_type = mapped_column(String, nullable=False)
     symbol = mapped_column(String, nullable=True)
     market = mapped_column(String, nullable=True)
     description = mapped_column(String, nullable=False)
