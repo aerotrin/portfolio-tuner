@@ -132,8 +132,7 @@ def create_account(
 ):
     """Create a new brokerage account. The owner is always set to the authenticated user."""
     try:
-        payload.owner = user_id
-        return account_man.create_account(payload)
+        return account_man.create_account(payload, owner=user_id)
     except Exception as e:
         _raise_http_error(e)
 

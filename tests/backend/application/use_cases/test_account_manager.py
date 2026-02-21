@@ -160,7 +160,6 @@ def test_create_account_rejects_duplicate_account_number():
     req = AccountCreateRequest(
         number="001",
         name="John Smith",
-        owner="John",
         type="RRSP",
         currency=Currency.CAD,
         tax_status="Registered",
@@ -168,7 +167,7 @@ def test_create_account_rejects_duplicate_account_number():
     )
 
     with pytest.raises(ValueError, match="already exists"):
-        manager.create_account(req)
+        manager.create_account(req, owner="user-123")
 
 
 def test_patch_account_rejects_missing_account_id():

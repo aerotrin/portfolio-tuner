@@ -110,7 +110,6 @@ def create_account_dialog(benchmark_symbols: Sequence[str]) -> None:
     payload = AccountCreateRequest(
         number=number,
         name=name,
-        owner="",
         type=account_type,
         currency=values.currency,
         tax_status=values.tax_status,
