@@ -106,6 +106,7 @@ def _show_login() -> None:
                     {"email": email, "password": password}
                 )
                 st.session_state["jwt_token"] = res.session.access_token
+                st.session_state["user_id"] = res.user.id
                 st.session_state["authenticated"] = True
                 st.rerun()
             except Exception as exc:
@@ -121,6 +122,7 @@ if not st.session_state.get("authenticated"):
 _current_session = _get_supabase_client().auth.get_session()
 if _current_session:
     st.session_state["jwt_token"] = _current_session.access_token
+    st.session_state["user_id"] = _current_session.user.id
 else:
     # Session has fully expired — force re-login
     for key in list(st.session_state.keys()):
@@ -245,8 +247,8 @@ api = get_api_client()
 # Cached boot data (API calls)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60, show_spinner=False)
-def get_accounts_cached() -> list[Any]:
-    return load_accounts_list()
+def get_accounts_cached(user_id: str) -> list[Any]:
+    return load_accounts_list(user_id)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -260,7 +262,7 @@ def get_rates_cached() -> Any:
 
 
 # Load accounts for sidebar selection; keep expensive loads lazy.
-accounts = get_accounts_cached()
+accounts = get_accounts_cached(st.session_state["user_id"])
 
 # Load cached data to session state
 st.session_state["available_symbols"] = get_available_symbols_cached()

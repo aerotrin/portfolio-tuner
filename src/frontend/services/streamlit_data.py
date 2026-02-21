@@ -78,7 +78,7 @@ def load_rates() -> dict:
 
 
 @st.cache_data(show_spinner=False)
-def load_accounts_list() -> list[AccountEntity]:
+def load_accounts_list(user_id: str) -> list[AccountEntity]:  # noqa: ARG001
     """Load accounts from API (GET /accounts)."""
     api = get_api_client()
     try:
