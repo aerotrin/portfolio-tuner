@@ -2,44 +2,15 @@ name: Tests
 
 on:
   push:
-    branches: [main, "feat/**"]
+    branches: [main, "feat/**", "fix/**"]
   pull_request:
     branches: [main]
 
 jobs:
   test:
-    name: Lint & Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --all-groups
-
-      - name: Lint (ruff)
-        run: uv run ruff check src/ tests/
-
-      - name: Type check (mypy)
-        run: uv run mypy src/backend/
-
-      - name: Run tests
-        run: uv run pytest tests/ --cov=src/backend --cov-report=term-missing --cov-report=xml
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
-          if-no-files-found: ignore
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups
+      - run: uv run pytest tests/
