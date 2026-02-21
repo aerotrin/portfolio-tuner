@@ -15,28 +15,21 @@ from backend.domain.entities.security import (
     Quote,
     TimeseriesIndicator,
 )
-from backend.infra.db.repo import SqliteMarketDataRepository
+from backend.infra.api.v1.dependencies.auth import verify_token
+from backend.infra.api.v1.dependencies.db import get_user_db
+from backend.infra.db.repo import PgMarketDataRepository
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 
 # -----------------------------
 # Dependencies
 # -----------------------------
-def get_db(request: Request):
-    SessionLocal = request.app.state.SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def get_market_data_manager(
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ) -> MarketDataManager:
-    repo = SqliteMarketDataRepository(db)
+    repo = PgMarketDataRepository(db)
     return MarketDataManager(
         ds_us=request.app.state.fmp_client,
         ds_ca=request.app.state.eodhd_client,

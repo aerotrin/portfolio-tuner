@@ -51,6 +51,7 @@ class AccountEntity(BaseModel):
 
     id: str
     number: str
+    name: str = ""
     owner: str
     type: str
     currency: Currency
@@ -61,7 +62,7 @@ class AccountEntity(BaseModel):
 
 class AccountCreateRequest(BaseModel):
     number: str
-    owner: str
+    name: str
     type: str
     currency: Currency
     tax_status: TaxStatus
@@ -70,7 +71,7 @@ class AccountCreateRequest(BaseModel):
 
 class AccountPatchRequest(BaseModel):
     number: Optional[str] = None
-    owner: Optional[str] = None
+    name: Optional[str] = None
     type: Optional[str] = None
     currency: Optional[Currency] = None
     tax_status: Optional[TaxStatus] = None

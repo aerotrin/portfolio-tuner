@@ -11,7 +11,7 @@ from backend.infra.db.models import AccountDB, BarDB, GlobalRatesDB, ProfileDB, 
 from backend.infra.db.models import TransactionDB
 
 
-class SqliteMarketDataRepository(MarketDataRepository):
+class PgMarketDataRepository(MarketDataRepository):
     def __init__(self, session: Session):
         self.session = session
 
@@ -123,7 +123,7 @@ class SqliteMarketDataRepository(MarketDataRepository):
             raise
 
 
-class SqliteAccountDataRepository(AccountDataRepository):
+class PgAccountDataRepository(AccountDataRepository):
     def __init__(self, session: Session):
         self.session = session
 
@@ -134,6 +134,7 @@ class SqliteAccountDataRepository(AccountDataRepository):
             row = AccountDB(
                 id=account.id,
                 number=account.number,
+                name=account.name,
                 owner=account.owner,
                 type=account.type,
                 currency=account.currency,
@@ -174,6 +175,7 @@ class SqliteAccountDataRepository(AccountDataRepository):
             if row is None:
                 raise KeyError(f"Account {account.id} not found")
             row.number = account.number
+            row.name = account.name
             row.owner = account.owner
             row.type = account.type
             row.currency = account.currency

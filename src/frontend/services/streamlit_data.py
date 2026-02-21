@@ -54,10 +54,15 @@ class AccountRecords:
 # API caller / caching wrappers
 # Any HTTP error should raise via requests.raise_for_status() inside APIClient.
 # ---------------------------------------------------------------------------
-@st.cache_resource
 def get_api_client() -> APIClient:
-    """One shared API client per Streamlit session."""
-    return APIClient()
+    """One API client per Streamlit user session, carrying the user's JWT."""
+    if "api_client" not in st.session_state:
+        st.session_state["api_client"] = APIClient()
+    client: APIClient = st.session_state["api_client"]
+    token = st.session_state.get("jwt_token")
+    if token:
+        client.update_token(token)  # ensure client always has the latest token
+    return client
 
 
 @st.cache_data(show_spinner=False)
@@ -73,7 +78,7 @@ def load_rates() -> dict:
 
 
 @st.cache_data(show_spinner=False)
-def load_accounts_list() -> list[AccountEntity]:
+def load_accounts_list(user_id: str) -> list[AccountEntity]:  # noqa: ARG001
     """Load accounts from API (GET /accounts)."""
     api = get_api_client()
     try:

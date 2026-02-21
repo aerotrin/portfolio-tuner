@@ -32,14 +32,15 @@ class AccountManager:
 
     # --- Account CRUD ---
 
-    def create_account(self, req: AccountCreateRequest) -> AccountEntity:
+    def create_account(self, req: AccountCreateRequest, owner: str) -> AccountEntity:
         if self.db.account_exists_by_number(req.number):
             raise ValueError(f"Account with number {req.number!r} already exists")
         now = datetime.now(timezone.utc)
         account = AccountEntity(
             id=str(uuid.uuid4()),
             number=req.number,
-            owner=req.owner,
+            name=req.name,
+            owner=owner,
             type=req.type,
             currency=req.currency,
             tax_status=req.tax_status,
@@ -65,7 +66,8 @@ class AccountManager:
         updated = AccountEntity(
             id=account.id,
             number=req.number if req.number is not None else account.number,
-            owner=req.owner if req.owner is not None else account.owner,
+            name=req.name if req.name is not None else account.name,
+            owner=account.owner,
             type=req.type if req.type is not None else account.type,
             currency=req.currency if req.currency is not None else account.currency,
             tax_status=(

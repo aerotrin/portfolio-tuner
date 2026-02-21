@@ -8,10 +8,15 @@ from frontend.shared.dto import (
 
 
 class APIClient:
-    def __init__(self):
+    def __init__(self, jwt_token: str | None = None):
         self.base_url = config.api_url
         self.session = requests.Session()
         self.timeout = (config.connect_timeout, config.read_timeout)
+        if jwt_token:
+            self.session.headers["Authorization"] = f"Bearer {jwt_token}"
+
+    def update_token(self, jwt_token: str) -> None:
+        self.session.headers["Authorization"] = f"Bearer {jwt_token}"
 
     def _get(self, path: str, **kwargs) -> dict:
         url = f"{self.base_url}{path}"

@@ -60,7 +60,7 @@ def render_status_strip(rates: dict) -> None:
         color_us = "gray"
     else:
         last_us_timestamp_natural, _, color_us = humanize_timestamp(
-            last_us_timestamp.tz_localize("UTC")
+            last_us_timestamp.tz_convert("UTC")
         )
 
     if not last_ca_timestamp or pd.isna(last_ca_timestamp):
@@ -68,7 +68,7 @@ def render_status_strip(rates: dict) -> None:
         color_ca = "gray"
     else:
         last_ca_timestamp_natural, _, color_ca = humanize_timestamp(
-            last_ca_timestamp.tz_localize("UTC")
+            last_ca_timestamp.tz_convert("UTC")
         )
 
     with st.container(horizontal=True, border=False):

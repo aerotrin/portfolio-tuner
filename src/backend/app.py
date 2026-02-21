@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 import logging
-from pathlib import Path
 
 from fastapi import FastAPI
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.infra.adapters.eodhd_client import EODHDClient, EODHDConfig
@@ -12,7 +11,6 @@ from backend.infra.adapters.fmp_client import FMPClient, FMPConfig
 from backend.infra.api.v1.routers import accounts as accounts_routers
 from backend.infra.api.v1.routers import admin as admin_routers
 from backend.infra.api.v1.routers import securities as securities_routers
-from backend.infra.db.models import Base
 from backend.shared.config import config
 from backend.shared.logging import setup_logging
 
@@ -20,29 +18,16 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def _ensure_db_dir():
-    """Ensure parent directory of SQLite DB exists."""
-    url = config.db_url
-    if url.startswith("sqlite:///"):
-        path = Path(url.removeprefix("sqlite:///"))
-        path.resolve().parent.mkdir(parents=True, exist_ok=True)
-
-
 @asynccontextmanager
 async def lifespan(app):
     logger.info("Starting up...")
 
-    _ensure_db_dir()
-    engine = create_engine(config.db_url)
-
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, connection_record):
-        if "sqlite" in config.db_url:
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
-    Base.metadata.create_all(bind=engine)
+    engine = create_engine(
+        config.db_url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+    )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Client setup
