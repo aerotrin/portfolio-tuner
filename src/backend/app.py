@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.infra.adapters.eodhd_client import EODHDClient, EODHDConfig
 from backend.infra.adapters.excel_pandas_client import ExcelPandasClient
 from backend.infra.adapters.fmp_client import FMPClient, FMPConfig
+from backend.infra.adapters.rate_limiter import RateLimiterConfig
 from backend.infra.api.v1.routers import accounts as accounts_routers
 from backend.infra.api.v1.routers import admin as admin_routers
 from backend.infra.api.v1.routers import securities as securities_routers
@@ -38,9 +39,7 @@ async def lifespan(app):
             base_url=config.fmp_base_url,
             timeout_sec=config.fmp_timeout_sec,
             default_days_back=config.fmp_default_days_back,
-            max_per_minute=config.fmp_max_per_minute,
-            burst_capacity=config.fmp_burst_capacity,
-            min_request_interval=config.fmp_min_request_interval,
+            rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_max_per_minute),
         )
     )
     eodhd_client = EODHDClient(

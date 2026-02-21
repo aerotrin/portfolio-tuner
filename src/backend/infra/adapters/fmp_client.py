@@ -1,11 +1,8 @@
 """https://site.financialmodelingprep.com/developer/docs"""
 
-from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 import logging
-import threading
-import time
 from typing import Any
 
 import requests
@@ -18,6 +15,7 @@ from backend.domain.entities.security import (
     Quote,
     SecurityType,
 )
+from backend.infra.adapters.rate_limiter import RateLimiter, RateLimiterConfig
 
 
 logger = logging.getLogger(__name__)
@@ -30,39 +28,18 @@ class FMPConfig:
     timeout_sec: float = 10.0
     default_days_back: int = 365
 
-    # Rate limiting - Sliding window + token bucket hybrid
-    max_per_minute: int = 280  # provider limit 300, with 20 safety margin
-    burst_capacity: int = 50  # max burst before waiting (~50 symbols at once)
-    min_request_interval: float = (
-        0.05  # 50ms min between requests (prevents micro-bursts)
+    # Rate limiting — see Config (shared/config.py) for env-var overrides
+    rate_limiter: RateLimiterConfig = field(
+        default_factory=lambda: RateLimiterConfig(max_per_minute=280)
     )
-
-    @property
-    def per_second_rate(self) -> float:
-        # Sustained rate: 280/60 ≈ 4.67 req/sec
-        return self.max_per_minute / 60.0
 
 
 class FMPClient(MarketDataProvider):
     """
-    Thin client over the FinancialModelingPrep API with robust rate limiting.
-
-    Rate Limiting Strategy (Hybrid Sliding Window + Token Bucket):
-    ─────────────────────────────────────────────────────────────────
-    1. **Sliding Window**: Tracks actual request timestamps over the last 60s
-       to ensure we never exceed max_per_minute (hard ceiling).
-
-    2. **Token Bucket**: Allows burst_capacity requests quickly, then throttles
-       to per_second_rate for smooth sustained throughput.
-
-    3. **Minimum Interval**: Enforces min_request_interval between requests
-       to prevent micro-burst spikes that some APIs reject.
-
-    4. **429 Backoff**: On rate limit errors, drains tokens and backs off
-       with exponential delay to allow the API to recover.
+    Thin client over the FinancialModelingPrep API.
 
     All HTTP calls go through `_get`, which:
-      - Throttles using the hybrid rate limiter
+      - Throttles via a `RateLimiter` (hybrid sliding window + token bucket)
       - Retries on 429 with exponential backoff (up to 3 retries)
       - Raises for any other HTTP errors
       - Returns parsed JSON
@@ -70,20 +47,7 @@ class FMPClient(MarketDataProvider):
 
     def __init__(self, config: FMPConfig):
         self.cfg = config
-        self._lock = threading.Lock()
-
-        # Sliding window: track timestamps of requests in the last 60 seconds
-        self._request_timestamps: deque[float] = deque()
-
-        # Token bucket state
-        self._tb_tokens: float = float(self.cfg.burst_capacity)
-        self._tb_last_refill: float = time.monotonic()
-
-        # Track last request time for minimum interval enforcement
-        self._last_request_time: float = 0.0
-
-        # Backoff state for 429 handling
-        self._backoff_until: float = 0.0
+        self._rate_limiter = RateLimiter(config.rate_limiter)
 
         # Optional lookup lists (currently disabled)
         self.index_list: dict[str, Any] = {}
@@ -97,117 +61,6 @@ class FMPClient(MarketDataProvider):
         # self.commodity_list = self._fetch_commodity_list()
         # self.crypto_list = self._fetch_crypto_list()
         # self.forex_list = self._fetch_forex_list()
-
-    # -------------------------------------------------------------------------
-    # Core HTTP helpers
-    # -------------------------------------------------------------------------
-
-    def _prune_old_timestamps(self, now: float) -> None:
-        """Remove timestamps older than 60 seconds from the sliding window."""
-        cutoff = now - 60.0
-        while self._request_timestamps and self._request_timestamps[0] < cutoff:
-            self._request_timestamps.popleft()
-
-    def _acquire_slot(self) -> None:
-        """
-        Hybrid rate limiter combining sliding window and token bucket:
-
-        1. Sliding Window: Hard limit of max_per_minute requests in any 60s window
-        2. Token Bucket: Allows burst_capacity requests quickly, then ~5/sec sustained
-        3. Minimum Interval: At least min_request_interval between consecutive requests
-
-        Thread-safe. Logs throttling only at DEBUG for meaningful sleeps.
-        """
-        while True:
-            sleep_for = 0.0
-
-            with self._lock:
-                now = time.monotonic()
-
-                # Check if we're in a backoff period (from a recent 429)
-                if now < self._backoff_until:
-                    sleep_for = self._backoff_until - now
-                else:
-                    # Prune old timestamps from sliding window
-                    self._prune_old_timestamps(now)
-
-                    # --- Check 1: Sliding window (hard ceiling) ---
-                    if len(self._request_timestamps) >= self.cfg.max_per_minute:
-                        # Must wait until the oldest request expires from the window
-                        oldest = self._request_timestamps[0]
-                        sleep_for = (oldest + 60.0) - now + 0.1  # +100ms buffer
-
-                        if logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(
-                                "FMPClient sliding window full (%d/%d), will sleep %.2fs",
-                                len(self._request_timestamps),
-                                self.cfg.max_per_minute,
-                                max(sleep_for, 0.0),
-                            )
-
-                    # --- Check 2: Minimum interval between requests ---
-                    if sleep_for <= 0.0:
-                        time_since_last = now - self._last_request_time
-                        if time_since_last < self.cfg.min_request_interval:
-                            sleep_for = self.cfg.min_request_interval - time_since_last
-
-                    # --- Check 3: Token bucket (burst control) ---
-                    if sleep_for <= 0.0:
-                        # Refill tokens based on elapsed time
-                        elapsed = now - self._tb_last_refill
-                        if elapsed > 0:
-                            added = elapsed * self.cfg.per_second_rate
-                            self._tb_tokens = min(
-                                float(self.cfg.burst_capacity),
-                                self._tb_tokens + added,
-                            )
-                            self._tb_last_refill = now
-
-                        if self._tb_tokens >= 1.0:
-                            # All checks passed - consume token and record timestamp
-                            self._tb_tokens -= 1.0
-                            self._request_timestamps.append(now)
-                            self._last_request_time = now
-                            return
-
-                        # Not enough tokens: compute required sleep
-                        needed = 1.0 - self._tb_tokens
-                        sleep_for = needed / self.cfg.per_second_rate
-
-            # Sleep outside the lock
-            if sleep_for > 0.0:
-                if sleep_for >= 0.05 and logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        "FMPClient token/backoff throttling: sleeping %.3fs",
-                        sleep_for,
-                    )
-                time.sleep(sleep_for)
-            else:
-                # Shouldn't really happen often, but avoid tight spin
-                time.sleep(0.01)
-
-    def _handle_rate_limit(self, retry_after: int, attempt: int) -> None:
-        """
-        Handle 429 response by draining tokens and setting backoff period.
-
-        Uses exponential backoff: retry_after * (2 ^ attempt) with jitter.
-        """
-        with self._lock:
-            # Drain the token bucket to prevent other threads from immediately retrying
-            self._tb_tokens = 0.0
-
-            # Calculate backoff with exponential increase
-            base_backoff = max(retry_after, 2)  # At least 2 seconds
-            backoff_multiplier = min(2**attempt, 8)  # Cap at 8x
-            total_backoff = base_backoff * backoff_multiplier
-
-            self._backoff_until = time.monotonic() + total_backoff
-
-            logger.warning(
-                "FMPClient rate limited, backing off for %ds (attempt %d)",
-                total_backoff,
-                attempt,
-            )
 
     def _get(
         self, url: str, params: dict[str, Any] | None = None, *, max_retries: int = 3
@@ -223,7 +76,7 @@ class FMPClient(MarketDataProvider):
 
         while True:
             # Reserve rate-limit slot before issuing the HTTP request
-            self._acquire_slot()
+            self._rate_limiter.acquire_slot()
             resp = requests.get(
                 url,
                 params=params,
@@ -254,7 +107,7 @@ class FMPClient(MarketDataProvider):
                     resp.raise_for_status()
 
                 # Handle rate limit with exponential backoff
-                self._handle_rate_limit(retry_after, attempt)
+                self._rate_limiter.handle_rate_limit(retry_after, attempt)
                 continue  # retry loop
 
             # Other HTTP errors

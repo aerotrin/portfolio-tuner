@@ -34,10 +34,7 @@ class Config(BaseSettings):
     fmp_base_url: str = "https://financialmodelingprep.com/stable"
     fmp_timeout_sec: float = 10.0
     fmp_default_days_back: int = 365
-    # -- rate limiting
-    fmp_max_per_minute: int = 280
-    fmp_burst_capacity: int = 50
-    fmp_min_request_interval: float = 0.05
+    fmp_max_per_minute: int = 300
 
     # EODHD settings
     eodhd_api_key: str = Field(default="")
