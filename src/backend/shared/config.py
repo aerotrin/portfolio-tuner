@@ -22,7 +22,7 @@ class Config(BaseSettings):
     admin_enabled: bool = False
     debug: bool = False
 
-    max_concurrency: int = 10
+    max_concurrency: int = 5
 
     # DB
     db_url: str = "sqlite:///./data/dev.db"

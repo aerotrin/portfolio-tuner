@@ -45,6 +45,18 @@ class PgMarketDataRepository(MarketDataRepository):
             self.session.rollback()
             raise
 
+    def upsert_quotes_batch(self, quotes: list[Quote]) -> None:
+        if not quotes:
+            return
+        try:
+            symbols = [q.symbol for q in quotes]
+            self.session.query(QuoteDB).filter(QuoteDB.symbol.in_(symbols)).delete()
+            self.session.add_all([QuoteDB(**q.model_dump()) for q in quotes])
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
     def read_quote(self, symbol: str) -> Quote | None:
         row = self.session.query(QuoteDB).filter(QuoteDB.symbol == symbol).first()
         if row is None:
@@ -84,7 +96,12 @@ class PgMarketDataRepository(MarketDataRepository):
             filters.append(BarDB.date >= start_date)
         if end_date:
             filters.append(BarDB.date <= end_date)
-        rows = self.session.query(BarDB).filter(*filters).all()
+        rows = (
+            self.session.query(BarDB)
+            .filter(*filters)
+            .order_by(BarDB.symbol, BarDB.date)
+            .all()
+        )
         result: dict[str, List[Bar]] = {symbol: [] for symbol in symbols}
         for row in rows:
             result[row.symbol].append(Bar.model_validate(row))
@@ -117,6 +134,18 @@ class PgMarketDataRepository(MarketDataRepository):
                 ProfileDB.symbol == profile.symbol
             ).delete()
             self.session.add(ProfileDB(**profile.model_dump()))
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+    def upsert_profiles_batch(self, profiles: list[Profile]) -> None:
+        if not profiles:
+            return
+        try:
+            symbols = [p.symbol for p in profiles]
+            self.session.query(ProfileDB).filter(ProfileDB.symbol.in_(symbols)).delete()
+            self.session.add_all([ProfileDB(**p.model_dump()) for p in profiles])
             self.session.commit()
         except Exception:
             self.session.rollback()

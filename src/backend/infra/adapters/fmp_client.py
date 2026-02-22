@@ -230,9 +230,39 @@ class FMPClient(MarketDataProvider):
             volume=item.get("volume", 0.0),
             change=item.get("change", 0.0),
             change_percent=item.get("changePercentage", 0.0) / 100.0,
-            previousClose=item.get("previousClose", ""),
+            previousClose=item.get("previousClose", 0.0),
             timestamp=item.get("timestamp", datetime.now()),
         )
+
+    def fetch_batch_quotes(self, symbols: list[str]) -> list[Quote]:
+        url = f"{self.cfg.base_url}/batch-quote"
+        params = {"symbols": ",".join(symbols), "apikey": self.cfg.api_key}
+        try:
+            data = self._get(url, params=params)
+        except requests.exceptions.HTTPError as e:
+            logger.error("Error retrieving batch quotes for %s: %s", symbols, e)
+            raise
+        if not data:
+            logger.error("No batch quotes data retrieved for symbols %s", symbols)
+            raise RuntimeError(f"No batch quotes data for {symbols}")
+        return [
+            Quote(
+                symbol=item.get("symbol", ""),
+                name=item.get("name", ""),
+                exchange=item.get("exchange", ""),
+                open=item.get("open", 0.0),
+                high=item.get("dayHigh", 0.0),
+                low=item.get("dayLow", 0.0),
+                close=item.get("price", 0.0),
+                currency="USD",
+                volume=item.get("volume", 0.0),
+                change=item.get("change", 0.0),
+                change_percent=item.get("changePercentage", 0.0) / 100.0,
+                previousClose=item.get("previousClose", 0.0),
+                timestamp=item.get("timestamp", datetime.now()),
+            )
+            for item in data
+        ]
 
     def fetch_bars(
         self,

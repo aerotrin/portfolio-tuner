@@ -1,6 +1,7 @@
 import asyncio
 from datetime import date
 import logging
+import time
 from typing import Callable, List, Optional
 
 from backend.application.ports.market_data_provider import MarketDataProvider
@@ -200,8 +201,89 @@ class MarketDataManager:
                         # Don't let progress callback errors break the refresh
                         pass
 
+    async def refresh_batch_intraday_async(
+        self,
+        symbols: list[str],
+        batch_size: int = 100,
+        max_concurrency: int = 10,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        if not symbols:
+            return
+
+        batches = [
+            symbols[i : i + batch_size] for i in range(0, len(symbols), batch_size)
+        ]
+        sem = asyncio.Semaphore(max_concurrency)
+
+        async def fetch_batch(batch: list[str]) -> tuple[list[str], list[Quote]]:
+            await sem.acquire()
+            try:
+                t0 = time.perf_counter()
+                quotes = await asyncio.to_thread(self.ds_us.fetch_batch_quotes, batch)
+                elapsed = time.perf_counter() - t0
+                logger.info(
+                    "fetch_batch_quotes: %d symbols in %.3fs",
+                    len(batch),
+                    elapsed,
+                )
+                return batch, quotes
+            finally:
+                sem.release()
+
+        all_quotes: list[Quote] = []
+        all_symbols: list[str] = []
+
+        tasks = {asyncio.create_task(fetch_batch(b)): b for b in batches}
+        for completed_task in asyncio.as_completed(tasks.keys()):
+            current_batch: list[str] | None = None
+            returned_quotes: list[Quote] = []
+            try:
+                current_batch, returned_quotes = await completed_task
+                returned_syms = {q.symbol for q in returned_quotes}
+                missed = set(current_batch) - returned_syms
+
+                # --- Single-fetch retry for missed symbols ---
+                for symbol in missed:
+                    try:
+                        quote = await asyncio.to_thread(self.ds_us.fetch_quote, symbol)
+                        returned_quotes.append(quote)
+                    except Exception:
+                        logger.warning(
+                            "Single-fetch retry failed for symbol %s; skipping",
+                            symbol,
+                        )
+
+                all_quotes.extend(returned_quotes)
+            except Exception:
+                if current_batch is None:
+                    current_batch = tasks.get(completed_task)  # type: ignore
+                raise
+            finally:
+                batch_for_progress = (
+                    current_batch or tasks.get(completed_task) or []  # type: ignore
+                )
+                all_symbols.extend(batch_for_progress)
+
+        t1 = time.perf_counter()
+        self.db.upsert_quotes_batch(all_quotes)
+        logger.info(
+            "upsert_quotes_batch: %d quotes in %.3fs",
+            len(all_quotes),
+            time.perf_counter() - t1,
+        )
+
+        for sym in all_symbols:
+            if on_progress:
+                try:
+                    on_progress(sym)
+                except Exception:
+                    pass
+
     # --- Aggregate building helpers ---
-    def build_security(self, symbol: str, rates: Optional[GlobalRates] = None) -> Security:
+    def build_security(
+        self, symbol: str, rates: Optional[GlobalRates] = None
+    ) -> Security:
         quote = self.get_security_quote(symbol)
         bars = self.get_security_bars(symbol)
         profile = self.get_security_profile(symbol)
@@ -284,7 +366,9 @@ class MarketDataManager:
 
     def get_security_batch_metrics(self, symbols: list[str]) -> list[PerformanceMetric]:
         securities = self.build_securities_batch(symbols)
-        return [securities[symbol].metrics for symbol in symbols if symbol in securities]
+        return [
+            securities[symbol].metrics for symbol in symbols if symbol in securities
+        ]
 
     def get_security_indicators(self, symbol: str) -> List[TimeseriesIndicator]:
         return self.build_security(symbol).indicators
@@ -293,4 +377,8 @@ class MarketDataManager:
         self, symbols: list[str]
     ) -> dict[str, list[TimeseriesIndicator]]:
         securities = self.build_securities_batch(symbols)
-        return {symbol: securities[symbol].indicators for symbol in symbols if symbol in securities}
+        return {
+            symbol: securities[symbol].indicators
+            for symbol in symbols
+            if symbol in securities
+        }

@@ -268,12 +268,13 @@ async def _run_refresh_job(
 
         if intraday:
             logger.info(
-                "Background INTRADAY securities refresh started, job_id=%s, symbols=%d",
+                "Background INTRADAY BATCH securities refresh started, job_id=%s, symbols=%d",
                 job_id,
                 len(symbols),
             )
-            await market_man.refresh_securities_intraday_async(
+            await market_man.refresh_batch_intraday_async(
                 symbols,
+                batch_size=100,
                 max_concurrency=config.max_concurrency,
                 on_progress=on_progress,
             )
