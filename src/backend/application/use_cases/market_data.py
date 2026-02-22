@@ -34,6 +34,9 @@ class MarketDataManager:
         self.ds_backup = ds_backup  # retained but unused; reserved for future failover
         self.db = db
 
+    # Helper methods
+
+    # TODO: Deprecate this
     def _profile_fixer(self, quote: Quote, profile: Profile) -> Profile:
         # FTRK-351 infer missing profile fields from quote, if not present
         if profile.type == SecurityType.UNKNOWN:
@@ -53,21 +56,7 @@ class MarketDataManager:
             logger.info(f"Inferred profile fields from quote for {quote.symbol}")
         return profile
 
-    def _bars_fixer(self, quote: Quote, bars: list[Bar]) -> list[Bar]:
-        bars.append(
-            Bar(
-                symbol=quote.symbol,
-                date=quote.timestamp,
-                open=quote.open,
-                high=quote.high,
-                low=quote.low,
-                close=quote.close,
-                volume=quote.volume,
-            )
-        )
-        return bars
-
-    # --- Write / ETL use cases ---
+    # --- DS passthrough use cases ---
 
     def fetch_quote(
         self,
@@ -77,39 +66,37 @@ class MarketDataManager:
 
         return quote
 
-    def fetch_security_data(
+    def fetch_bars(
         self,
         symbol: str,
         start_date: Optional[date],
         end_date: Optional[date],
-    ) -> tuple[Quote, list[Bar], Profile]:
-        quote = self.ds_primary.fetch_quote(symbol)
+    ) -> list[Bar]:
         bars = self.ds_primary.fetch_bars(symbol, start_date, end_date)
-        profile = self.ds_primary.fetch_stock_profile(symbol)
-        profile = self._profile_fixer(quote, profile)
-        bars = self._bars_fixer(quote, bars)
+        return bars
 
-        return quote, bars, profile
+    def fetch_profile(
+        self,
+        symbol: str,
+    ) -> Profile:
+        profile = self.ds_primary.fetch_stock_profile(symbol)
+        return profile
+
+    # --- Sync to DB use cases ---
 
     def refresh_global_rates(self):
         self.db.upsert_global_rates(self.ds_primary.fetch_global_rates())
 
-    def refresh_security(
+    async def refresh_batch_profiles_async(
         self,
-        symbol: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-    ):
-        quote = self.ds_primary.fetch_quote(symbol)
-        bars = self.ds_primary.fetch_bars(symbol, start_date, end_date)
-        profile = self.ds_primary.fetch_stock_profile(symbol)
-        profile = self._profile_fixer(quote, profile)
+        symbols: list[str],
+        max_concurrency: int = 10,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        # TODO: Implement smart updating logic of profiles
+        pass
 
-        self.db.upsert_quote(quote)
-        self.db.upsert_bars(bars)
-        self.db.upsert_profile(profile)
-
-    async def refresh_securities_async(
+    async def refresh_batch_bars_async(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
@@ -117,49 +104,10 @@ class MarketDataManager:
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        if not symbols:
-            return
+        # TODO: Implement smart updating logic of bars
+        pass
 
-        sem = asyncio.Semaphore(max_concurrency)
-
-        async def fetch_one(symbol: str):
-            # limit concurrent workers
-            await sem.acquire()
-            try:
-                # run blocking HTTP work in a thread
-                quote, bars, profile = await asyncio.to_thread(
-                    self.fetch_security_data, symbol, start_date, end_date
-                )
-                return symbol, quote, bars, profile
-            finally:
-                sem.release()
-
-        # 1) fetch all data concurrently, process as they complete
-        tasks = {asyncio.create_task(fetch_one(sym)): sym for sym in symbols}
-        for completed_task in asyncio.as_completed(tasks.keys()):
-            symbol = None
-            try:
-                symbol, quote, bars, profile = await completed_task
-                # 2) write to DB sequentially (single thread)
-                self.db.upsert_quote(quote)
-                self.db.upsert_bars(bars)
-                self.db.upsert_profile(profile)
-            except Exception:
-                # If we don't have the symbol yet, try to get it from the task mapping
-                if symbol is None:
-                    # Type cast to handle type checker - asyncio.as_completed returns the same tasks
-                    symbol = tasks.get(completed_task)  # type: ignore
-                raise
-            finally:
-                # Report progress after each symbol is processed (success or failure)
-                if on_progress and symbol:
-                    try:
-                        on_progress(symbol)
-                    except Exception:
-                        # Don't let progress callback errors break the refresh
-                        pass
-
-    async def refresh_batch_intraday_async(
+    async def refresh_batch_quotes_async(
         self,
         symbols: list[str],
         batch_size: int = 100,
@@ -242,15 +190,91 @@ class MarketDataManager:
                 except Exception:
                     pass
 
-    # --- Aggregate building helpers ---
-    def build_security(
-        self, symbol: str, rates: Optional[GlobalRates] = None
+    async def refresh_securities_batch_async(
+        self,
+        symbols: list[str],
+        intraday: bool,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        max_concurrency: int = 10,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        """Refresh global rates then all securities — intraday (quotes only) or EOD (full bars)."""
+        self.refresh_global_rates()
+        if intraday:
+            await self.refresh_batch_quotes_async(
+                symbols,
+                batch_size=100,
+                max_concurrency=max_concurrency,
+                on_progress=on_progress,
+            )
+        else:
+            await self.refresh_batch_bars_async(
+                symbols,
+                start_date=start_date,
+                end_date=end_date,
+                max_concurrency=max_concurrency,
+                on_progress=on_progress,
+            )
+            await self.refresh_batch_profiles_async(
+                symbols,
+                max_concurrency=max_concurrency,
+                on_progress=on_progress,
+            )
+
+    # --- Read raw use cases ---
+
+    def read_global_rates(self) -> GlobalRates:
+        rates = self.db.read_global_rates()
+        if rates is None:  # first time, refresh from external source
+            self.refresh_global_rates()
+            rates = self.db.read_global_rates()
+        return rates
+
+    def read_available_symbols(self) -> List[str]:
+        return self.db.read_securities_list()
+
+    def read_security_quote(self, symbol: str) -> Quote | None:
+        return self.db.read_quote(symbol)
+
+    def read_security_batch_quotes(self, symbols: list[str]) -> list[Quote]:
+        return self.db.read_quotes(symbols)
+
+    def read_security_bars(
+        self,
+        symbol: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> list[Bar]:
+        return self.db.read_bars(symbol, start_date, end_date)
+
+    def read_security_batch_bars(
+        self,
+        symbols: list[str],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> dict[str, list[Bar]]:
+        return self.db.read_batch_bars(symbols, start_date, end_date)
+
+    def read_security_profile(self, symbol: str) -> Profile | None:
+        return self.db.read_profile(symbol)
+
+    def read_security_batch_profiles(self, symbols: list[str]) -> list[Profile]:
+        return self.db.read_profiles(symbols)
+
+    # --- Compute security analytics use cases ---
+    def _build_security(
+        self,
+        symbol: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        rates: Optional[GlobalRates] = None,
     ) -> Security:
-        quote = self.get_security_quote(symbol)
-        bars = self.get_security_bars(symbol)
-        profile = self.get_security_profile(symbol)
+        quote = self.read_security_quote(symbol)
+        bars = self.read_security_bars(symbol, start_date, end_date)
+        profile = self.read_security_profile(symbol)
         if rates is None:
-            rates = self.get_global_rates()
+            rates = self.read_global_rates()
         if quote is None or bars is None or profile is None or rates is None:
             raise ValueError(f"Security data missing for symbol: {symbol}")
         return Security(quote=quote, bars=bars, profile=profile, rates=rates)
@@ -265,7 +289,7 @@ class MarketDataManager:
         if not symbols:
             return {}
         if rates is None:
-            rates = await asyncio.to_thread(self.get_global_rates)
+            rates = await asyncio.to_thread(self.read_global_rates)
         quotes_list, bars_map, profiles_list = await asyncio.gather(
             asyncio.to_thread(self.db.read_quotes, symbols),
             asyncio.to_thread(self.db.read_batch_bars, symbols, start_date, end_date),
@@ -291,88 +315,65 @@ class MarketDataManager:
         )
         return dict(pairs)
 
-    # --- Read / view-model use cases ---
-
-    def get_global_rates(self) -> GlobalRates:
-        rates = self.db.read_global_rates()
-        if rates is None:  # first time, refresh from external source
-            self.refresh_global_rates()
-            rates = self.db.read_global_rates()
-        return rates
-
-    def get_available_symbols(self) -> List[str]:
-        return self.db.read_securities_list()
-
-    def get_security_quote(self, symbol: str) -> Quote | None:
-        return self.db.read_quote(symbol)
-
-    def get_security_quotes(self, symbols: list[str]) -> list[Quote]:
-        return self.db.read_quotes(symbols)
-
-    def get_security_bars(
+    def compute_security_metrics(
         self,
         symbol: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-    ) -> list[Bar]:
-        return self.db.read_bars(symbol, start_date, end_date)
+    ) -> PerformanceMetric:
+        return self._build_security(symbol, start_date, end_date).metrics
 
-    def get_security_batch_bars(
+    async def compute_security_batch_metrics(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-    ) -> dict[str, list[Bar]]:
-        return self.db.read_batch_bars(symbols, start_date, end_date)
-
-    def get_security_profile(self, symbol: str) -> Profile | None:
-        return self.db.read_profile(symbol)
-
-    def get_security_profiles(self, symbols: list[str]) -> list[Profile]:
-        return self.db.read_profiles(symbols)
-
-    def get_security_metrics(self, symbol: str) -> PerformanceMetric:
-        return self.build_security(symbol).metrics
-
-    async def get_security_batch_metrics(
-        self, symbols: list[str]
     ) -> list[PerformanceMetric]:
-        securities = await self.build_securities_batch_async(symbols)
+        securities = await self.build_securities_batch_async(
+            symbols, start_date, end_date
+        )
         return [
             securities[symbol].metrics for symbol in symbols if symbol in securities
         ]
 
-    def get_security_indicators(self, symbol: str) -> List[TimeseriesIndicator]:
-        return self.build_security(symbol).indicators
+    def compute_security_indicators(
+        self,
+        symbol: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> List[TimeseriesIndicator]:
+        return self._build_security(symbol, start_date, end_date).indicators
 
-    async def get_security_batch_indicators(
-        self, symbols: list[str]
+    async def compute_security_batch_indicators(
+        self,
+        symbols: list[str],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> dict[str, list[TimeseriesIndicator]]:
-        securities = await self.build_securities_batch_async(symbols)
+        securities = await self.build_securities_batch_async(
+            symbols, start_date, end_date
+        )
         return {
             symbol: securities[symbol].indicators
             for symbol in symbols
             if symbol in securities
         }
 
-    async def get_security_batch_analytics(
+    async def compute_security_batch_analytics(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> dict[str, SecurityAnalyticsResponse]:
-        securities = await self.build_securities_batch_async(symbols)
+        securities = await self.build_securities_batch_async(
+            symbols, start_date, end_date
+        )
         result: dict[str, SecurityAnalyticsResponse] = {}
         for symbol, sec in securities.items():
-            bars = sec.bars
-            if start_date:
-                bars = [b for b in bars if b.date.date() >= start_date]
-            if end_date:
-                bars = [b for b in bars if b.date.date() <= end_date]
             result[symbol] = SecurityAnalyticsResponse(
                 quote=sec.quote,
                 profile=sec.profile,
-                bars=bars,
+                bars=sec.bars,
                 metrics=sec.metrics,
                 indicators=sec.indicators,
             )

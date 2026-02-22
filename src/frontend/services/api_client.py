@@ -67,12 +67,6 @@ class APIClient:
     def refresh_rates(self):
         return self._post("/admin/refresh-rates")
 
-    def refresh_security(self, symbol: str):
-        return self._post(
-            "/admin/refresh-security",
-            params={"symbol": symbol},
-        )
-
     def refresh_securities(
         self,
         symbols: list[str],
@@ -168,11 +162,27 @@ class APIClient:
             params = {"start_date": start_date, "end_date": end_date}
         return self._get(f"/securities/{symbol}/bars", params=params)
 
-    def get_security_metrics(self, symbol: str):
-        return self._get(f"/securities/{symbol}/metrics")
+    def get_security_metrics(
+        self,
+        symbol: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        params = {}
+        if start_date is not None and end_date is not None:
+            params = {"start_date": start_date, "end_date": end_date}
+        return self._get(f"/securities/{symbol}/metrics", params=params)
 
-    def get_security_indicators(self, symbol: str):
-        return self._get(f"/securities/{symbol}/indicators")
+    def get_security_indicators(
+        self,
+        symbol: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        params = {}
+        if start_date is not None and end_date is not None:
+            params = {"start_date": start_date, "end_date": end_date}
+        return self._get(f"/securities/{symbol}/indicators", params=params)
 
     def get_security_batch_quotes(self, symbols: list[str]):
         return self._post("/securities/batch-quotes", json={"symbols": symbols})
@@ -189,11 +199,23 @@ class APIClient:
         payload = {"symbols": symbols, "start_date": start_date, "end_date": end_date}
         return self._post("/securities/batch-bars", json=payload)
 
-    def get_security_batch_metrics(self, symbols: list[str]):
-        return self._post("/securities/batch-metrics", json={"symbols": symbols})
+    def get_security_batch_metrics(
+        self,
+        symbols: list[str],
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        payload = {"symbols": symbols, "start_date": start_date, "end_date": end_date}
+        return self._post("/securities/batch-metrics", json=payload)
 
-    def get_security_batch_indicators(self, symbols: list[str]):
-        return self._post("/securities/batch-indicators", json={"symbols": symbols})
+    def get_security_batch_indicators(
+        self,
+        symbols: list[str],
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        payload = {"symbols": symbols, "start_date": start_date, "end_date": end_date}
+        return self._post("/securities/batch-indicators", json=payload)
 
     def get_security_batch_analytics(
         self,

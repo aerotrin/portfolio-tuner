@@ -34,7 +34,7 @@ class PortfolioManager:
     ) -> Portfolio:
         account, rates = await asyncio.gather(
             asyncio.to_thread(self.account_man.build_account, account_number, account_name),
-            asyncio.to_thread(self.market_man.get_global_rates),
+            asyncio.to_thread(self.market_man.read_global_rates),
         )
         positions = account.open_positions
         symbols = [p.symbol for p in positions]
@@ -53,7 +53,7 @@ class PortfolioManager:
         symbols: List[str],
         n_p: int = 5000,
     ) -> dict[str, Any]:
-        rates = await asyncio.to_thread(self.market_man.get_global_rates)
+        rates = await asyncio.to_thread(self.market_man.read_global_rates)
         securities_map = await self.market_man.build_securities_batch_async(symbols, rates=rates)
         securities = [securities_map[s] for s in symbols if s in securities_map]
         simulator = PortfolioSimulator(securities, rates, n_p)

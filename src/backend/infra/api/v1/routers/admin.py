@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import logging
 from typing import Literal
 import uuid
@@ -150,7 +150,7 @@ def _raise_http_error(exc: Exception) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Simple synchronous admin endpoints
+# Admin endpoints
 # ---------------------------------------------------------------------------
 
 
@@ -158,12 +158,12 @@ def _raise_http_error(exc: Exception) -> None:
     "/rates",
     response_model=GlobalRates,
 )
-def get_global_rates(
+def read_global_rates(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get current rates (i.e. risk-free rate, CAD/USD exchange rate)."""
     try:
-        rates = market_man.get_global_rates()
+        rates = market_man.read_global_rates()
         if rates is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -216,30 +216,11 @@ def refresh_rates(
         _raise_http_error(e)
 
 
-@router.post("/admin/refresh-security", status_code=status.HTTP_202_ACCEPTED)
-def refresh_security(
-    symbol: str,
-    market_man: MarketDataManager = Depends(get_market_data_manager),
-):
-    """Refresh market data (quote, bars, profile) for a single security by symbol."""
-    try:
-        market_man.refresh_security(symbol)
-        return  # 202 Accepted
-    except Exception as e:
-        _raise_http_error(e)
-
-
-# ---------------------------------------------------------------------------
-# Background worker for securities refresh
-# NOTE: This is async because MarketDataManager uses async methods.
-# ---------------------------------------------------------------------------
 async def _run_refresh_job(
     job_id: str,
     app,
-    symbols: list[str],
-    intraday: bool,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> None:
     """Runs in a background task after the HTTP response is sent."""
     job = _JOBS.get(job_id)
@@ -250,17 +231,12 @@ async def _run_refresh_job(
     job.status = "running"
     job.started_at = datetime.now(timezone.utc)
 
-    try:
-        bars_start_date = (
-            datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
-        )
-        bars_end_date = (
-            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
-        )
-    except Exception as e:
-        bars_start_date = None
-        bars_end_date = None
-        logger.error("Invalid date format for start_date or end_date: %s", e)
+    logger.info(
+        "Background %s securities refresh started, job_id=%s, symbols=%d",
+        "intraday" if job.intraday else "EOD",
+        job_id,
+        len(job.symbols),
+    )
 
     SessionLocal = app.state.SessionLocal
     db = SessionLocal()
@@ -272,39 +248,18 @@ async def _run_refresh_job(
             db=repo,
         )
 
-        market_man.refresh_global_rates()
-
-        # Create progress callback that decrements symbols_remaining
         def on_progress(symbol: str):
-            """Callback to update job progress after each symbol is processed."""
             if job.symbols_remaining > 0:
                 job.symbols_remaining -= 1
 
-        if intraday:
-            logger.info(
-                "Background INTRADAY BATCH securities refresh started, job_id=%s, symbols=%d",
-                job_id,
-                len(symbols),
-            )
-            await market_man.refresh_batch_intraday_async(
-                symbols,
-                batch_size=100,
-                max_concurrency=config.max_concurrency,
-                on_progress=on_progress,
-            )
-        else:
-            logger.info(
-                "Background EOD securities refresh started, job_id=%s, symbols=%d",
-                job_id,
-                len(symbols),
-            )
-            await market_man.refresh_securities_async(
-                symbols,
-                start_date=bars_start_date,
-                end_date=bars_end_date,
-                max_concurrency=config.max_concurrency,
-                on_progress=on_progress,
-            )
+        await market_man.refresh_securities_batch_async(
+            job.symbols,
+            intraday=job.intraday,
+            start_date=start_date,
+            end_date=end_date,
+            max_concurrency=config.max_concurrency,
+            on_progress=on_progress,
+        )
 
         job.status = "success"
         logger.info("Background refresh job %s completed successfully", job_id)
@@ -326,15 +281,19 @@ async def _run_refresh_job(
     "/admin/refresh-securities",
     response_model=RefreshSecuritiesResponse,
 )
-async def refresh_securities_async(
+async def refresh_securities(
     request: Request,
     symbols: list[str] = Body(...),
     intraday: bool = False,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     bg_task: BackgroundTasks = None,
 ):
-    """Trigger a batch refresh of market data for multiple securities by symbol."""
+    """
+    Trigger a batch refresh of market data for multiple securities by symbol.
+    Note: If intraday=True, only quote data (not full bars/history) will be refreshed for the given symbols.
+    """
+
     global _LAST_REFRESH
 
     if bg_task is None:
@@ -372,8 +331,6 @@ async def refresh_securities_async(
         _run_refresh_job,
         job_id,
         app,
-        list(symbols),
-        intraday,
         start_date=start_date,
         end_date=end_date,
     )

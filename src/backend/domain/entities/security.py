@@ -69,12 +69,12 @@ class Bar(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     symbol: str = Field()
-    date: datetime = Field()
     open: float = Field()
     high: float = Field()
     low: float = Field()
     close: float = Field()
     volume: float = Field()
+    date: datetime = Field()
 
 
 class GlobalRates(BaseModel):
