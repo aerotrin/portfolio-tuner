@@ -42,20 +42,12 @@ async def lifespan(app):
             rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_max_per_minute),
         )
     )
-    eodhd_client = EODHDClient(
-        EODHDConfig(
-            api_key=config.eodhd_api_key,
-            base_url=config.eodhd_base_url,
-            timeout_sec=config.eodhd_timeout_sec,
-            default_days_back=config.eodhd_default_days_back,
-        )
-    )
 
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal
     app.state.records_importer = records_importer
-    app.state.fmp_client = fmp_client
-    app.state.eodhd_client = eodhd_client
+    app.state.primary_market_datasource = fmp_client
+    app.state.backup_market_datasource = None
 
     yield
     engine.dispose()

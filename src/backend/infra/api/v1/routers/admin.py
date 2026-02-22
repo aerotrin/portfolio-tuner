@@ -113,8 +113,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(session)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -253,8 +253,8 @@ async def _run_refresh_job(
     try:
         repo = PgMarketDataRepository(db)
         market_man = MarketDataManager(
-            ds_us=app.state.fmp_client,
-            ds_ca=app.state.eodhd_client,
+            ds_primary=app.state.primary_market_datasource,
+            ds_backup=app.state.backup_market_datasource,
             db=repo,
         )
 

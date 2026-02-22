@@ -21,8 +21,7 @@ from frontend.services.streamlit_data import (
     load_account_summary,
     load_portfolio_data_eod,
     load_portfolio_data_intraday,
-    load_security_data_eod,
-    load_security_data_intraday,
+    load_security_data,
 )
 from frontend.utils.dataframe import (
     add_last_indicators,
@@ -118,11 +117,10 @@ portfolio_intraday = load_portfolio_data_intraday(account_id)
 st.session_state["portfolio_summary"] = portfolio_intraday.summary
 
 # --- Load securities data ---------------------------------------------------
-securities_intraday = load_security_data_intraday(page_symbols)
-securities_eod = load_security_data_eod(page_symbols, start_date, end_date)
+securities = load_security_data(page_symbols, start_date, end_date)
 
 # --- Make header dataframes -------------------------------------------------------
-header_quotes = combine_header_data(header_symbols, securities_intraday, securities_eod)
+header_quotes = combine_header_data(header_symbols, securities)
 st.session_state["last_us_timestamp"] = header_quotes[
     (header_quotes["currency"] == "USD") & (header_quotes["exchange"] == "INDEX")
 ]["timestamp"].max()  # FTRK-306
@@ -141,22 +139,22 @@ render_market_snapshot(header_quotes)
 
 # --- Benchmark dataframes ---------------------------------------------------
 # Benchmark quotes
-benchmark_quotes = combine_header_data([benchmark], securities_intraday, securities_eod)
+benchmark_quotes = combine_header_data([benchmark], securities)
 
 # Benchmark metrics
 benchmark_metrics = make_scalar_wide_df(
-    {s: securities_eod.metrics[s] for s in [benchmark]}
+    {s: securities.metrics[s] for s in [benchmark]}
 )
 benchmark_profiles = make_scalar_wide_df(
-    {s: securities_eod.profile[s] for s in [benchmark]}
+    {s: securities.profile[s] for s in [benchmark]}
 )
 
 # Benchmark bars & indicators
 benchmark_bars = make_timeseries_long_df(
-    {s: securities_eod.bars[s] for s in [benchmark]}
+    {s: securities.bars[s] for s in [benchmark]}
 )
 benchmark_indicators = make_timeseries_long_df(
-    {s: securities_eod.indicators[s] for s in [benchmark]}
+    {s: securities.indicators[s] for s in [benchmark]}
 )
 
 # Benchmark closes & close norms
@@ -211,18 +209,18 @@ if account_symbols:
     holdings_quotes_positions["symbol"] = holdings_quotes_positions.index
 
     holdings_metrics = make_scalar_wide_df(
-        {s: securities_eod.metrics[s] for s in account_symbols}
+        {s: securities.metrics[s] for s in account_symbols}
     )
     holdings_profiles = make_scalar_wide_df(
-        {s: securities_eod.profile[s] for s in account_symbols}
+        {s: securities.profile[s] for s in account_symbols}
     )
     holdings_metrics = normalize_trends(holdings_metrics)
 
     holdings_bars = make_timeseries_long_df(
-        {s: securities_eod.bars[s] for s in account_symbols}
+        {s: securities.bars[s] for s in account_symbols}
     )
     holdings_indicators = make_timeseries_long_df(
-        {s: securities_eod.indicators[s] for s in account_symbols}
+        {s: securities.indicators[s] for s in account_symbols}
     )
     holdings_closes = make_timeseries_wide_df(holdings_indicators, "close")
     holdings_close_norm = make_timeseries_wide_df(holdings_indicators, "close_norm")

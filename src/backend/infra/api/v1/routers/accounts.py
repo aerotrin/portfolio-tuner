@@ -53,8 +53,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(db)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -320,13 +320,13 @@ def get_account_cash_flows(
     "/accounts/{account_id}/portfolio",
     response_model=PortfolioSummaryDTO,
 )
-def get_account_portfolio_summary(
+async def get_account_portfolio_summary(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
 ):
     """Get aggregated portfolio summary for an account (market value, pnl etc.)."""
     try:
-        summary = portfolio_man.get_portfolio_summary(account.number, None)
+        summary = await portfolio_man.get_portfolio_summary(account.number, None)
         return summary
     except Exception as e:
         _raise_http_error(e)
@@ -336,13 +336,13 @@ def get_account_portfolio_summary(
     "/accounts/{account_id}/portfolio/holdings",
     response_model=dict[str, Holding],
 )
-def get_portfolio_holdings(
+async def get_portfolio_holdings(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
 ):
     """Get current holdings with holding details for an account's portfolio."""
     try:
-        holdings = portfolio_man.get_portfolio_holdings(account.number, None)
+        holdings = await portfolio_man.get_portfolio_holdings(account.number, None)
         return holdings
     except Exception as e:
         _raise_http_error(e)
@@ -352,13 +352,13 @@ def get_portfolio_holdings(
     "/accounts/{account_id}/portfolio/indicators",
     response_model=List[TimeseriesIndicator],
 )
-def get_portfolio_indicators(
+async def get_portfolio_indicators(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
 ):
     """Get timeseries indicators (e.g. portfolio value over time) for an account's portfolio."""
     try:
-        indicators = portfolio_man.get_portfolio_indicators(account.number, None)
+        indicators = await portfolio_man.get_portfolio_indicators(account.number, None)
         return indicators
     except Exception as e:
         _raise_http_error(e)
@@ -368,13 +368,13 @@ def get_portfolio_indicators(
     "/accounts/{account_id}/portfolio/metrics",
     response_model=PerformanceMetric,
 )
-def get_portfolio_metrics(
+async def get_portfolio_metrics(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
 ):
     """Get performance metrics (returns, Sharpe, etc.) for an account's portfolio."""
     try:
-        metrics = portfolio_man.get_portfolio_metrics(account.number, None)
+        metrics = await portfolio_man.get_portfolio_metrics(account.number, None)
         return metrics
     except Exception as e:
         _raise_http_error(e)
@@ -384,13 +384,13 @@ def get_portfolio_metrics(
     "/accounts/{account_id}/portfolio/correlation",
     response_model=CorrelationMatrixDTO,
 )
-def get_portfolio_correlation_matrix(
+async def get_portfolio_correlation_matrix(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
 ):
     """Get the correlation matrix between securities in an account's portfolio."""
     try:
-        correlation_matrix = portfolio_man.get_portfolio_correlation_matrix(
+        correlation_matrix = await portfolio_man.get_portfolio_correlation_matrix(
             account.number, None
         )
         if correlation_matrix is None:

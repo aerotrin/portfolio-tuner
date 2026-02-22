@@ -22,12 +22,8 @@ logger = logging.getLogger(__name__)
 # Data containers (Streamlit-friendly shapes)
 # ---------------------------------------------------------------------------
 @dataclass
-class SecurityIntradayData:
+class SecurityData:
     quote: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-
-@dataclass
-class SecurityEODData:
     profile: dict[str, dict[str, Any]] = field(default_factory=dict)
     metrics: dict[str, dict[str, Any]] = field(default_factory=dict)
     bars: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
@@ -141,84 +137,33 @@ def load_account_records(account_id: str) -> AccountRecords:
     return records
 
 
-@st.cache_data(show_spinner=False)
-def load_security_data_intraday(symbols: list[str]) -> SecurityIntradayData:
-    """Load intraday/quote data for given symbols."""
-    api = get_api_client()
-    securities = SecurityIntradayData()
-
-    if not symbols:
-        return securities
-
-    try:
-        quotes = api.get_security_batch_quotes(symbols)
-        for quote in quotes:
-            sym = quote.get("symbol")
-            if sym:
-                securities.quote[sym] = quote
-    except Exception:
-        st.error(f"Failed to get quotes data: {symbols}")
-        logger.exception("Failed to get quotes data for %s", symbols)
-
-    return securities
-
-
 @st.cache_data(show_spinner="Loading securities data…")
-def load_security_data_eod(
+def load_security_data(
     symbols: list[str],
     start_date: str | None,
     end_date: str | None,
-) -> SecurityEODData:
-    """Load EOD bars/metrics/indicators for given symbols and date range."""
+) -> SecurityData:
+    """Load quote, profile, bars, metrics and indicators for given symbols in a single request."""
     api = get_api_client()
-    securities = SecurityEODData()
+    data = SecurityData()
 
     if not symbols:
-        return securities
+        return data
 
-    # Profiles
     try:
-        profiles = api.get_security_batch_profiles(symbols)
-        for profile in profiles:
-            sym = profile.get("symbol")
-            if sym:
-                securities.profile[sym] = profile
+        batch = api.get_security_batch_analytics(symbols, start_date, end_date)
+        if isinstance(batch, dict):
+            for sym, analytics in batch.items():
+                data.quote[sym] = analytics.get("quote", {})
+                data.profile[sym] = analytics.get("profile", {})
+                data.metrics[sym] = analytics.get("metrics", {})
+                data.bars[sym] = analytics.get("bars", [])
+                data.indicators[sym] = analytics.get("indicators", [])
     except Exception:
-        st.error(f"Failed to get profiles data: {symbols}")
-        logger.exception("Failed to get profiles data for %s", symbols)
+        st.error("Failed to load securities data")
+        logger.exception("Failed to load securities data for %s", symbols)
 
-    # Bars (batch returns dict[symbol, list[Bar]])
-    try:
-        batch_bars = api.get_security_batch_bars(symbols, start_date, end_date)
-        if isinstance(batch_bars, dict):
-            for sym, bars in batch_bars.items():
-                securities.bars[sym] = bars
-    except Exception:
-        st.error("Failed to get bars data.")
-        logger.exception("Failed to get bars data for %s", symbols)
-
-    # Metrics
-    try:
-        metrics = api.get_security_batch_metrics(symbols)
-        for metric in metrics:
-            sym = metric.get("symbol")
-            if sym:
-                securities.metrics[sym] = metric
-    except Exception:
-        st.error(f"Failed to get metrics data: {symbols}")
-        logger.exception("Failed to get metrics data for %s", symbols)
-
-    # Indicators (batch returns dict[symbol, list[indicator]])
-    try:
-        batch_indicators = api.get_security_batch_indicators(symbols)
-        if isinstance(batch_indicators, dict):
-            for sym, indicator in batch_indicators.items():
-                securities.indicators[sym] = indicator
-    except Exception:
-        st.error(f"Failed to get indicators data: {symbols}")
-        logger.exception("Failed to get indicators data for %s", symbols)
-
-    return securities
+    return data
 
 
 def load_single_security_quote(symbol: str) -> dict | None:

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -124,3 +124,13 @@ class PerformanceMetric(BaseModel):
     near_52wk_hi: bool = Field(default=False)
     near_52wk_lo: bool = Field(default=False)
     last_calculated: datetime = Field(default_factory=datetime.now)
+
+
+class SecurityAnalyticsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    quote: Quote
+    profile: Profile
+    bars: List[Bar]
+    metrics: PerformanceMetric
+    indicators: List[TimeseriesIndicator]

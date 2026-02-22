@@ -10,10 +10,7 @@ from frontend.presentation.widgets.kpis import (
     render_market_snapshot,
     render_status_strip,
 )
-from frontend.services.streamlit_data import (
-    load_security_data_eod,
-    load_security_data_intraday,
-)
+from frontend.services.streamlit_data import load_security_data
 from frontend.shared.config_loader import SymbolGroup, load_symbols_config
 from frontend.utils.dataframe import (
     add_last_indicators,
@@ -96,11 +93,10 @@ if missing_symbols:
     )
 
 # --- Load securities data ---------------------------------------------------
-securities_intraday = load_security_data_intraday(page_symbols)
-securities_eod = load_security_data_eod(page_symbols, start_date, end_date)
+securities = load_security_data(page_symbols, start_date, end_date)
 
 # --- Header dataframes ---------------------------------------------------
-header_quotes = combine_header_data(header_symbols, securities_intraday, securities_eod)
+header_quotes = combine_header_data(header_symbols, securities)
 st.session_state["last_us_timestamp"] = header_quotes[
     (header_quotes["currency"] == "USD") & (header_quotes["exchange"] == "INDEX")
 ]["timestamp"].max()  # FTRK-306
@@ -116,22 +112,22 @@ render_market_snapshot(header_quotes)
 
 # --- Benchmark dataframes ---------------------------------------------------
 # Benchmark quotes
-benchmark_quotes = combine_header_data([benchmark], securities_intraday, securities_eod)
+benchmark_quotes = combine_header_data([benchmark], securities)
 
 # Benchmark metrics
 benchmark_metrics = make_scalar_wide_df(
-    {s: securities_eod.metrics[s] for s in [benchmark]}
+    {s: securities.metrics[s] for s in [benchmark]}
 )
 benchmark_profiles = make_scalar_wide_df(
-    {s: securities_eod.profile[s] for s in [benchmark]}
+    {s: securities.profile[s] for s in [benchmark]}
 )
 
 # Benchmark bars & indicators
 benchmark_bars = make_timeseries_long_df(
-    {s: securities_eod.bars[s] for s in [benchmark]}
+    {s: securities.bars[s] for s in [benchmark]}
 )
 benchmark_indicators = make_timeseries_long_df(
-    {s: securities_eod.indicators[s] for s in [benchmark]}
+    {s: securities.indicators[s] for s in [benchmark]}
 )
 
 # Benchmark closes & close norms
@@ -148,25 +144,25 @@ benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
 # --- Market dataframes -------------------------------------------------------
 # Market quotes
 market_quotes = make_scalar_wide_df(
-    {s: securities_intraday.quote[s] for s in market_symbols}
+    {s: securities.quote[s] for s in market_symbols}
 )
 market_quotes["symbol"] = market_quotes.index
 
 # Market metrics
 market_metrics = make_scalar_wide_df(
-    {s: securities_eod.metrics[s] for s in market_symbols}
+    {s: securities.metrics[s] for s in market_symbols}
 )
 market_profiles = make_scalar_wide_df(
-    {s: securities_eod.profile[s] for s in market_symbols}
+    {s: securities.profile[s] for s in market_symbols}
 )
 market_metrics = normalize_trends(market_metrics)
 
 # Market bars & indicators
 market_bars = make_timeseries_long_df(
-    {s: securities_eod.bars[s] for s in market_symbols}
+    {s: securities.bars[s] for s in market_symbols}
 )
 market_indicators = make_timeseries_long_df(
-    {s: securities_eod.indicators[s] for s in market_symbols}
+    {s: securities.indicators[s] for s in market_symbols}
 )
 
 # Market closes & close norms

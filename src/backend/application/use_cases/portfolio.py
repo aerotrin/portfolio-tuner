@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, List
 
 from backend.application.use_cases.account import AccountManager
@@ -26,43 +27,44 @@ class PortfolioManager:
     # --- Write / ETL use cases ---
 
     # --- Aggregate building helpers ---
-    def build_portfolio_from_account(
+    async def build_portfolio_from_account(
         self,
         account_number: str,
         account_name: str | None = None,
     ) -> Portfolio:
-        account = self.account_man.build_account(account_number, account_name)
+        account, rates = await asyncio.gather(
+            asyncio.to_thread(self.account_man.build_account, account_number, account_name),
+            asyncio.to_thread(self.market_man.get_global_rates),
+        )
         positions = account.open_positions
         symbols = [p.symbol for p in positions]
-        rates = self.market_man.get_global_rates()
-        securities = self.market_man.build_securities_batch(symbols, rates=rates)
-        portfolio = Portfolio(
+        securities = await self.market_man.build_securities_batch_async(symbols, rates=rates)
+        return Portfolio(
             id=account_number,
             cash=account.cash_balance,
             positions=positions,
             securities=securities,
             rates=rates,
         )
-        return portfolio
 
     # --- Simulated portfolio use cases ---
-    def run_simulated_portfolio(
+    async def run_simulated_portfolio(
         self,
         symbols: List[str],
         n_p: int = 5000,
     ) -> dict[str, Any]:
-        rates = self.market_man.get_global_rates()
-        securities_map = self.market_man.build_securities_batch(symbols, rates=rates)
+        rates = await asyncio.to_thread(self.market_man.get_global_rates)
+        securities_map = await self.market_man.build_securities_batch_async(symbols, rates=rates)
         securities = [securities_map[s] for s in symbols if s in securities_map]
         simulator = PortfolioSimulator(securities, rates, n_p)
         simulator.run_simulator()
         return simulator.find_optimal_portfolio()
 
     # --- Read / view-model use cases ---
-    def get_portfolio_summary(
+    async def get_portfolio_summary(
         self, account_number: str, account_name: str | None = None
     ) -> PortfolioSummaryDTO:
-        portfolio = self.build_portfolio_from_account(account_number, account_name)
+        portfolio = await self.build_portfolio_from_account(account_number, account_name)
         return PortfolioSummaryDTO(
             id=portfolio.id,
             book_value=portfolio.book_value,
@@ -77,26 +79,26 @@ class PortfolioManager:
             open_positions=[h.symbol for h in portfolio.holdings.values()],
         )
 
-    def get_portfolio_holdings(
+    async def get_portfolio_holdings(
         self, account_number: str, account_name: str | None = None
     ) -> dict[str, Holding]:
-        portfolio = self.build_portfolio_from_account(account_number, account_name)
+        portfolio = await self.build_portfolio_from_account(account_number, account_name)
         return portfolio.holdings
 
-    def get_portfolio_indicators(
+    async def get_portfolio_indicators(
         self, account_number: str, account_name: str | None = None
     ) -> List[TimeseriesIndicator]:
-        portfolio = self.build_portfolio_from_account(account_number, account_name)
+        portfolio = await self.build_portfolio_from_account(account_number, account_name)
         return portfolio.indicators
 
-    def get_portfolio_metrics(
+    async def get_portfolio_metrics(
         self, account_number: str, account_name: str | None = None
     ) -> PerformanceMetric:
-        portfolio = self.build_portfolio_from_account(account_number, account_name)
+        portfolio = await self.build_portfolio_from_account(account_number, account_name)
         return portfolio.metrics
 
-    def get_portfolio_correlation_matrix(
+    async def get_portfolio_correlation_matrix(
         self, account_number: str, account_name: str | None = None
     ) -> CorrelationMatrixDTO | None:
-        portfolio = self.build_portfolio_from_account(account_number, account_name)
+        portfolio = await self.build_portfolio_from_account(account_number, account_name)
         return portfolio.correlation_matrix

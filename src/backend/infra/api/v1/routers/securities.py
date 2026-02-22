@@ -13,6 +13,7 @@ from backend.domain.entities.security import (
     PerformanceMetric,
     Profile,
     Quote,
+    SecurityAnalyticsResponse,
     TimeseriesIndicator,
 )
 from backend.infra.api.v1.dependencies.auth import verify_token
@@ -31,8 +32,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(db)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -45,6 +46,12 @@ class SymbolsRequest(BaseModel):
 
 
 class BatchBarsRequest(BaseModel):
+    symbols: list[str] = Field(..., min_length=1)
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+class BatchAnalyticsRequest(BaseModel):
     symbols: list[str] = Field(..., min_length=1)
     start_date: date | None = None
     end_date: date | None = None
@@ -291,13 +298,13 @@ def get_security_batch_bars(
     "/securities/batch-metrics",
     response_model=List[PerformanceMetric],
 )
-def get_security_batch_metrics(
+async def get_security_batch_metrics(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get performance metrics for multiple securities in a batch request."""
     try:
-        return market_man.get_security_batch_metrics(payload.symbols)
+        return await market_man.get_security_batch_metrics(payload.symbols)
     except Exception as e:
         _raise_http_error(e)
 
@@ -306,12 +313,29 @@ def get_security_batch_metrics(
     "/securities/batch-indicators",
     response_model=Dict[str, List[TimeseriesIndicator]],
 )
-def get_security_batch_indicators(
+async def get_security_batch_indicators(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get timeseries indicators for multiple securities in a batch request."""
     try:
-        return market_man.get_security_batch_indicators(payload.symbols)
+        return await market_man.get_security_batch_indicators(payload.symbols)
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post(
+    "/securities/batch-analytics",
+    response_model=Dict[str, SecurityAnalyticsResponse],
+)
+async def get_security_batch_analytics(
+    payload: BatchAnalyticsRequest,
+    market_man: MarketDataManager = Depends(get_market_data_manager),
+):
+    """Get quote, profile, bars, metrics and indicators for multiple securities in a single request."""
+    try:
+        return await market_man.get_security_batch_analytics(
+            payload.symbols, payload.start_date, payload.end_date
+        )
     except Exception as e:
         _raise_http_error(e)

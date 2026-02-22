@@ -112,18 +112,17 @@ def normalize_trends(df: pd.DataFrame) -> pd.DataFrame:
 
 def combine_header_data(
     header_symbols: list[str],
-    securities_intraday: "SecurityIntradayData",
-    securities_eod: "SecurityEODData",
+    securities: "SecurityData",
 ) -> pd.DataFrame:
     """
-    Make a header dataframe from the intraday and EOD security data.
+    Make a header dataframe from the combined security data.
     """
     header = make_scalar_wide_df(
-        {s: securities_intraday.quote[s] for s in header_symbols}
+        {s: securities.quote[s] for s in header_symbols}
     )
 
     header_bars = make_timeseries_long_df(
-        {s: securities_eod.bars[s] for s in header_symbols}
+        {s: securities.bars[s] for s in header_symbols}
     )
     header_closes = make_timeseries_wide_df(header_bars, "close")
     header = add_sparkline(header, header_closes, add_intraday_close=True)
