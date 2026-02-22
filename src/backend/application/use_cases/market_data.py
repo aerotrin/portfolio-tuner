@@ -53,6 +53,20 @@ class MarketDataManager:
             logger.info(f"Inferred profile fields from quote for {quote.symbol}")
         return profile
 
+    def _bars_fixer(self, quote: Quote, bars: list[Bar]) -> list[Bar]:
+        bars.append(
+            Bar(
+                symbol=quote.symbol,
+                date=quote.timestamp,
+                open=quote.open,
+                high=quote.high,
+                low=quote.low,
+                close=quote.close,
+                volume=quote.volume,
+            )
+        )
+        return bars
+
     # --- Write / ETL use cases ---
 
     def fetch_quote(
@@ -73,6 +87,7 @@ class MarketDataManager:
         bars = self.ds_primary.fetch_bars(symbol, start_date, end_date)
         profile = self.ds_primary.fetch_stock_profile(symbol)
         profile = self._profile_fixer(quote, profile)
+        bars = self._bars_fixer(quote, bars)
 
         return quote, bars, profile
 

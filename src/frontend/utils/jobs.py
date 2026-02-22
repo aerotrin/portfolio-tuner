@@ -23,20 +23,27 @@ def _clear_job_state() -> None:
 
 
 def start_refresh_job(
-    symbols: list[str], blocking: bool, intraday: bool, active_page: str | None = None
+    symbols: list[str],
+    blocking: bool,
+    intraday: bool,
+    active_page: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> None:
     job_id = st.session_state.get("job_id")
     if job_id:
         st.toast(
             "Refresh job already in progress. Please wait for it to complete.", icon="⚠️"
         )
-        return
+        st.stop()
 
     if symbols:
         api = get_api_client()
         resp = api.refresh_securities(
             symbols,
             intraday=intraday,
+            start_date=start_date,
+            end_date=end_date,
         )
         status = resp.get("status")
         job_type = "Intraday" if intraday else "Full"

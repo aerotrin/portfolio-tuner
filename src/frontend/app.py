@@ -185,10 +185,10 @@ def bootstrap_once() -> None:
     # --- Date range defaults (only if missing) ---
     if "start_date" not in st.session_state or "end_date" not in st.session_state:
         now = datetime.now()
-        st.session_state["start_date"] = (now - timedelta(days=365)).strftime(
+        st.session_state["start_date"] = (now - timedelta(days=380)).strftime(
             "%Y-%m-%d"
         )
-        st.session_state["end_date"] = now.strftime("%Y-%m-%d")
+        st.session_state["end_date"] = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
     # --- Load symbols config once and derive symbol sets once ---
     symbols_config = load_symbols_config()
