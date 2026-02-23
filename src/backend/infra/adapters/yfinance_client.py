@@ -73,7 +73,9 @@ class YFinanceClient(MarketDataProvider):
             change=change,
             change_percent=change_pct,
             previousClose=previous_close,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.fromtimestamp(info["regularMarketTime"], tz=timezone.utc)
+            if info.get("regularMarketTime")
+            else datetime.now(timezone.utc),
         )
 
     def fetch_batch_quotes(self, symbols: list[str]) -> list[Quote]:
