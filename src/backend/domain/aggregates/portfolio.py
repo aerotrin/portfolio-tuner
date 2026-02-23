@@ -17,6 +17,7 @@ from backend.domain.entities.security import (
     GlobalRates,
     PerformanceMetric,
     SecurityAnalyticsResponse,
+    SecurityType,
     TimeseriesIndicator,
 )
 
@@ -261,7 +262,7 @@ class Portfolio:
                         previous_close=security.quote.previousClose,
                         timestamp=security.quote.timestamp,
                         holding_category=position.category,
-                        security_type=security.profile.type,
+                        security_type=security.profile.type if security.profile else SecurityType.UNKNOWN,
                         fx_rate=fx_rate,
                         option_osi=position.option_osi,
                         open_date=position.open_date,

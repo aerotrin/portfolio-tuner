@@ -87,7 +87,7 @@ if missing_symbols:
     start_refresh_job(
         symbols=missing_symbols,
         blocking=True,
-        intraday=False,
+        intraday=True,
         active_page=active_page,
         start_date=start_date,
         end_date=end_date,
@@ -122,8 +122,8 @@ with h[1]:
 # --- Make header dataframes -------------------------------------------------------
 header_quotes = combine_header_data(header_symbols, securities)
 st.session_state["last_us_timestamp"] = header_quotes[
-    (header_quotes["currency"] == "USD") & (header_quotes["exchange"] == "INDEX")
-]["timestamp"].max()  # FTRK-306
+    (header_quotes["currency"] == "USD")
+]["timestamp"].max()
 st.session_state["last_ca_timestamp"] = header_quotes[
     header_quotes["currency"] == "CAD"
 ]["timestamp"].max()

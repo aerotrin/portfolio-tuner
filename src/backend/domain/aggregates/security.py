@@ -28,7 +28,7 @@ class Security:
         quote: Quote,
         bars: List[Bar],
         rates: GlobalRates,
-        profile: Profile,
+        profile: Profile | None = None,
     ):
         self.quote = quote
         self.bars = bars

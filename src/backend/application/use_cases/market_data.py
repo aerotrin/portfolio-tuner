@@ -136,10 +136,18 @@ class MarketDataManager:
                     elapsed,
                 )
                 return batch, quotes
+            except Exception:
+                logger.warning(
+                    "fetch_batch_quotes failed for batch of %d symbols; falling back to single fetches",
+                    len(batch),
+                    exc_info=True,
+                )
+                return batch, []
             finally:
                 sem.release()
 
         all_quotes: list[Quote] = []
+        all_bars: list[Bar] = []
         all_symbols: list[str] = []
 
         tasks = {asyncio.create_task(fetch_batch(b)): b for b in batches}
@@ -151,16 +159,29 @@ class MarketDataManager:
                 returned_syms = {q.symbol for q in returned_quotes}
                 missed = set(current_batch) - returned_syms
 
-                # --- Single-fetch retry for missed symbols ---
+                # --- Single-fetch retry with backup datasource for missed symbols ---
                 for symbol in missed:
                     try:
+                        logger.info(f"Fetching backup quote for symbol: {symbol}")
                         quote = await asyncio.to_thread(
-                            self.ds_primary.fetch_quote, symbol
+                            self.ds_backup.fetch_quote, symbol
                         )
                         returned_quotes.append(quote)
                     except Exception:
                         logger.warning(
                             "Single-fetch retry failed for symbol %s; skipping",
+                            symbol,
+                        )
+
+                    try:
+                        logger.info(f"Fetching backup bars for symbol: {symbol}")
+                        bars = await asyncio.to_thread(
+                            self.ds_backup.fetch_bars, symbol
+                        )
+                        all_bars.extend(bars)
+                    except Exception:
+                        logger.warning(
+                            "Backup fetch_bars failed for symbol %s; skipping",
                             symbol,
                         )
 
@@ -182,6 +203,15 @@ class MarketDataManager:
             len(all_quotes),
             time.perf_counter() - t1,
         )
+
+        if all_bars:
+            t2 = time.perf_counter()
+            self.db.upsert_bars(all_bars)
+            logger.info(
+                "upsert_bars (backup): %d bars in %.3fs",
+                len(all_bars),
+                time.perf_counter() - t2,
+            )
 
         for sym in all_symbols:
             if on_progress:
@@ -275,7 +305,7 @@ class MarketDataManager:
         profile = self.read_security_profile(symbol)
         if rates is None:
             rates = self.read_global_rates()
-        if quote is None or bars is None or profile is None or rates is None:
+        if quote is None or bars is None or rates is None:
             raise ValueError(f"Security data missing for symbol: {symbol}")
         return Security(quote=quote, bars=bars, profile=profile, rates=rates)
 
@@ -301,7 +331,7 @@ class MarketDataManager:
         def build_one(symbol: str) -> tuple[str, Security]:
             quote = quotes.get(symbol)
             profile = profiles.get(symbol)
-            if quote is None or profile is None or rates is None:
+            if quote is None or rates is None:
                 raise ValueError(f"Security data missing for symbol: {symbol}")
             return symbol, Security(
                 quote=quote,

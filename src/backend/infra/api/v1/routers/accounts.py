@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 from typing import List
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from backend.infra.api.v1.dependencies.db import get_user_db
 from backend.infra.db.repo import PgAccountDataRepository, PgMarketDataRepository
 
 router = APIRouter(dependencies=[Depends(verify_token)])
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------
@@ -78,6 +80,7 @@ def _raise_http_error(exc: Exception) -> None:
     Minimal, pragmatic exception mapping.
     Replace/extend with your domain exception types if you have them.
     """
+    logger.exception("Unhandled exception in accounts router: %s", exc)
     # Conflict (e.g. duplicate account number)
     if isinstance(exc, ValueError) and "already exists" in str(exc).lower():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

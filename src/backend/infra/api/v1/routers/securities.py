@@ -21,6 +21,7 @@ from backend.infra.api.v1.dependencies.db import get_user_db
 from backend.infra.db.repo import PgMarketDataRepository
 
 router = APIRouter(dependencies=[Depends(verify_token)])
+logger = __import__("logging").getLogger(__name__)
 
 
 # -----------------------------
@@ -65,6 +66,8 @@ def _raise_http_error(exc: Exception) -> None:
     Minimal, pragmatic exception mapping.
     Replace/extend with your domain exception types if you have them.
     """
+    logger.exception("Unhandled exception in securities router: %s", exc)
+
     # Common "bad request" cases
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

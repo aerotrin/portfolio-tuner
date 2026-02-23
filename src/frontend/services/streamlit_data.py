@@ -148,11 +148,11 @@ def load_security_data(
         batch = api.get_security_batch_analytics(symbols, start_date, end_date)
         if isinstance(batch, dict):
             for sym, analytics in batch.items():
-                data.quote[sym] = analytics.get("quote", {})
-                data.profile[sym] = analytics.get("profile", {})
-                data.metrics[sym] = analytics.get("metrics", {})
-                data.bars[sym] = analytics.get("bars", [])
-                data.indicators[sym] = analytics.get("indicators", [])
+                data.quote[sym] = analytics.get("quote") or {}
+                data.profile[sym] = analytics.get("profile") or {}
+                data.metrics[sym] = analytics.get("metrics") or {}
+                data.bars[sym] = analytics.get("bars") or []
+                data.indicators[sym] = analytics.get("indicators") or []
     except Exception:
         st.error("Failed to load securities data")
         logger.exception("Failed to load securities data for %s", symbols)
@@ -187,11 +187,11 @@ def load_portfolio_snapshot(
         portfolio.indicators["PORTF"] = snap.get("indicators", [])
         portfolio.correlation_matrix = snap.get("correlation_matrix", {})
         for sym, analytics in snap.get("securities", {}).items():
-            portfolio.securities.quote[sym] = analytics.get("quote", {})
-            portfolio.securities.profile[sym] = analytics.get("profile", {})
-            portfolio.securities.metrics[sym] = analytics.get("metrics", {})
-            portfolio.securities.bars[sym] = analytics.get("bars", [])
-            portfolio.securities.indicators[sym] = analytics.get("indicators", [])
+            portfolio.securities.quote[sym] = analytics.get("quote") or {}
+            portfolio.securities.profile[sym] = analytics.get("profile") or {}
+            portfolio.securities.metrics[sym] = analytics.get("metrics") or {}
+            portfolio.securities.bars[sym] = analytics.get("bars") or []
+            portfolio.securities.indicators[sym] = analytics.get("indicators") or []
     except Exception:
         st.error("Failed to load portfolio data.")
         logger.exception("Failed to load portfolio snapshot for %s", account_id)

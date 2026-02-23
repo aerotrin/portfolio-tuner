@@ -130,7 +130,7 @@ class SecurityAnalyticsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     quote: Quote
-    profile: Profile
+    profile: Optional[Profile] = None
     bars: List[Bar]
     metrics: PerformanceMetric
     indicators: List[TimeseriesIndicator]

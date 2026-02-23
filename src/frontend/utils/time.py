@@ -11,7 +11,12 @@ COLOR_FRESH = "blue"
 COLOR_STALE = "yellow"
 
 
-def humanize_timestamp(time_in: str | datetime | pd.Timestamp) -> tuple[str, int, str]:
+def humanize_timestamp(
+    time_in: str | datetime | pd.Timestamp | None,
+) -> tuple[str, int, str]:
+    if time_in is None or time_in is pd.NaT:
+        return "N/A", -1, COLOR_STALE
+
     # Parse / normalize to aware UTC datetime
     if isinstance(time_in, str):
         dt = datetime.fromisoformat(time_in)

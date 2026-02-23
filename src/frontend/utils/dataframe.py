@@ -7,7 +7,9 @@ def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
     if all(isinstance(v, dict) for v in data.values()):
         df = pd.DataFrame.from_dict(data, orient="index")
         if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+            df["timestamp"] = pd.to_datetime(
+                df["timestamp"], errors="coerce", format="ISO8601"
+            )
         return df
 
     # single record
