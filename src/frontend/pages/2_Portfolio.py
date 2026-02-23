@@ -17,10 +17,9 @@ from frontend.presentation.widgets.kpis import (
     render_status_strip,
 )
 from frontend.services.streamlit_data import (
+    load_account_details,
     load_account_records,
-    load_account_summary,
-    load_portfolio_data_eod,
-    load_portfolio_data_intraday,
+    load_portfolio_snapshot,
     load_security_data,
 )
 from frontend.utils.dataframe import (
@@ -30,7 +29,6 @@ from frontend.utils.dataframe import (
     make_scalar_wide_df,
     make_timeseries_long_df,
     make_timeseries_wide_df,
-    normalize_trends,
 )
 from frontend.utils.jobs import (
     check_job_status,
@@ -45,16 +43,15 @@ active_page = "portfolio"
 # --- Session state -----------------------------------------------------------
 try:
     account_id = st.session_state["account_id"]
-    account_number = st.session_state["account_number"]
-    account_name = st.session_state["account_name"]
-    account_type = st.session_state["account_type"]
-
     hide_balances = st.session_state["hide_balances_toggle"]
+
     start_date = st.session_state["start_date"]
     end_date = st.session_state["end_date"]
 
     header_symbols = st.session_state["header_symbols"]
     benchmark_symbols = st.session_state["benchmark_symbols"]
+    base_symbols = st.session_state["base_symbols"]
+
     benchmark = st.session_state["benchmark"]
 
     available_symbols = st.session_state["available_symbols"]
@@ -65,26 +62,45 @@ except KeyError as exc:
     logger.exception("Missing session key on Holdings page: %s", exc)
     st.stop()
 
+# --- Load account details -----------------------------------------------------
+account = load_account_details(account_id)
 
 # -- Render header ------------------------------------------------------------
 h = st.columns([6, 1], vertical_alignment="center")
 with h[0]:
-    st.markdown(f"## 📊 {account_type} Portfolio")
+    st.markdown(f"## 📊 {account.type} Portfolio")
 
-# --- Account summary and symbols (selected account) --------------------------------------
-account_summary = load_account_summary(account_id)
-st.session_state["account_summary"] = account_summary
-account_symbols = account_summary["open_positions"]
+# --- Auto job status checking ------------------------------------------------
+check_job_status()
+render_refresh_job_ui(active_page)
 
-# --- Page symbols -----------------------------------------------------------
-page_symbols = sorted(
-    {
-        *header_symbols,
-        *benchmark_symbols,
-        *account_symbols,
-    }
-)
+# --- Load account records -----------------------------------------------------
+records = load_account_records(account.id)
 
+# --- Load portfolio symbols -------------------------------------------------------
+portfolio_symbols = sorted(set(p["symbol"] for p in records.open_positions))
+page_symbols = sorted(set(portfolio_symbols + base_symbols))
+
+# --- Ensure all page symbols are available else blocking refresh job --------
+missing_symbols = sorted(set(page_symbols) - set(available_symbols))
+if missing_symbols:
+    start_refresh_job(
+        symbols=missing_symbols,
+        blocking=True,
+        intraday=False,
+        active_page=active_page,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+# --- Load base data (header + benchmark only) ------------------------------
+securities = load_security_data(base_symbols, start_date, end_date)
+
+# --- Load portfolio data ---------------------------------------------------
+portfolio = load_portfolio_snapshot(account.id, start_date, end_date)
+
+# --- Render refresh data button -----------------------------------------------
 with h[1]:
     holdings_refresh = st.button(
         "Refresh Data",
@@ -97,34 +113,11 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=False,
+            intraday=True,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,
         )
-
-# --- Auto job status checking ------------------------------------------------
-check_job_status()
-render_refresh_job_ui(active_page)
-
-# --- Ensure all page symbols are available else blocking refresh job ----------------------------------------
-missing_symbols = sorted(set(page_symbols) - set(available_symbols))
-if missing_symbols:
-    start_refresh_job(
-        symbols=missing_symbols,
-        blocking=True,
-        intraday=False,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
-
-# --- Load portfolio data ---------------------------------------------------
-portfolio_intraday = load_portfolio_data_intraday(account_id)
-st.session_state["portfolio_summary"] = portfolio_intraday.summary
-
-# --- Load securities data ---------------------------------------------------
-securities = load_security_data(page_symbols, start_date, end_date)
 
 # --- Make header dataframes -------------------------------------------------------
 header_quotes = combine_header_data(header_symbols, securities)
@@ -139,7 +132,9 @@ st.session_state["last_ca_timestamp"] = header_quotes[
 render_status_strip(rates)
 
 if not hide_balances:
-    render_account_summary()
+    render_account_summary(
+        account.number, account.type, account.name, portfolio.summary
+    )
 
 # --- Market snapshot --------------------------------------------------------------------
 render_market_snapshot(header_quotes)
@@ -149,17 +144,13 @@ render_market_snapshot(header_quotes)
 benchmark_quotes = combine_header_data([benchmark], securities)
 
 # Benchmark metrics
-benchmark_metrics = make_scalar_wide_df(
-    {s: securities.metrics[s] for s in [benchmark]}
-)
+benchmark_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in [benchmark]})
 benchmark_profiles = make_scalar_wide_df(
     {s: securities.profile[s] for s in [benchmark]}
 )
 
 # Benchmark bars & indicators
-benchmark_bars = make_timeseries_long_df(
-    {s: securities.bars[s] for s in [benchmark]}
-)
+benchmark_bars = make_timeseries_long_df({s: securities.bars[s] for s in [benchmark]})
 benchmark_indicators = make_timeseries_long_df(
     {s: securities.indicators[s] for s in [benchmark]}
 )
@@ -175,8 +166,63 @@ benchmark_quotes = add_sparkline(
 benchmark_metrics = add_sparkline(benchmark_metrics, benchmark_closes)
 benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
 
-# --- Load account records ---------------------------------------------------
-records = load_account_records(account_id)
+
+# --- Holdings + portfolio data (only when account has positions) -------------
+holdings_positions = None
+holdings_metrics = None
+holdings_close_norm = None
+portfolio_metrics = None
+portfolio_close_norm = None
+portfolio_correlation_matrix = None
+
+if portfolio_symbols:
+    holdings_positions = make_scalar_wide_df(portfolio.holdings)
+    holdings_positions["symbol"] = holdings_positions.index
+
+    holdings_metrics = make_scalar_wide_df(
+        {s: portfolio.securities.metrics[s] for s in portfolio_symbols}
+    )
+    holdings_profiles = make_scalar_wide_df(
+        {s: portfolio.securities.profile[s] for s in portfolio_symbols}
+    )
+
+    holdings_bars = make_timeseries_long_df(
+        {s: portfolio.securities.bars[s] for s in portfolio_symbols}
+    )
+    holdings_indicators = make_timeseries_long_df(
+        {s: portfolio.securities.indicators[s] for s in portfolio_symbols}
+    )
+    holdings_closes = make_timeseries_wide_df(holdings_indicators, "close")
+    holdings_close_norm = make_timeseries_wide_df(holdings_indicators, "close_norm")
+
+    prof_df = holdings_profiles.loc[
+        :, ~holdings_profiles.columns.isin(holdings_positions.columns)
+    ]
+    holdings_positions = holdings_positions.join(prof_df, how="left")
+
+    holdings_positions = add_sparkline(
+        holdings_positions, holdings_closes, add_intraday_close=True
+    )
+    holdings_metrics = add_sparkline(holdings_metrics, holdings_closes)
+    holdings_metrics = add_last_indicators(holdings_metrics, holdings_indicators)
+
+    # Portfolio dataframes
+    portfolio_metrics = make_scalar_wide_df(portfolio.metrics)
+    portfolio_metrics = portfolio_metrics.set_index("symbol", drop=False)
+
+    portfolio_indicators = make_timeseries_long_df(portfolio.indicators)
+    portfolio_closes = make_timeseries_wide_df(portfolio_indicators, "close")
+    portfolio_close_norm = make_timeseries_wide_df(portfolio_indicators, "close_norm")
+
+    portfolio_correlation_matrix = pd.DataFrame(portfolio.correlation_matrix["entries"])
+    portfolio_correlation_matrix = portfolio_correlation_matrix.pivot(
+        index="row", columns="col", values="value"
+    )
+
+    portfolio_metrics = add_sparkline(portfolio_metrics, portfolio_closes)
+    portfolio_metrics = add_last_indicators(portfolio_metrics, portfolio_indicators)
+
+# --- Account records dataframes ---------------------------------------------------
 transactions = pd.DataFrame.from_records(records.transactions)
 if not transactions.empty:
     transactions["transaction_date"] = pd.to_datetime(
@@ -200,88 +246,21 @@ if not cash_flows.empty:
     )
     cash_flows = cash_flows.sort_values(by="transaction_date", ascending=False)
 
-# --- Holdings + portfolio data (only when account has positions) -------------
-holdings_quotes_positions = None
-holdings_metrics = None
-holdings_close_norm = None
-portfolio_metrics = None
-portfolio_close_norm = None
-portfolio_correlation_matrix = None
 
-if account_symbols:
-    portfolio_eod = load_portfolio_data_eod(account_id)
-
-    # Holdings dataframes
-    holdings_quotes_positions = make_scalar_wide_df(portfolio_intraday.holdings)
-    holdings_quotes_positions["symbol"] = holdings_quotes_positions.index
-
-    holdings_metrics = make_scalar_wide_df(
-        {s: securities.metrics[s] for s in account_symbols}
-    )
-    holdings_profiles = make_scalar_wide_df(
-        {s: securities.profile[s] for s in account_symbols}
-    )
-    holdings_metrics = normalize_trends(holdings_metrics)
-
-    holdings_bars = make_timeseries_long_df(
-        {s: securities.bars[s] for s in account_symbols}
-    )
-    holdings_indicators = make_timeseries_long_df(
-        {s: securities.indicators[s] for s in account_symbols}
-    )
-    holdings_closes = make_timeseries_wide_df(holdings_indicators, "close")
-    holdings_close_norm = make_timeseries_wide_df(holdings_indicators, "close_norm")
-
-    prof_df = holdings_profiles.loc[
-        :, ~holdings_profiles.columns.isin(holdings_quotes_positions.columns)
-    ]
-    holdings_quotes_positions = holdings_quotes_positions.join(prof_df, how="left")
-
-    holdings_quotes_positions = add_sparkline(
-        holdings_quotes_positions, holdings_closes, add_intraday_close=True
-    )
-    holdings_metrics = add_sparkline(holdings_metrics, holdings_closes)
-    holdings_metrics = add_last_indicators(holdings_metrics, holdings_indicators)
-
-    # Portfolio dataframes
-    portfolio_metrics = make_scalar_wide_df(portfolio_eod.metrics)
-    portfolio_metrics = portfolio_metrics.set_index("symbol", drop=False)
-
-    portfolio_indicators = make_timeseries_long_df(portfolio_eod.indicators)
-    portfolio_closes = make_timeseries_wide_df(portfolio_indicators, "close")
-    portfolio_close_norm = make_timeseries_wide_df(portfolio_indicators, "close_norm")
-
-    portfolio_correlation_matrix = pd.DataFrame(
-        portfolio_eod.correlation_matrix["entries"]
-    )
-    portfolio_correlation_matrix = portfolio_correlation_matrix.pivot(
-        index="row", columns="col", values="value"
-    )
-
-    portfolio_metrics = add_sparkline(portfolio_metrics, portfolio_closes)
-    portfolio_metrics = add_last_indicators(portfolio_metrics, portfolio_indicators)
-
-
-# --- Tabs (Reports first; Positions and Performance use prebuilt holdings data when present)
-tabs = st.tabs(["Open Positions", "Performance", "Reports"])
-
-with tabs[2]:
-    if not transactions.empty:
-        start_date, end_date = render_reports_header(transactions)
-        render_closed_lots_table(closed_lots, start_date, end_date)
-        render_cash_flows_table(cash_flows, start_date, end_date)
-        render_transactions_table(transactions, start_date, end_date)
-    else:
-        st.info("No transactions found.")
-
+# --- Render tabs --------------------------------------------------------------------
+tabs = st.tabs(["Positions", "Performance", "Reports"])
 
 with tabs[0]:
     render_portfolio_intraday(
-        holdings_quotes_positions, account_id, account_name, rates["fx_rate"]
+        holdings_positions,
+        portfolio.summary,
+        account.id,
+        account.name,
+        rates["fx_rate"],
     )
 
 with tabs[1]:
-    if not account_symbols:
+    if not portfolio_symbols:
         st.info("No open positions found for account.")
     else:
         assert (
@@ -304,3 +283,12 @@ with tabs[1]:
             correlation_matrix=portfolio_correlation_matrix,
             use_group_filter=False,
         )
+
+with tabs[2]:
+    if not transactions.empty:
+        start_date, end_date = render_reports_header(transactions)
+        render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)
+        render_cash_flows_table(cash_flows, start_date, end_date)
+        render_transactions_table(transactions, start_date, end_date)
+    else:
+        st.info("No transactions found.")

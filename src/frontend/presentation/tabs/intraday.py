@@ -9,13 +9,8 @@ from frontend.presentation.styles import (
     positions_table_styler,
     quote_table_styler,
 )
-from frontend.presentation.widgets.allocation_charts import (
-    render_portfolio_allocation,
-)
-from frontend.presentation.widgets.kpis import (
-    render_health_bar,
-    render_portfolio_kpis,
-)
+from frontend.presentation.widgets.allocation_charts import render_portfolio_allocation
+from frontend.presentation.widgets.kpis import render_health_bar, render_portfolio_kpis
 from frontend.presentation.widgets.transaction_form import transaction_form
 from frontend.presentation.widgets.treemaps import (
     render_treemap_intraday,
@@ -24,12 +19,55 @@ from frontend.presentation.widgets.treemaps import (
 from frontend.shared.config_loader import SymbolGroup
 
 
-def _render_transaction_button(
+def render_portfolio_intraday(
+    holdings: pd.DataFrame | None,
+    portfolio_summary: dict,
     account_id: str,
     account_name: str,
-    holdings: pd.DataFrame | None,
     fx_rate: float,
 ) -> None:
+    """Intraday view for current account holdings."""
+
+    portfolio_value = portfolio_summary["total_value"]
+    cash_balance = portfolio_summary["cash_balance"]
+
+    st.markdown("#### :material/show_chart: Intraday")
+
+    if holdings is None:
+        st.info("No holdings found")
+    else:
+        fig = render_treemap_intraday(holdings, top_label="Holdings", has_weight=False)
+        st.plotly_chart(fig, key="chart-holdings-securities")
+        # st.caption("Size is based on weight in portfolio")
+        with st.expander(
+            "Holdings Quote Table", icon=":material/table:", expanded=False
+        ):
+            st.dataframe(
+                quote_table_styler(holdings),
+                hide_index=True,
+                column_order=QUOTE_TABLE_CONFIG.keys(),
+                column_config=QUOTE_TABLE_CONFIG,
+                key="table-holdings-quote",
+            )
+
+    st.divider()
+
+    st.markdown("#### :material/table_rows: Positions")
+
+    if holdings is None:
+        st.info("No holdings found")
+    else:
+        # Metrics
+        with st.container(border=True, horizontal=True):
+            render_portfolio_kpis(holdings)
+
+        # Treemap
+        fig = render_treemap_positions(holdings)
+        st.plotly_chart(fig, key="chart-holdings-open")
+
+        # Health bar
+        render_health_bar(holdings)
+
     record_transaction = st.button(
         "Record Transaction", icon=":material/edit:", type="secondary"
     )
@@ -39,51 +77,12 @@ def _render_transaction_button(
             account_name,
             holdings,
             fx_rate,
+            portfolio_value,
+            cash_balance,
         )
-
-
-def render_portfolio_intraday(
-    holdings: pd.DataFrame | None,
-    account_id: str,
-    account_name: str,
-    fx_rate: float,
-) -> None:
-    """Intraday view for current account holdings."""
-    st.markdown("#### :material/show_chart: Intraday")
 
     if holdings is None:
-        st.info("No holdings found")
-        _render_transaction_button(account_id, account_name, holdings, fx_rate)
         return
-
-    fig = render_treemap_intraday(holdings, top_label="Holdings", has_weight=False)
-    st.plotly_chart(fig, key="chart-holdings-securities")
-    # st.caption("Size is based on weight in portfolio")
-    with st.expander("Holdings Quote Table", icon=":material/table:", expanded=False):
-        st.dataframe(
-            quote_table_styler(holdings),
-            hide_index=True,
-            column_order=QUOTE_TABLE_CONFIG.keys(),
-            column_config=QUOTE_TABLE_CONFIG,
-            key="table-holdings-quote",
-        )
-
-    st.divider()
-
-    st.markdown("#### :material/table_rows: Positions")
-
-    # Metrics
-    with st.container(border=True, horizontal=True):
-        render_portfolio_kpis(holdings)
-
-    # Treemap
-    fig = render_treemap_positions(holdings)
-    st.plotly_chart(fig, key="chart-holdings-open")
-
-    _render_transaction_button(account_id, account_name, holdings, fx_rate)
-
-    # Health bar
-    render_health_bar(holdings)
 
     # Table
     equity_df = holdings[holdings["holding_category"] == "Equity"]
@@ -117,7 +116,7 @@ def render_portfolio_intraday(
 
     st.divider()
 
-    render_portfolio_allocation(holdings)
+    render_portfolio_allocation(portfolio_summary, holdings)
 
 
 def render_market_intraday(

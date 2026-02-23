@@ -238,3 +238,10 @@ class CashFlow(BaseModel):
     quantity: Optional[int] = None
     currency: Currency
     amount: float
+
+
+class AccountRecordsDTO(BaseModel):
+    transactions: list[Transaction]
+    open_positions: list[OpenLot]
+    closed_lots: list[ClosedLot]
+    cash_flows: list[CashFlow]

@@ -1,10 +1,11 @@
 import requests
-from frontend.shared.env_loader import config
+
 from frontend.shared.dto import (
     AccountCreateRequest,
     AccountPatchRequest,
     TransactionCreate,
 )
+from frontend.shared.env_loader import config
 
 
 class APIClient:
@@ -104,9 +105,6 @@ class APIClient:
     def delete_account(self, account_id: str):
         return self._delete(f"/accounts/{account_id}")
 
-    def get_account_summary(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/summary")
-
     def get_account_transactions(self, account_id: str):
         return self._get(f"/accounts/{account_id}/transactions")
 
@@ -119,34 +117,24 @@ class APIClient:
     def delete_transaction(self, account_id: str, transaction_id: str):
         return self._delete(f"/accounts/{account_id}/transactions/{transaction_id}")
 
-    def get_account_open_positions(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/open")
+    def get_account_records(self, account_id: str):
+        return self._get(f"/accounts/{account_id}/records")
 
-    def get_account_closed_lots(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/closed")
-
-    def get_account_cash_flows(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/cash")
-
-    def get_portfolio_summary(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/portfolio")
-
-    def get_portfolio_holdings(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/portfolio/holdings")
-
-    def get_portfolio_indicators(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/portfolio/indicators")
-
-    def get_portfolio_metrics(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/portfolio/metrics")
-
-    def get_portfolio_correlation_matrix(self, account_id: str):
-        return self._get(f"/accounts/{account_id}/portfolio/correlation")
+    def get_portfolio(
+        self,
+        account_id: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        params = {}
+        if start_date is not None:
+            params["start_date"] = start_date
+        if end_date is not None:
+            params["end_date"] = end_date
+        return self._get(f"/accounts/{account_id}/portfolio", params=params)
 
     def get_available_symbols(self):
         return self._get("/securities")
-
-    # TODO Implement portfolio simulation POST endpoint
 
     def get_security_quote(self, symbol: str):
         return self._get(f"/securities/{symbol}")

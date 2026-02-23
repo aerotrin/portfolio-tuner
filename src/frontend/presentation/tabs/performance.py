@@ -6,13 +6,10 @@ from frontend.presentation.styles import (
     PERFORMANCE_TABLE_CONFIG,
     performance_table_styler,
 )
-from frontend.presentation.widgets.correlation_charts import (
-    render_correlation_matrix,
-)
+from frontend.presentation.widgets.correlation_charts import render_correlation_matrix
 from frontend.presentation.widgets.growth_chart import render_growth_chart
 from frontend.presentation.widgets.risk_chart import render_risk_chart
 from frontend.shared.config_loader import SymbolGroup
-from frontend.utils.dataframe import normalize_trends
 
 
 def _render_footer(metrics: pd.DataFrame, bars: pd.DataFrame) -> None:
@@ -108,7 +105,6 @@ def render_performance_view(
             close_norm_eod.loc[:, sel_symbols] if sel_symbols else close_norm_eod
         )
         sub_metrics = metrics_eod.loc[sel_symbols] if sel_symbols else metrics_eod
-        sub_metrics = normalize_trends(sub_metrics)
 
         with st.container(border=True):
             growth_chart_args = [sub_close_norm, benchmark_close_norm_eod]

@@ -3,14 +3,16 @@ import plotly.express as px
 import streamlit as st
 
 
-def render_portfolio_allocation(df: pd.DataFrame | None) -> None:
+def render_portfolio_allocation(
+    portfolio_summary: dict, df: pd.DataFrame | None
+) -> None:
     """Allocation breakdown for current holdings."""
     df = df.copy() if df is not None else pd.DataFrame()
 
     st.markdown("#### :material/pie_chart: Allocation")
 
-    cash_value = st.session_state["portfolio_summary"]["cash_balance"]
-    cash_weight = st.session_state["portfolio_summary"]["cash_pct"]
+    cash_value = portfolio_summary["cash_balance"]
+    cash_weight = portfolio_summary["cash_pct"]
     cash_row = {
         "symbol": "CASH",
         "name": "Cash",

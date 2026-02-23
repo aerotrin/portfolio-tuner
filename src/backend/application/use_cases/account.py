@@ -8,10 +8,7 @@ from backend.domain.entities.account import (
     AccountCreateRequest,
     AccountEntity,
     AccountPatchRequest,
-    AccountSummaryDTO,
-    CashFlow,
-    ClosedLot,
-    OpenLot,
+    AccountRecordsDTO,
     Transaction,
     TransactionCreateDTO,
 )
@@ -29,8 +26,6 @@ class AccountManager:
     def __init__(self, importer: AccountDataImporter, db: AccountDataRepository):
         self.importer = importer
         self.db = db
-
-    # --- Account CRUD ---
 
     def create_account(self, req: AccountCreateRequest, owner: str) -> AccountEntity:
         if self.db.account_exists_by_number(req.number):
@@ -52,7 +47,7 @@ class AccountManager:
     def list_accounts(self) -> list[AccountEntity]:
         return self.db.list_accounts()
 
-    def get_account(self, account_id: str) -> AccountEntity | None:
+    def read_account(self, account_id: str) -> AccountEntity | None:
         return self.db.get_account(account_id)
 
     def patch_account(self, account_id: str, req: AccountPatchRequest) -> AccountEntity:
@@ -86,14 +81,11 @@ class AccountManager:
             raise KeyError(f"Account {account_id} not found")
         self.db.delete_account(account_id)
 
-    # --- Write / ETL use case ---
-
     def import_account(self, account_number: str, file_content: bytes) -> None:
         """Import transactions from uploaded xlsx and upsert for the account."""
         txs = self.importer.import_account(account_number, file_content)
         self.db.upsert_transactions(account_number, txs)
 
-    # --- Aggregate building helpers ---
     def build_account(
         self, account_number: str, account_name: str | None = None
     ) -> Account:
@@ -101,49 +93,25 @@ class AccountManager:
         txs = self.db.read_transactions(account_number)
         return Account(account_number, txs, account_name)
 
-    # --- Read / view-model helpers for API ---
-    def get_account_summary(
+    def read_account_transactions(
         self,
         account_number: str,
-        account_name: str | None = None,
-    ) -> AccountSummaryDTO:
-        account = self.build_account(account_number, account_name)
-        return AccountSummaryDTO(
-            number=account.number,
-            name=account.name,
-            cash_balance=account.cash_balance,
-            book_value_securities=account.book_value_securities,
-            net_investment=account.net_investment,
-            open_positions=[p.symbol for p in account.open_positions],
-        )
-
-    def get_account_transactions(
-        self,
-        account_number: str,
-        account_name: str | None = None,
     ) -> list[Transaction]:
-        return self.build_account(account_number, account_name).transactions
+        txs = self.db.read_transactions(account_number)
+        return [Transaction.model_validate(tx) for tx in txs]
 
-    def get_account_open_positions(
+    def get_account_records(
         self,
         account_number: str,
         account_name: str | None = None,
-    ) -> list[OpenLot]:
-        return self.build_account(account_number, account_name).open_positions
-
-    def get_account_closed_positions(
-        self,
-        account_number: str,
-        account_name: str | None = None,
-    ) -> list[ClosedLot]:
-        return self.build_account(account_number, account_name).closed_positions
-
-    def get_account_cash_flows(
-        self,
-        account_number: str,
-        account_name: str | None = None,
-    ) -> list[CashFlow]:
-        return self.build_account(account_number, account_name).cash_flows
+    ) -> AccountRecordsDTO:
+        account = self.build_account(account_number, account_name)
+        return AccountRecordsDTO(
+            transactions=account.transactions,
+            open_positions=account.open_positions,
+            closed_lots=account.closed_positions,
+            cash_flows=account.cash_flows,
+        )
 
     def create_transaction(
         self, account_number: str, payload: TransactionCreateDTO

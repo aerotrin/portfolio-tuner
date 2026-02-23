@@ -1,5 +1,6 @@
-import pandas as pd
 from typing import Any
+
+import pandas as pd
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
@@ -98,18 +99,6 @@ def add_last_indicators(df: pd.DataFrame, indicators: pd.DataFrame) -> pd.DataFr
     return df
 
 
-def normalize_trends(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalize trend values for a DataFrame between -1 and 1.
-    """
-    df = df.copy()
-    for col in ["trend", "rsi_slope"]:
-        if col in df.columns:
-            scale = max(abs(df[col].min()), abs(df[col].max()))
-            df[col] = df[col] / scale
-    return df
-
-
 def combine_header_data(
     header_symbols: list[str],
     securities: "SecurityData",
@@ -117,9 +106,7 @@ def combine_header_data(
     """
     Make a header dataframe from the combined security data.
     """
-    header = make_scalar_wide_df(
-        {s: securities.quote[s] for s in header_symbols}
-    )
+    header = make_scalar_wide_df({s: securities.quote[s] for s in header_symbols})
 
     header_bars = make_timeseries_long_df(
         {s: securities.bars[s] for s in header_symbols}

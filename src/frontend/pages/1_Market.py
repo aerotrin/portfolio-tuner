@@ -19,7 +19,6 @@ from frontend.utils.dataframe import (
     make_scalar_wide_df,
     make_timeseries_long_df,
     make_timeseries_wide_df,
-    normalize_trends,
 )
 from frontend.utils.jobs import (
     check_job_status,
@@ -28,6 +27,7 @@ from frontend.utils.jobs import (
 )
 
 logger = logging.getLogger(__name__)
+
 active_page = "market"
 
 # --- Session state -----------------------------------------------------------
@@ -36,8 +36,10 @@ try:
     end_date = st.session_state["end_date"]
 
     header_symbols = st.session_state["header_symbols"]
-    market_symbols = st.session_state["market_symbols"]
     benchmark_symbols = st.session_state["benchmark_symbols"]
+    base_symbols = st.session_state["base_symbols"]
+
+    market_symbols = st.session_state["market_symbols"]
     benchmark = st.session_state["benchmark"]
 
     available_symbols = st.session_state["available_symbols"]
@@ -48,13 +50,17 @@ except KeyError as exc:
     logger.exception("Missing session key on Market page: %s", exc)
     st.stop()
 
-symbols_config = load_symbols_config()
+symbols_config = load_symbols_config()  # TODO: Duplication with app.py
 
 
 # -- Render header ------------------------------------------------------------
 h = st.columns([6, 1], vertical_alignment="center")
 with h[0]:
     st.markdown("## 🏦 Market Watch")
+
+# --- Auto job status checking ------------------------------------------------
+check_job_status()
+render_refresh_job_ui(active_page)
 
 # --- Page symbols -----------------------------------------------------------
 page_symbols = sorted(
@@ -65,6 +71,22 @@ page_symbols = sorted(
     }
 )
 
+# --- Ensure all page symbols are available else blocking refresh job --------
+missing_symbols = sorted(set(page_symbols) - set(available_symbols))
+if missing_symbols:
+    start_refresh_job(
+        symbols=missing_symbols,
+        blocking=True,
+        intraday=False,
+        active_page=active_page,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+# --- Load base + market securities data ---------------------------------------
+securities = load_security_data(page_symbols, start_date, end_date)
+
+# --- Render refresh data button -----------------------------------------------
 with h[1]:
     market_refresh = st.button(
         "Refresh Data",
@@ -77,30 +99,12 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=False,
+            intraday=True,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,
         )
 
-# --- Auto job status checking ------------------------------------------------
-check_job_status()
-render_refresh_job_ui(active_page)
-
-# --- Ensure all symbols are available else blocking refresh job ------------
-missing_symbols = sorted(set(page_symbols) - set(available_symbols))
-if missing_symbols:
-    start_refresh_job(
-        symbols=missing_symbols,
-        blocking=True,
-        intraday=False,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
-
-# --- Load securities data ---------------------------------------------------
-securities = load_security_data(page_symbols, start_date, end_date)
 
 # --- Header dataframes ---------------------------------------------------
 header_quotes = combine_header_data(header_symbols, securities)
@@ -122,17 +126,13 @@ render_market_snapshot(header_quotes)
 benchmark_quotes = combine_header_data([benchmark], securities)
 
 # Benchmark metrics
-benchmark_metrics = make_scalar_wide_df(
-    {s: securities.metrics[s] for s in [benchmark]}
-)
+benchmark_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in [benchmark]})
 benchmark_profiles = make_scalar_wide_df(
     {s: securities.profile[s] for s in [benchmark]}
 )
 
 # Benchmark bars & indicators
-benchmark_bars = make_timeseries_long_df(
-    {s: securities.bars[s] for s in [benchmark]}
-)
+benchmark_bars = make_timeseries_long_df({s: securities.bars[s] for s in [benchmark]})
 benchmark_indicators = make_timeseries_long_df(
     {s: securities.indicators[s] for s in [benchmark]}
 )
@@ -150,24 +150,17 @@ benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
 
 # --- Market dataframes -------------------------------------------------------
 # Market quotes
-market_quotes = make_scalar_wide_df(
-    {s: securities.quote[s] for s in market_symbols}
-)
+market_quotes = make_scalar_wide_df({s: securities.quote[s] for s in market_symbols})
 market_quotes["symbol"] = market_quotes.index
 
 # Market metrics
-market_metrics = make_scalar_wide_df(
-    {s: securities.metrics[s] for s in market_symbols}
-)
+market_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in market_symbols})
 market_profiles = make_scalar_wide_df(
     {s: securities.profile[s] for s in market_symbols}
 )
-market_metrics = normalize_trends(market_metrics)
 
 # Market bars & indicators
-market_bars = make_timeseries_long_df(
-    {s: securities.bars[s] for s in market_symbols}
-)
+market_bars = make_timeseries_long_df({s: securities.bars[s] for s in market_symbols})
 market_indicators = make_timeseries_long_df(
     {s: securities.indicators[s] for s in market_symbols}
 )

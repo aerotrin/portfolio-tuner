@@ -18,9 +18,9 @@ benchmarks:
     - ^IXIC
     - ^DJI
     - XIC.TO  # substitute for ^GSPTSE
+    # - ^GSPTSE
     - ^VIX
     # - ^RUT
-    # - ^GSPTSE
     # - ^FTSE
     # - ^N225
     # - ^HSI
@@ -33,6 +33,7 @@ snapshot:
     - ^IXIC
     - ^DJI
     - XIC.TO  # substitute for ^GSPTSE
+    # - ^GSPTSE
     - ^VIX
     - GCUSD
     - SIUSD

@@ -163,6 +163,7 @@ def test_portfolio_build_holdings_summary_and_contributions(
     portfolio = Portfolio(
         id="acct-1",
         cash=500.0,
+        net_investment=1000.0,
         positions=positions,
         securities=securities,
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.25),
@@ -260,6 +261,7 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     portfolio = Portfolio(
         id="acct-2",
         cash=0.0,
+        net_investment=0.0,
         positions=positions,
         securities=securities,
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.25),
@@ -280,6 +282,7 @@ def test_build_correlation_matrix_empty_securities_guard():
     portfolio = Portfolio(
         id="acct-3",
         cash=0.0,
+        net_investment=0.0,
         positions=[],
         securities={},
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),

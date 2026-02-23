@@ -7,44 +7,45 @@ from frontend.presentation.settings import HEIGHT_MARKET_SNAPSHOT
 from frontend.utils.time import humanize_timestamp
 
 
-def render_account_summary() -> None:
+def render_account_summary(
+    account_number: str, account_type: str, account_owner: str, portfolio_summary: dict
+) -> None:
     """Draw KPIs for the balances of a selected portfolio."""
-    account_name = st.session_state["account_name"]
-    account_owner = st.session_state["account_owner"]
-    account_kpis = st.session_state["account_summary"]
-    portfolio_kpis = st.session_state["portfolio_summary"]
 
     with st.container(border=True, horizontal=True):
         st.metric(
-            account_name,
+            f"{account_type} #{account_number}",
             account_owner,
         )
         st.metric(
             "Current Value CAD",
-            f"${portfolio_kpis['total_value']:,.2f}",
+            f"${portfolio_summary['total_value']:,.2f}",
         )
         st.metric(
             "Unrealized P/L CAD",
-            f"${portfolio_kpis['unrealized_gain']:,.2f}",
-            f"{portfolio_kpis['pnl_intraday']:+,.2f}",
+            f"${portfolio_summary['unrealized_gain']:,.2f}",
+            f"{portfolio_summary['pnl_intraday']:+,.2f}",
         )
         st.metric(
             "Cash CAD",
-            f"${account_kpis['cash_balance']:,.2f}",
-            f"{portfolio_kpis['cash_pct']:.1%}",
+            f"${portfolio_summary['cash_balance']:,.2f}",
+            f"{portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
         )
         st.metric(
             "Securities CAD",
-            f"${portfolio_kpis['market_value']:,.2f}",
-            f"{1 - portfolio_kpis['cash_pct']:.1%}",
+            f"${portfolio_summary['market_value']:,.2f}",
+            f"{1 - portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
         )
         st.metric(
-            "Total Return CAD",
-            f"${portfolio_kpis['total_value'] - account_kpis['net_investment']:,.2f}",
+            "Return CAD/IRR%",
+            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f}",
+            "TBD",  # TODO: Add IRR calculation
+            delta_color="off",  # TODO: Remove
+            delta_arrow="off",  # TODO: Remove
         )
 
 

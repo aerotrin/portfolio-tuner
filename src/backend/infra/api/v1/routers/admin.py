@@ -23,12 +23,9 @@ from sqlalchemy.orm import Session
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.domain.entities.security import GlobalRates
-from backend.infra.db.repo import (
-    PgAccountDataRepository,
-    PgMarketDataRepository,
-)
 from backend.infra.api.v1.dependencies.auth import verify_token
 from backend.infra.api.v1.dependencies.db import get_admin_db
+from backend.infra.db.repo import PgAccountDataRepository, PgMarketDataRepository
 from backend.shared.config import config
 
 logger = logging.getLogger(__name__)
@@ -189,7 +186,7 @@ async def import_account(
             detail="File must be an xlsx spreadsheet.",
         )
     try:
-        account = account_man.get_account(account_id)
+        account = account_man.read_account(account_id)
         if account is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

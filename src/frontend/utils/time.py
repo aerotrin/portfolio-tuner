@@ -8,7 +8,7 @@ UTC = ZoneInfo("UTC")
 M_TO_SEC = 60
 MINS_STALE = 60
 COLOR_FRESH = "blue"
-COLOR_STALE = "gray"
+COLOR_STALE = "yellow"
 
 
 def humanize_timestamp(time_in: str | datetime | pd.Timestamp) -> tuple[str, int, str]:

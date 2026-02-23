@@ -14,7 +14,6 @@ from frontend.services.streamlit_data import (
     delete_account,
     get_api_client,
     import_account_records,
-    load_account_summary,
     load_accounts_list,
     load_available_securities_list,
     load_rates,
@@ -185,18 +184,24 @@ def bootstrap_once() -> None:
     # --- Date range defaults (only if missing) ---
     if "start_date" not in st.session_state or "end_date" not in st.session_state:
         now = datetime.now()
-        st.session_state["start_date"] = (now - timedelta(days=380)).strftime(
+        st.session_state["start_date"] = (now - timedelta(days=365)).strftime(
             "%Y-%m-%d"
         )
-        st.session_state["end_date"] = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        st.session_state["end_date"] = now.strftime("%Y-%m-%d")
 
     # --- Load symbols config once and derive symbol sets once ---
     symbols_config = load_symbols_config()
     header_symbols = symbols_config.snapshot.symbols
     benchmark_symbols = symbols_config.benchmarks.symbols
-
+    base_symbols = sorted(
+        {
+            *header_symbols,
+            *benchmark_symbols,
+        }
+    )
     st.session_state["header_symbols"] = header_symbols
     st.session_state["benchmark_symbols"] = benchmark_symbols
+    st.session_state["base_symbols"] = base_symbols
 
     market_etf_symbols = sorted(
         {
@@ -282,20 +287,20 @@ if not accounts:
     st.stop()
 
 account_numbers = [account.number for account in accounts]
-account_labels = [f"{account.type} #{account.number}" for account in accounts]
+account_display_labels = [f"{account.type} #{account.number}" for account in accounts]
 account_ids = [account.id for account in accounts]
 
 # Choose default account only if not set
-st.session_state.setdefault("account_name", account_labels[0])
+st.session_state.setdefault("account_display_label", account_display_labels[0])
 
 
 # -----------------------------------------------------------------------------
 # Dialogs
 # -----------------------------------------------------------------------------
 @st.dialog("Delete account?")
-def _show_delete_confirm_dialog(account_id: str, account_label: str) -> None:
+def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> None:
     st.warning(
-        f"Delete {account_label}? \n\n"
+        f"Delete Account {account_display_label}? \n\n"
         "All transactions and account records will be permanently deleted.\n"
         "This action cannot be undone."
     )
@@ -324,20 +329,14 @@ with st.sidebar:
 
     st.toggle("Hide Balances", key="hide_balances_toggle")
 
-    account_name = st.radio(
+    account_display_label = st.radio(
         "Select an account",
-        account_labels,
-        key="account_name",
+        account_display_labels,
+        key="account_display_label",
     )
-
     # Update selected account state (derived, but tied to user selection)
-    idx = account_labels.index(account_name)
+    idx = account_display_labels.index(account_display_label)
     selected = accounts[idx]
-
-    st.session_state["account_number"] = selected.number
-    st.session_state["account_status"] = selected.tax_status
-    st.session_state["account_owner"] = selected.name
-    st.session_state["account_type"] = selected.type
     st.session_state["account_id"] = selected.id
 
     # Benchmark select: default to account benchmark if present
@@ -406,7 +405,7 @@ with st.sidebar:
     if st.session_state.get("show_edit_account_dialog", False):
         edit_account_dialog(
             st.session_state["account_id"],
-            st.session_state["account_number"],
+            st.session_state["account_display_label"],
             benchmark_symbols,
         )
         st.session_state["show_edit_account_dialog"] = False
@@ -422,10 +421,9 @@ with st.sidebar:
         st.rerun()
 
     if st.session_state.get("show_delete_account_confirm", False):
-        idx = account_labels.index(st.session_state["account_name"])
         _show_delete_confirm_dialog(
-            account_id=account_ids[idx],
-            account_label=account_labels[idx],
+            account_id=st.session_state["account_id"],
+            account_display_label=st.session_state["account_display_label"],
         )
 
     st.divider()
@@ -439,23 +437,7 @@ with st.sidebar:
         type="primary",
         key="full_data_refresh_button",
     ):
-        all_account_symbols: list[str] = []
-        for account_id in account_ids:
-            account_summary = load_account_summary(account_id)
-            all_account_symbols.extend(account_summary["open_positions"])
-
-        all_account_symbols = sorted(set(all_account_symbols))
-        symbols_to_fetch = sorted(
-            {
-                *header_symbols,
-                *benchmark_symbols,
-                *market_symbols,
-                *all_account_symbols,
-            }
-        )
-
-        start_refresh_job(symbols_to_fetch, blocking=False, intraday=False)
-        st.toast("Background EOD refresh started", icon="🔄")
+        pass
 
     if config.debug:
         st.divider()
