@@ -208,6 +208,14 @@ def transaction_form(
     if not submit:
         return None
 
+    # --- Guard: BUY must not exceed available cash balance ---
+    if transaction_type == TransactionKind.BUY and abs(amount) > cash_balance:
+        st.toast(
+            f"Insufficient funds — amount **{abs(amount):,.2f} CAD** exceeds available cash balance of **{cash_balance:,.2f} CAD**.",
+            icon="🚫",
+        )
+        return None
+
     # --- Symbol cleaning (for records table) ---
     if transaction_type in (TransactionKind.BUY, TransactionKind.SELL):
         assert symbol is not None
