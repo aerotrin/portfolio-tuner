@@ -28,7 +28,7 @@ class Security:
         quote: Quote,
         bars: List[Bar],
         rates: GlobalRates,
-        profile: Profile,
+        profile: Profile | None = None,
     ):
         self.quote = quote
         self.bars = bars
@@ -43,8 +43,29 @@ class Security:
 
     def calculate(self):
         try:
-            bars_df = pd.DataFrame([bar.model_dump() for bar in self.bars])
-            bars_df = bars_df.sort_values(by="date", ascending=True).set_index("date")
+            quote_as_bar = Bar(
+                symbol=self.quote.symbol,
+                open=self.quote.open,
+                high=self.quote.high,
+                low=self.quote.low,
+                close=self.quote.close,
+                volume=self.quote.volume,
+                date=self.quote.timestamp,
+            )
+            bars_df = pd.DataFrame(
+                [bar.model_dump() for bar in self.bars + [quote_as_bar]]
+            )
+            bars_df["date"] = pd.to_datetime(bars_df["date"], utc=True).dt.normalize()
+            bars_df = bars_df.drop_duplicates(subset="date", keep="last")
+            bars_df = (
+                bars_df.sort_values(by="date", ascending=True)
+                .tail(252)
+                .set_index("date")
+            )
+
+            self.bars = [
+                Bar(**r) for r in bars_df.reset_index().to_dict(orient="records")
+            ]
 
             self.indicators_df = compute_timeseries_indicators(bars_df)
             self.metrics_df = compute_performance_metrics(

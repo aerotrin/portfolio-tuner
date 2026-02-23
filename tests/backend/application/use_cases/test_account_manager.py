@@ -130,15 +130,15 @@ def test_build_account_and_summary_and_view_accessors(
     assert account.book_value_securities == pytest.approx(300.0)
     assert account.net_investment == pytest.approx(1000.0)
 
-    summary = manager.get_account_summary("ACC-1", account_name="Primary")
-    assert summary.cash_balance == pytest.approx(760.0)
-    assert summary.book_value_securities == pytest.approx(300.0)
-    assert summary.net_investment == pytest.approx(1000.0)
-    assert summary.open_positions == ["AAPL"]
+    assert account.cash_balance == pytest.approx(760.0)
+    assert account.book_value_securities == pytest.approx(300.0)
+    assert account.net_investment == pytest.approx(1000.0)
+    assert [p.symbol for p in account.open_positions] == ["AAPL"]
 
-    assert len(manager.get_account_open_positions("ACC-1")) == 1
-    assert len(manager.get_account_closed_positions("ACC-1")) == 1
-    assert len(manager.get_account_cash_flows("ACC-1")) == 1
+    records = manager.get_account_records("ACC-1")
+    assert len(records.open_positions) == 1
+    assert len(records.closed_lots) == 1
+    assert len(records.cash_flows) == 1
 
 
 def test_create_account_rejects_duplicate_account_number():
@@ -224,7 +224,7 @@ def test_get_account_returns_none_for_missing_id():
     manager = AccountManager(
         importer=FakeAccountDataImporter(), db=FakeAccountDataRepository()
     )
-    assert manager.get_account("missing") is None
+    assert manager.read_account("missing") is None
 
 
 def test_create_transaction_roundtrip_through_repository():

@@ -1,24 +1,33 @@
+import asyncio
 from datetime import date, datetime
 from types import SimpleNamespace
 
+import pytest
+
 from src.backend.application.use_cases.portfolio import PortfolioManager
+from src.backend.domain.aggregates.security import Security
 from src.backend.domain.entities.account import OpenLot
 from src.backend.domain.entities.security import (
     GlobalRates,
     PerformanceMetric,
     TimeseriesIndicator,
 )
+from tests.backend.conftest import build_bars, build_global_rates, build_profile, build_quote
 
 
 class FakeMarketDataManager:
     def __init__(self):
-        self.build_securities_batch_calls: list[list[str]] = []
+        self.build_securities_batch_calls: list[dict] = []
 
-    def build_securities_batch(self, symbols, start_date=None, end_date=None, rates=None):
-        self.build_securities_batch_calls.append(list(symbols))
+    async def build_securities_batch_async(
+        self, symbols, start_date=None, end_date=None, rates=None
+    ):
+        self.build_securities_batch_calls.append(
+            {"symbols": list(symbols), "start_date": start_date, "end_date": end_date}
+        )
         return {symbol: SimpleNamespace(symbol=symbol) for symbol in symbols}
 
-    def get_global_rates(self):
+    def read_global_rates(self):
         return GlobalRates(rf_rate=4.5, fx_rate=1.34)
 
 
@@ -31,7 +40,7 @@ class FakeAccountManager:
     def build_account(self, account_number: str, account_name: str | None = None):
         self.calls.append((account_number, account_name))
         return SimpleNamespace(
-            open_positions=self.positions, cash_balance=self.cash_balance
+            open_positions=self.positions, cash_balance=self.cash_balance, net_investment=0.0
         )
 
 
@@ -60,7 +69,7 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     captured = {}
 
     class CapturingPortfolio:
-        def __init__(self, id, cash, positions, securities, rates):
+        def __init__(self, id, cash, net_investment, positions, securities, rates):
             captured["id"] = id
             captured["cash"] = cash
             captured["positions"] = positions
@@ -72,14 +81,41 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     )
 
     manager = PortfolioManager(market_man=fake_market, account_man=fake_account)
-    manager.build_portfolio_from_account("ACC-1", account_name="Main")
+    asyncio.run(manager.build_portfolio_from_account("ACC-1", account_name="Main"))
 
     assert fake_account.calls == [("ACC-1", "Main")]
-    assert fake_market.build_securities_batch_calls == [["AAPL", "MSFT"]]
+    assert fake_market.build_securities_batch_calls == [
+        {"symbols": ["AAPL", "MSFT"], "start_date": None, "end_date": None}
+    ]
     assert captured["id"] == "ACC-1"
     assert captured["cash"] == 250.0
     assert captured["positions"] == positions
     assert set(captured["securities"].keys()) == {"AAPL", "MSFT"}
+
+
+def test_build_portfolio_from_account_forwards_date_filter(monkeypatch):
+    """start_date and end_date are forwarded to build_securities_batch_async."""
+    fake_market = FakeMarketDataManager()
+    fake_account = FakeAccountManager(positions=[], cash_balance=0.0)
+
+    class CapturingPortfolio:
+        def __init__(self, id, cash, net_investment, positions, securities, rates):
+            pass
+
+    monkeypatch.setattr(
+        "src.backend.application.use_cases.portfolio.Portfolio", CapturingPortfolio
+    )
+
+    manager = PortfolioManager(market_man=fake_market, account_man=fake_account)
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 31)
+    asyncio.run(
+        manager.build_portfolio_from_account("ACC-1", start_date=start, end_date=end)
+    )
+
+    assert fake_market.build_securities_batch_calls == [
+        {"symbols": [], "start_date": start, "end_date": end}
+    ]
 
 
 def test_portfolio_read_methods_pass_through(monkeypatch):
@@ -119,32 +155,86 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
         unrealized_gain=100.0,
         return_on_cost=0.1,
         return_on_value=0.083,
+        net_investment=0.0,
         pnl_intraday=5.0,
-        holdings={"AAPL": SimpleNamespace(symbol="AAPL")},
+        holdings={},
         indicators=[indicator],
         metrics=metric,
-        correlation_matrix={"labels": ["AAPL"], "values": [[1.0]]},
+        correlation_matrix=None,
+        securities={},
     )
 
     manager = PortfolioManager(
         market_man=FakeMarketDataManager(), account_man=FakeAccountManager([])
     )
-    monkeypatch.setattr(
-        manager,
-        "build_portfolio_from_account",
-        lambda *_args, **_kwargs: stub_portfolio,
+
+    async def fake_build(*_args, **_kwargs):
+        return stub_portfolio
+
+    monkeypatch.setattr(manager, "build_portfolio_from_account", fake_build)
+
+    snap = asyncio.run(manager.get_portfolio("ACC-1"))
+    assert snap.summary.id == "ACC-1"
+    assert snap.summary.open_positions == []
+    assert snap.holdings == {}
+    assert len(snap.indicators) == 1
+    assert snap.indicators[0].model_dump() == indicator.model_dump()
+    assert snap.metrics.model_dump() == metric.model_dump()
+    assert snap.correlation_matrix is None
+
+
+def test_get_portfolio_includes_per_security_analytics(monkeypatch):
+    """get_portfolio returns per-security analytics and forwards date params."""
+    rates = build_global_rates()
+    aapl_sec = Security(
+        quote=build_quote("AAPL"),
+        bars=build_bars("AAPL", closes=[100.0, 101.0, 102.0, 103.0, 104.0]),
+        profile=build_profile("AAPL"),
+        rates=rates,
+    )
+    stub_portfolio = SimpleNamespace(
+        id="ACC-1",
+        book_value=500.0,
+        market_value=550.0,
+        total_value=650.0,
+        cash_balance=100.0,
+        cash_pct=0.15,
+        unrealized_gain=50.0,
+        return_on_cost=0.1,
+        return_on_value=0.077,
+        net_investment=0.0,
+        pnl_intraday=2.0,
+        holdings={},
+        indicators=[],
+        metrics=PerformanceMetric(
+            symbol="PORTF", name="Portfolio", exchange="N/A", currency="CAD"
+        ),
+        correlation_matrix=None,
+        securities={"AAPL": aapl_sec},
     )
 
-    summary = manager.get_portfolio_summary("ACC-1")
-    assert summary.id == "ACC-1"
-    assert summary.open_positions == ["AAPL"]
-    assert manager.get_portfolio_holdings("ACC-1") is stub_portfolio.holdings
-    assert manager.get_portfolio_indicators("ACC-1") == [indicator]
-    assert manager.get_portfolio_metrics("ACC-1") == metric
-    assert manager.get_portfolio_correlation_matrix("ACC-1") == {
-        "labels": ["AAPL"],
-        "values": [[1.0]],
-    }
+    build_calls: list[dict] = []
+
+    async def fake_build(account_number, account_name=None, start_date=None, end_date=None):
+        build_calls.append({"start_date": start_date, "end_date": end_date})
+        return stub_portfolio
+
+    manager = PortfolioManager(
+        market_man=FakeMarketDataManager(), account_man=FakeAccountManager([])
+    )
+    monkeypatch.setattr(manager, "build_portfolio_from_account", fake_build)
+
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 31)
+    snap = asyncio.run(
+        manager.get_portfolio("ACC-1", start_date=start, end_date=end)
+    )
+
+    assert build_calls == [{"start_date": start, "end_date": end}]
+    assert snap.summary.id == "ACC-1"
+    assert snap.summary.open_positions == []
+    assert set(snap.securities.keys()) == {"AAPL"}
+    assert snap.securities["AAPL"].quote.symbol == "AAPL"
 
 
 def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
@@ -179,9 +269,13 @@ def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
         FakePortfolioSimulator,
     )
 
-    result = manager.run_simulated_portfolio(symbols=["AAPL", "MSFT"], n_p=123)
+    result = asyncio.run(
+        manager.run_simulated_portfolio(symbols=["AAPL", "MSFT"], n_p=123)
+    )
 
-    assert fake_market.build_securities_batch_calls == [["AAPL", "MSFT"]]
+    assert fake_market.build_securities_batch_calls == [
+        {"symbols": ["AAPL", "MSFT"], "start_date": None, "end_date": None}
+    ]
     assert captured["n_p"] == 123
     assert captured["ran"] is True
     assert result["id"] == "PORTF_42"

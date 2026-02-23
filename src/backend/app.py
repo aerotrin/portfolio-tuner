@@ -5,9 +5,10 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.infra.adapters.eodhd_client import EODHDClient, EODHDConfig
 from backend.infra.adapters.excel_pandas_client import ExcelPandasClient
 from backend.infra.adapters.fmp_client import FMPClient, FMPConfig
+from backend.infra.adapters.rate_limiter import RateLimiterConfig
+from backend.infra.adapters.yfinance_client import YFinanceClient
 from backend.infra.api.v1.routers import accounts as accounts_routers
 from backend.infra.api.v1.routers import admin as admin_routers
 from backend.infra.api.v1.routers import securities as securities_routers
@@ -38,25 +39,17 @@ async def lifespan(app):
             base_url=config.fmp_base_url,
             timeout_sec=config.fmp_timeout_sec,
             default_days_back=config.fmp_default_days_back,
-            max_per_minute=config.fmp_max_per_minute,
-            burst_capacity=config.fmp_burst_capacity,
-            min_request_interval=config.fmp_min_request_interval,
+            rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_max_per_minute),
         )
     )
-    eodhd_client = EODHDClient(
-        EODHDConfig(
-            api_key=config.eodhd_api_key,
-            base_url=config.eodhd_base_url,
-            timeout_sec=config.eodhd_timeout_sec,
-            default_days_back=config.eodhd_default_days_back,
-        )
-    )
+
+    yfinance_client = YFinanceClient()
 
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal
     app.state.records_importer = records_importer
-    app.state.fmp_client = fmp_client
-    app.state.eodhd_client = eodhd_client
+    app.state.primary_market_datasource = fmp_client
+    app.state.backup_market_datasource = yfinance_client
 
     yield
     engine.dispose()

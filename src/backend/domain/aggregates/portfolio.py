@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
@@ -16,6 +16,8 @@ from backend.domain.entities.account import Category, Holding, OpenLot
 from backend.domain.entities.security import (
     GlobalRates,
     PerformanceMetric,
+    SecurityAnalyticsResponse,
+    SecurityType,
     TimeseriesIndicator,
 )
 
@@ -46,8 +48,18 @@ class PortfolioSummaryDTO(BaseModel):
     unrealized_gain: float
     return_on_cost: float
     return_on_value: float
+    net_investment: float
     pnl_intraday: float
     open_positions: List[str]
+
+
+class PortfolioSnapshotDTO(BaseModel):
+    summary: PortfolioSummaryDTO
+    holdings: dict[str, Holding]
+    metrics: PerformanceMetric
+    indicators: List[TimeseriesIndicator]
+    correlation_matrix: Optional[CorrelationMatrixDTO]
+    securities: dict[str, SecurityAnalyticsResponse] = {}
 
 
 class Portfolio:
@@ -57,12 +69,14 @@ class Portfolio:
         self,
         id: str,
         cash: float,
+        net_investment: float,
         positions: List[OpenLot],
         securities: dict[str, Security],
         rates: GlobalRates,
     ):
         self.id = id
         self.cash_balance = cash
+        self.net_investment = net_investment
         self.positions = positions
         self.securities = securities
         self.rf_rate = float(rates.rf_rate or 0.0) / 100
@@ -248,7 +262,7 @@ class Portfolio:
                         previous_close=security.quote.previousClose,
                         timestamp=security.quote.timestamp,
                         holding_category=position.category,
-                        security_type=security.profile.type,
+                        security_type=security.profile.type if security.profile else SecurityType.UNKNOWN,
                         fx_rate=fx_rate,
                         option_osi=position.option_osi,
                         open_date=position.open_date,

@@ -22,12 +22,8 @@ logger = logging.getLogger(__name__)
 # Data containers (Streamlit-friendly shapes)
 # ---------------------------------------------------------------------------
 @dataclass
-class SecurityIntradayData:
+class SecurityData:
     quote: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-
-@dataclass
-class SecurityEODData:
     profile: dict[str, dict[str, Any]] = field(default_factory=dict)
     metrics: dict[str, dict[str, Any]] = field(default_factory=dict)
     bars: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
@@ -41,11 +37,13 @@ class PortfolioData:
     metrics: dict[str, Any] = field(default_factory=dict)
     indicators: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     correlation_matrix: dict[str, dict[str, Any]] = field(default_factory=dict)
+    securities: SecurityData = field(default_factory=SecurityData)
 
 
 @dataclass
 class AccountRecords:
     transactions: list[dict[str, Any]] = field(default_factory=list)
+    open_positions: list[dict[str, Any]] = field(default_factory=list)
     closed_lots: list[dict[str, Any]] = field(default_factory=list)
     cash_flows: list[dict[str, Any]] = field(default_factory=list)
 
@@ -91,134 +89,75 @@ def load_accounts_list(user_id: str) -> list[AccountEntity]:  # noqa: ARG001
 
 
 @st.cache_data(show_spinner=False)
+def load_account_details(account_id: str) -> AccountEntity:
+    """Load account from API (GET /accounts/{account_id})."""
+    api = get_api_client()
+    try:
+        raw = api.get_account_details(account_id)
+    except Exception:
+        st.error("Failed to load account from API.")
+        logger.exception("Failed to load account from API.")
+        st.stop()
+    return AccountEntity.model_validate(raw)
+
+
+@st.cache_data(show_spinner=False)
 def load_available_securities_list() -> list[str]:
     """Load list of available securities from API."""
     api = get_api_client()
     try:
-        return api.get_available_symbols()
+        symbols = api.get_available_symbols()
     except Exception:
         st.error("Failed to get available securities list.")
         logger.exception("Failed to get available securities list.")
         st.stop()
-
-
-@st.cache_data(show_spinner=False)
-def load_account_summary(account_id: str) -> dict:
-    """Load account summary from API for given account id."""
-    api = get_api_client()
-    try:
-        return api.get_account_summary(account_id)
-    except Exception:
-        st.error("Failed to load account summary. Try reimporting the account records.")
-        logger.exception("Failed to load account summary for %s", account_id)
-        st.stop()
+    return symbols
 
 
 @st.cache_data(show_spinner="Loading account records…")
 def load_account_records(account_id: str) -> AccountRecords:
-    """Load transactions, closed lots, and cash flows for given account id."""
+    """Load transactions, closed lots, and cash flows for given account id in a single request."""
     api = get_api_client()
     records = AccountRecords()
-
     try:
-        records.transactions = list(api.get_account_transactions(account_id))
+        batch = api.get_account_records(account_id)
+        records.transactions = batch.get("transactions", [])
+        records.open_positions = batch.get("open_positions", [])
+        records.closed_lots = batch.get("closed_lots", [])
+        records.cash_flows = batch.get("cash_flows", [])
     except Exception:
-        st.error("Failed to get transactions data.")
-        logger.exception("Failed to get transactions data for %s", account_id)
-
-    try:
-        records.closed_lots = list(api.get_account_closed_lots(account_id))
-    except Exception:
-        st.error("Failed to get closed lots data.")
-        logger.exception("Failed to get closed lots data for %s", account_id)
-
-    try:
-        records.cash_flows = list(api.get_account_cash_flows(account_id))
-    except Exception:
-        st.error("Failed to get cash flows data.")
-        logger.exception("Failed to get cash flows data for %s", account_id)
-
+        st.error("Failed to get account records.")
+        logger.exception("Failed to get account records for %s", account_id)
     return records
 
 
-@st.cache_data(show_spinner=False)
-def load_security_data_intraday(symbols: list[str]) -> SecurityIntradayData:
-    """Load intraday/quote data for given symbols."""
-    api = get_api_client()
-    securities = SecurityIntradayData()
-
-    if not symbols:
-        return securities
-
-    try:
-        quotes = api.get_security_batch_quotes(symbols)
-        for quote in quotes:
-            sym = quote.get("symbol")
-            if sym:
-                securities.quote[sym] = quote
-    except Exception:
-        st.error(f"Failed to get quotes data: {symbols}")
-        logger.exception("Failed to get quotes data for %s", symbols)
-
-    return securities
-
-
 @st.cache_data(show_spinner="Loading securities data…")
-def load_security_data_eod(
+def load_security_data(
     symbols: list[str],
     start_date: str | None,
     end_date: str | None,
-) -> SecurityEODData:
-    """Load EOD bars/metrics/indicators for given symbols and date range."""
+) -> SecurityData:
+    """Load quote, profile, bars, metrics and indicators for given symbols in a single request."""
     api = get_api_client()
-    securities = SecurityEODData()
+    data = SecurityData()
 
     if not symbols:
-        return securities
+        return data
 
-    # Profiles
     try:
-        profiles = api.get_security_batch_profiles(symbols)
-        for profile in profiles:
-            sym = profile.get("symbol")
-            if sym:
-                securities.profile[sym] = profile
+        batch = api.get_security_batch_analytics(symbols, start_date, end_date)
+        if isinstance(batch, dict):
+            for sym, analytics in batch.items():
+                data.quote[sym] = analytics.get("quote") or {}
+                data.profile[sym] = analytics.get("profile") or {}
+                data.metrics[sym] = analytics.get("metrics") or {}
+                data.bars[sym] = analytics.get("bars") or []
+                data.indicators[sym] = analytics.get("indicators") or []
     except Exception:
-        st.error(f"Failed to get profiles data: {symbols}")
-        logger.exception("Failed to get profiles data for %s", symbols)
+        st.error("Failed to load securities data")
+        logger.exception("Failed to load securities data for %s", symbols)
 
-    # Bars (batch returns dict[symbol, list[Bar]])
-    try:
-        batch_bars = api.get_security_batch_bars(symbols, start_date, end_date)
-        if isinstance(batch_bars, dict):
-            for sym, bars in batch_bars.items():
-                securities.bars[sym] = bars
-    except Exception:
-        st.error("Failed to get bars data.")
-        logger.exception("Failed to get bars data for %s", symbols)
-
-    # Metrics
-    try:
-        metrics = api.get_security_batch_metrics(symbols)
-        for metric in metrics:
-            sym = metric.get("symbol")
-            if sym:
-                securities.metrics[sym] = metric
-    except Exception:
-        st.error(f"Failed to get metrics data: {symbols}")
-        logger.exception("Failed to get metrics data for %s", symbols)
-
-    # Indicators (batch returns dict[symbol, list[indicator]])
-    try:
-        batch_indicators = api.get_security_batch_indicators(symbols)
-        if isinstance(batch_indicators, dict):
-            for sym, indicator in batch_indicators.items():
-                securities.indicators[sym] = indicator
-    except Exception:
-        st.error(f"Failed to get indicators data: {symbols}")
-        logger.exception("Failed to get indicators data for %s", symbols)
-
-    return securities
+    return data
 
 
 def load_single_security_quote(symbol: str) -> dict | None:
@@ -231,61 +170,32 @@ def load_single_security_quote(symbol: str) -> dict | None:
         return None
 
 
-@st.cache_data(show_spinner=False)
-def load_portfolio_data_intraday(account_id: str) -> PortfolioData:
-    """Load intraday portfolio summary + holdings snapshot."""
-    api = get_api_client()
-    portfolio = PortfolioData()
-
-    try:
-        portfolio.summary = api.get_portfolio_summary(account_id)
-    except Exception:
-        st.error("Failed to get portfolio summary data.")
-        logger.exception("Failed to get portfolio summary data for %s", account_id)
-        st.stop()
-
-    try:
-        portfolio.holdings = api.get_portfolio_holdings(account_id)
-    except Exception:
-        st.error("Failed to get portfolio holdings data.")
-        logger.exception("Failed to get portfolio holdings data for %s", account_id)
-        st.stop()
-
-    return portfolio
-
-
 @st.cache_data(show_spinner="Loading portfolio data…")
-def load_portfolio_data_eod(account_id: str) -> PortfolioData:
-    """Load EOD portfolio metrics + time-series indicators."""
+def load_portfolio_snapshot(
+    account_id: str,
+    start_date: str | None,
+    end_date: str | None,
+) -> PortfolioData:
+    """Load full portfolio snapshot with per-security analytics in a single request."""
     api = get_api_client()
     portfolio = PortfolioData()
-
     try:
-        portfolio.metrics = api.get_portfolio_metrics(account_id)
+        snap = api.get_portfolio(account_id, start_date, end_date)
+        portfolio.summary = snap.get("summary", {})
+        portfolio.holdings = snap.get("holdings", {})
+        portfolio.metrics = snap.get("metrics", {})
+        portfolio.indicators["PORTF"] = snap.get("indicators", [])
+        portfolio.correlation_matrix = snap.get("correlation_matrix", {})
+        for sym, analytics in snap.get("securities", {}).items():
+            portfolio.securities.quote[sym] = analytics.get("quote") or {}
+            portfolio.securities.profile[sym] = analytics.get("profile") or {}
+            portfolio.securities.metrics[sym] = analytics.get("metrics") or {}
+            portfolio.securities.bars[sym] = analytics.get("bars") or []
+            portfolio.securities.indicators[sym] = analytics.get("indicators") or []
     except Exception:
-        st.error("Failed to get portfolio metrics data.")
-        logger.exception("Failed to get portfolio metrics data for %s", account_id)
+        st.error("Failed to load portfolio data.")
+        logger.exception("Failed to load portfolio snapshot for %s", account_id)
         st.stop()
-
-    try:
-        indicators = list(api.get_portfolio_indicators(account_id))
-        # Keep your existing downstream assumption that portfolio indicators live under "PORTF"
-        portfolio.indicators["PORTF"] = indicators
-    except Exception:
-        st.error("Failed to get portfolio indicators data.")
-        logger.exception("Failed to get portfolio indicators data for %s", account_id)
-        st.stop()
-
-    try:
-        correlation_matrix = api.get_portfolio_correlation_matrix(account_id)
-        portfolio.correlation_matrix = correlation_matrix
-    except Exception:
-        st.error("Failed to get portfolio correlation matrix data.")
-        logger.exception(
-            "Failed to get portfolio correlation matrix data for %s", account_id
-        )
-        st.stop()
-
     return portfolio
 
 

@@ -17,6 +17,7 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "sqlalchemy>=2.0.43",
     "uvicorn>=0.40.0",
+    "yfinance>=0.2.51",
 ]
 
 [dependency-groups]

@@ -22,7 +22,7 @@ class Config(BaseSettings):
     admin_enabled: bool = False
     debug: bool = False
 
-    max_concurrency: int = 10
+    max_concurrency: int = 5
 
     # DB
     db_url: str = "sqlite:///./data/dev.db"
@@ -34,16 +34,7 @@ class Config(BaseSettings):
     fmp_base_url: str = "https://financialmodelingprep.com/stable"
     fmp_timeout_sec: float = 10.0
     fmp_default_days_back: int = 365
-    # -- rate limiting
-    fmp_max_per_minute: int = 280
-    fmp_burst_capacity: int = 50
-    fmp_min_request_interval: float = 0.05
-
-    # EODHD settings
-    eodhd_api_key: str = Field(default="")
-    eodhd_base_url: str = "https://eodhd.com/api"
-    eodhd_timeout_sec: float = 10.0
-    eodhd_default_days_back: int = 365
+    fmp_max_per_minute: int = 300
 
     # Supabase auth (ES256 / P-256 asymmetric signing)
     supabase_jwt_public_key: str = Field(default="")

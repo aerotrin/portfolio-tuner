@@ -64,9 +64,11 @@ def render_reports_header(
 
 
 def render_closed_lots_table(
-    closed_lots: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp | None
+    closed_lots: pd.DataFrame,
+    account_status: str,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp | None,
 ) -> None:
-    account_status = st.session_state["account_status"]
 
     if account_status == "Non-Registered":
         h = st.columns([4, 1])

@@ -1,38 +1,30 @@
+from datetime import date
+import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.application.use_cases.portfolio import PortfolioManager
-from backend.infra.api.v1.dependencies.auth import get_current_user_id, verify_token
-from backend.infra.api.v1.dependencies.db import get_user_db
-from backend.domain.aggregates.portfolio import (
-    CorrelationMatrixDTO,
-    PortfolioSummaryDTO,
-)
+from backend.domain.aggregates.portfolio import PortfolioSnapshotDTO
 from backend.domain.entities.account import (
     AccountCreateRequest,
     AccountEntity,
     AccountPatchRequest,
-    AccountSummaryDTO,
-    CashFlow,
-    ClosedLot,
-    Holding,
-    OpenLot,
+    AccountRecordsDTO,
     Transaction,
     TransactionCreateDTO,
 )
-from backend.domain.entities.security import PerformanceMetric, TimeseriesIndicator
-from backend.infra.db.repo import (
-    PgAccountDataRepository,
-    PgMarketDataRepository,
-)
+from backend.infra.api.v1.dependencies.auth import get_current_user_id, verify_token
+from backend.infra.api.v1.dependencies.db import get_user_db
+from backend.infra.db.repo import PgAccountDataRepository, PgMarketDataRepository
 
 router = APIRouter(dependencies=[Depends(verify_token)])
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------
@@ -53,8 +45,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(db)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -71,7 +63,7 @@ def get_account_entity(
     account_man: AccountManager = Depends(get_account_manager),
 ) -> AccountEntity:
     """Resolve account_id to AccountEntity; raise 404 if not found."""
-    account = account_man.get_account(str(account_id))
+    account = account_man.read_account(str(account_id))
     if account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -88,6 +80,7 @@ def _raise_http_error(exc: Exception) -> None:
     Minimal, pragmatic exception mapping.
     Replace/extend with your domain exception types if you have them.
     """
+    logger.exception("Unhandled exception in accounts router: %s", exc)
     # Conflict (e.g. duplicate account number)
     if isinstance(exc, ValueError) and "already exists" in str(exc).lower():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -119,7 +112,6 @@ def _raise_http_error(exc: Exception) -> None:
 # -----------------------------
 
 
-# --- Account CRUD ---
 @router.post(
     "/accounts",
     response_model=AccountEntity,
@@ -141,7 +133,7 @@ def create_account(
     "/accounts",
     response_model=List[AccountEntity],
 )
-def get_accounts_list(
+def read_accounts_list(
     account_man: AccountManager = Depends(get_account_manager),
 ):
     """List all brokerage accounts."""
@@ -155,13 +147,13 @@ def get_accounts_list(
     "/accounts/{account_id}",
     response_model=AccountEntity,
 )
-def get_account_details(
+def read_account_details(
     account_id: UUID,
     account_man: AccountManager = Depends(get_account_manager),
 ):
     """Get full details for a single account by ID."""
     try:
-        return account_man.get_account(str(account_id))
+        return account_man.read_account(str(account_id))
     except Exception as e:
         _raise_http_error(e)
 
@@ -198,34 +190,17 @@ def delete_account(
         _raise_http_error(e)
 
 
-# --- Account by id (summary, transactions, positions, etc.) ---
-@router.get(
-    "/accounts/{account_id}/summary",
-    response_model=AccountSummaryDTO,
-)
-def get_account_summary(
-    account: AccountEntity = Depends(get_account_entity),
-    account_man: AccountManager = Depends(get_account_manager),
-):
-    """Get summary statistics for an account (cash balance, positions etc.)."""
-    try:
-        summary = account_man.get_account_summary(account.number, None)
-        return summary
-    except Exception as e:
-        _raise_http_error(e)
-
-
 @router.get(
     "/accounts/{account_id}/transactions",
     response_model=List[Transaction],
 )
-def get_account_transactions(
+def read_account_transactions(
     account: AccountEntity = Depends(get_account_entity),
     account_man: AccountManager = Depends(get_account_manager),
 ):
     """List all transaction records for an account."""
     try:
-        transactions = account_man.get_account_transactions(account.number, None)
+        transactions = account_man.read_account_transactions(account.number)
         return transactions
     except Exception as e:
         _raise_http_error(e)
@@ -236,7 +211,7 @@ def get_account_transactions(
     response_model=Transaction,
     status_code=status.HTTP_201_CREATED,
 )
-def add_transaction(
+def create_transaction(
     payload: TransactionCreateDTO,
     account: AccountEntity = Depends(get_account_entity),
     account_man: AccountManager = Depends(get_account_manager),
@@ -267,137 +242,34 @@ def delete_transaction(
 
 
 @router.get(
-    "/accounts/{account_id}/open",
-    response_model=List[OpenLot],
+    "/accounts/{account_id}/records",
+    response_model=AccountRecordsDTO,
 )
-def get_account_open_positions(
+def get_account_records(
     account: AccountEntity = Depends(get_account_entity),
     account_man: AccountManager = Depends(get_account_manager),
 ):
-    """Get all open (unrealized) positions for an account."""
+    """Get transactions, closed lots, and cash flows in a single request."""
     try:
-        open_positions = account_man.get_account_open_positions(account.number, None)
-        return open_positions
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/closed",
-    response_model=List[ClosedLot],
-)
-def get_account_closed_positions(
-    account: AccountEntity = Depends(get_account_entity),
-    account_man: AccountManager = Depends(get_account_manager),
-):
-    """Get all closed (realized) lots for an account."""
-    try:
-        closed_positions = account_man.get_account_closed_positions(
-            account.number, None
-        )
-        return closed_positions
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/cash",
-    response_model=List[CashFlow],
-)
-def get_account_cash_flows(
-    account: AccountEntity = Depends(get_account_entity),
-    account_man: AccountManager = Depends(get_account_manager),
-):
-    """Get all cash flows (deposits, withdrawals, dividends) for an account."""
-    try:
-        cash_flows = account_man.get_account_cash_flows(account.number, None)
-        return cash_flows
+        return account_man.get_account_records(account.number, None)
     except Exception as e:
         _raise_http_error(e)
 
 
 @router.get(
     "/accounts/{account_id}/portfolio",
-    response_model=PortfolioSummaryDTO,
+    response_model=PortfolioSnapshotDTO,
 )
-def get_account_portfolio_summary(
+async def get_portfolio(
     account: AccountEntity = Depends(get_account_entity),
     portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ):
-    """Get aggregated portfolio summary for an account (market value, pnl etc.)."""
+    """Get full portfolio snapshot (summary, holdings, metrics, indicators, correlation) in a single request."""
     try:
-        summary = portfolio_man.get_portfolio_summary(account.number, None)
-        return summary
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/portfolio/holdings",
-    response_model=dict[str, Holding],
-)
-def get_portfolio_holdings(
-    account: AccountEntity = Depends(get_account_entity),
-    portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
-):
-    """Get current holdings with holding details for an account's portfolio."""
-    try:
-        holdings = portfolio_man.get_portfolio_holdings(account.number, None)
-        return holdings
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/portfolio/indicators",
-    response_model=List[TimeseriesIndicator],
-)
-def get_portfolio_indicators(
-    account: AccountEntity = Depends(get_account_entity),
-    portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
-):
-    """Get timeseries indicators (e.g. portfolio value over time) for an account's portfolio."""
-    try:
-        indicators = portfolio_man.get_portfolio_indicators(account.number, None)
-        return indicators
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/portfolio/metrics",
-    response_model=PerformanceMetric,
-)
-def get_portfolio_metrics(
-    account: AccountEntity = Depends(get_account_entity),
-    portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
-):
-    """Get performance metrics (returns, Sharpe, etc.) for an account's portfolio."""
-    try:
-        metrics = portfolio_man.get_portfolio_metrics(account.number, None)
-        return metrics
-    except Exception as e:
-        _raise_http_error(e)
-
-
-@router.get(
-    "/accounts/{account_id}/portfolio/correlation",
-    response_model=CorrelationMatrixDTO,
-)
-def get_portfolio_correlation_matrix(
-    account: AccountEntity = Depends(get_account_entity),
-    portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
-):
-    """Get the correlation matrix between securities in an account's portfolio."""
-    try:
-        correlation_matrix = portfolio_man.get_portfolio_correlation_matrix(
-            account.number, None
+        return await portfolio_man.get_portfolio(
+            account.number, None, start_date, end_date
         )
-        if correlation_matrix is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Correlation matrix not available. Portfolio may have insufficient data.",  # noqa: E501
-            )
-        return correlation_matrix
     except Exception as e:
         _raise_http_error(e)

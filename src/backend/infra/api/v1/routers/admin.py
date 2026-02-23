@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import logging
 from typing import Literal
 import uuid
@@ -23,13 +23,11 @@ from sqlalchemy.orm import Session
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.domain.entities.security import GlobalRates
-from backend.infra.db.repo import (
-    PgAccountDataRepository,
-    PgMarketDataRepository,
-)
 from backend.infra.api.v1.dependencies.auth import verify_token
 from backend.infra.api.v1.dependencies.db import get_admin_db
+from backend.infra.db.repo import PgAccountDataRepository, PgMarketDataRepository
 from backend.shared.config import config
+
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +111,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(session)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -127,6 +125,7 @@ def _raise_http_error(exc: Exception) -> None:
     Minimal, pragmatic exception mapping.
     Replace/extend with your domain exception types if you have them.
     """
+    logger.exception("Unhandled exception in admin router: %s", exc)
     # Common "bad request" cases
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -150,7 +149,7 @@ def _raise_http_error(exc: Exception) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Simple synchronous admin endpoints
+# Admin endpoints
 # ---------------------------------------------------------------------------
 
 
@@ -158,12 +157,12 @@ def _raise_http_error(exc: Exception) -> None:
     "/rates",
     response_model=GlobalRates,
 )
-def get_global_rates(
+def read_global_rates(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get current rates (i.e. risk-free rate, CAD/USD exchange rate)."""
     try:
-        rates = market_man.get_global_rates()
+        rates = market_man.read_global_rates()
         if rates is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -189,7 +188,7 @@ async def import_account(
             detail="File must be an xlsx spreadsheet.",
         )
     try:
-        account = account_man.get_account(account_id)
+        account = account_man.read_account(account_id)
         if account is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -216,28 +215,11 @@ def refresh_rates(
         _raise_http_error(e)
 
 
-@router.post("/admin/refresh-security", status_code=status.HTTP_202_ACCEPTED)
-def refresh_security(
-    symbol: str,
-    market_man: MarketDataManager = Depends(get_market_data_manager),
-):
-    """Refresh market data (quote, bars, profile) for a single security by symbol."""
-    try:
-        market_man.refresh_security(symbol)
-        return  # 202 Accepted
-    except Exception as e:
-        _raise_http_error(e)
-
-
-# ---------------------------------------------------------------------------
-# Background worker for securities refresh
-# NOTE: This is async because MarketDataManager uses async methods.
-# ---------------------------------------------------------------------------
 async def _run_refresh_job(
     job_id: str,
     app,
-    symbols: list[str],
-    intraday: bool,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> None:
     """Runs in a background task after the HTTP response is sent."""
     job = _JOBS.get(job_id)
@@ -248,48 +230,35 @@ async def _run_refresh_job(
     job.status = "running"
     job.started_at = datetime.now(timezone.utc)
 
+    logger.info(
+        "Background %s securities refresh started, job_id=%s, symbols=%d",
+        "intraday" if job.intraday else "EOD",
+        job_id,
+        len(job.symbols),
+    )
+
     SessionLocal = app.state.SessionLocal
     db = SessionLocal()
     try:
         repo = PgMarketDataRepository(db)
         market_man = MarketDataManager(
-            ds_us=app.state.fmp_client,
-            ds_ca=app.state.eodhd_client,
+            ds_primary=app.state.primary_market_datasource,
+            ds_backup=app.state.backup_market_datasource,
             db=repo,
         )
 
-        market_man.refresh_global_rates()
-
-        # Create progress callback that decrements symbols_remaining
         def on_progress(symbol: str):
-            """Callback to update job progress after each symbol is processed."""
             if job.symbols_remaining > 0:
                 job.symbols_remaining -= 1
 
-        if intraday:
-            logger.info(
-                "Background INTRADAY securities refresh started, job_id=%s, symbols=%d",
-                job_id,
-                len(symbols),
-            )
-            await market_man.refresh_securities_intraday_async(
-                symbols,
-                max_concurrency=config.max_concurrency,
-                on_progress=on_progress,
-            )
-        else:
-            logger.info(
-                "Background EOD securities refresh started, job_id=%s, symbols=%d",
-                job_id,
-                len(symbols),
-            )
-            await market_man.refresh_securities_async(
-                symbols,
-                start_date=None,
-                end_date=None,
-                max_concurrency=config.max_concurrency,
-                on_progress=on_progress,
-            )
+        await market_man.refresh_securities_batch_async(
+            job.symbols,
+            intraday=job.intraday,
+            start_date=start_date,
+            end_date=end_date,
+            max_concurrency=config.max_concurrency,
+            on_progress=on_progress,
+        )
 
         job.status = "success"
         logger.info("Background refresh job %s completed successfully", job_id)
@@ -311,13 +280,19 @@ async def _run_refresh_job(
     "/admin/refresh-securities",
     response_model=RefreshSecuritiesResponse,
 )
-async def refresh_securities_async(
+async def refresh_securities(
     request: Request,
     symbols: list[str] = Body(...),
     intraday: bool = False,
+    start_date: date | None = None,
+    end_date: date | None = None,
     bg_task: BackgroundTasks = None,
 ):
-    """Trigger a batch refresh of market data for multiple securities by symbol."""
+    """
+    Trigger a batch refresh of market data for multiple securities by symbol.
+    Note: If intraday=True, only quote data (not full bars/history) will be refreshed for the given symbols.
+    """
+
     global _LAST_REFRESH
 
     if bg_task is None:
@@ -355,15 +330,17 @@ async def refresh_securities_async(
         _run_refresh_job,
         job_id,
         app,
-        list(symbols),
-        intraday,
+        start_date=start_date,
+        end_date=end_date,
     )
 
     logger.info(
-        "Scheduled %s securities refresh job_id=%s for %d symbols",
+        "Scheduled %s securities refresh job_id=%s for %d symbols from %s to %s",
         "intraday" if intraday else "EOD",
         job_id,
         len(symbols),
+        start_date,
+        end_date,
     )
 
     return RefreshSecuritiesResponse(

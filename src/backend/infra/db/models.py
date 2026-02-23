@@ -1,4 +1,12 @@
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
@@ -54,12 +62,12 @@ class BarDB(Base):
     )
     id = mapped_column(Integer, primary_key=True)
     symbol = mapped_column(String, nullable=False)
-    date = mapped_column(DateTime)
     open = mapped_column(Float)
     high = mapped_column(Float)
     low = mapped_column(Float)
     close = mapped_column(Float)
     volume = mapped_column(Float)
+    date = mapped_column(DateTime)
 
 
 class GlobalRatesDB(Base):

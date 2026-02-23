@@ -1,12 +1,15 @@
-import pandas as pd
 from typing import Any
+
+import pandas as pd
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
     if all(isinstance(v, dict) for v in data.values()):
         df = pd.DataFrame.from_dict(data, orient="index")
         if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+            df["timestamp"] = pd.to_datetime(
+                df["timestamp"], errors="coerce", format="ISO8601"
+            )
         return df
 
     # single record
@@ -98,32 +101,17 @@ def add_last_indicators(df: pd.DataFrame, indicators: pd.DataFrame) -> pd.DataFr
     return df
 
 
-def normalize_trends(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalize trend values for a DataFrame between -1 and 1.
-    """
-    df = df.copy()
-    for col in ["trend", "rsi_slope"]:
-        if col in df.columns:
-            scale = max(abs(df[col].min()), abs(df[col].max()))
-            df[col] = df[col] / scale
-    return df
-
-
 def combine_header_data(
     header_symbols: list[str],
-    securities_intraday: "SecurityIntradayData",
-    securities_eod: "SecurityEODData",
+    securities: "SecurityData",
 ) -> pd.DataFrame:
     """
-    Make a header dataframe from the intraday and EOD security data.
+    Make a header dataframe from the combined security data.
     """
-    header = make_scalar_wide_df(
-        {s: securities_intraday.quote[s] for s in header_symbols}
-    )
+    header = make_scalar_wide_df({s: securities.quote[s] for s in header_symbols})
 
     header_bars = make_timeseries_long_df(
-        {s: securities_eod.bars[s] for s in header_symbols}
+        {s: securities.bars[s] for s in header_symbols}
     )
     header_closes = make_timeseries_wide_df(header_bars, "close")
     header = add_sparkline(header, header_closes, add_intraday_close=True)

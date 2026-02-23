@@ -13,6 +13,7 @@ from backend.domain.entities.security import (
     PerformanceMetric,
     Profile,
     Quote,
+    SecurityAnalyticsResponse,
     TimeseriesIndicator,
 )
 from backend.infra.api.v1.dependencies.auth import verify_token
@@ -20,6 +21,7 @@ from backend.infra.api.v1.dependencies.db import get_user_db
 from backend.infra.db.repo import PgMarketDataRepository
 
 router = APIRouter(dependencies=[Depends(verify_token)])
+logger = __import__("logging").getLogger(__name__)
 
 
 # -----------------------------
@@ -31,8 +33,8 @@ def get_market_data_manager(
 ) -> MarketDataManager:
     repo = PgMarketDataRepository(db)
     return MarketDataManager(
-        ds_us=request.app.state.fmp_client,
-        ds_ca=request.app.state.eodhd_client,
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
         db=repo,
     )
 
@@ -50,6 +52,12 @@ class BatchBarsRequest(BaseModel):
     end_date: date | None = None
 
 
+class BatchAnalyticsRequest(BaseModel):
+    symbols: list[str] = Field(..., min_length=1)
+    start_date: date | None = None
+    end_date: date | None = None
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -58,6 +66,8 @@ def _raise_http_error(exc: Exception) -> None:
     Minimal, pragmatic exception mapping.
     Replace/extend with your domain exception types if you have them.
     """
+    logger.exception("Unhandled exception in securities router: %s", exc)
+
     # Common "bad request" cases
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -87,12 +97,12 @@ def _raise_http_error(exc: Exception) -> None:
     "/securities",
     response_model=List[str],
 )
-def get_available_symbols(
+def read_available_symbols(
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """List all security symbols that have cached data in the system."""
     try:
-        symbols = market_man.get_available_symbols()
+        symbols = market_man.read_available_symbols()
         return symbols
     except Exception as e:
         _raise_http_error(e)
@@ -102,13 +112,13 @@ def get_available_symbols(
     "/securities/{symbol}",
     response_model=Quote,
 )
-def get_security_quote(
+def fetch_quote(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get the latest quote (price, volume, etc.) for a security by symbol."""
     try:
-        quote = market_man.get_security_quote(symbol) or market_man.fetch_quote(symbol)
+        quote = market_man.fetch_quote(symbol)
 
         if not quote:
             raise HTTPException(
@@ -128,13 +138,13 @@ def get_security_quote(
     "/securities/{symbol}/profile",
     response_model=Profile,
 )
-def get_security_profile(
+def fetch_profile(
     symbol: str,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get the company profile (name, sector, description, etc.) for a security."""
     try:
-        profile = market_man.get_security_profile(symbol)
+        profile = market_man.fetch_profile(symbol)
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -151,7 +161,7 @@ def get_security_profile(
     "/securities/{symbol}/bars",
     response_model=List[Bar],
 )
-def get_security_bars(
+def fetch_bars(
     symbol: str,
     start_date: date | None = Query(default=None, description="YYYY-MM-DD"),
     end_date: date | None = Query(default=None, description="YYYY-MM-DD"),
@@ -171,7 +181,7 @@ def get_security_bars(
         )
 
     try:
-        return market_man.get_security_bars(symbol, start_date, end_date)
+        return market_man.fetch_bars(symbol, start_date, end_date)
     except Exception as e:
         _raise_http_error(e)
 
@@ -180,13 +190,15 @@ def get_security_bars(
     "/securities/{symbol}/metrics",
     response_model=PerformanceMetric,
 )
-def get_security_metrics(
+def compute_security_metrics(
     symbol: str,
+    start_date: date | None = Query(default=None, description="YYYY-MM-DD"),
+    end_date: date | None = Query(default=None, description="YYYY-MM-DD"),
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get performance metrics (returns, volatility, etc.) for a security."""
     try:
-        metrics = market_man.get_security_metrics(symbol)
+        metrics = market_man.compute_security_metrics(symbol, start_date, end_date)
         if not metrics:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -203,13 +215,17 @@ def get_security_metrics(
     "/securities/{symbol}/indicators",
     response_model=List[TimeseriesIndicator],
 )
-def get_security_indicators(
+def compute_security_indicators(
     symbol: str,
+    start_date: date | None = Query(default=None, description="YYYY-MM-DD"),
+    end_date: date | None = Query(default=None, description="YYYY-MM-DD"),
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get timeseries indicators (e.g. price history) for a security."""
     try:
-        indicators = market_man.get_security_indicators(symbol)
+        indicators = market_man.compute_security_indicators(
+            symbol, start_date, end_date
+        )
         if not indicators:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -226,13 +242,13 @@ def get_security_indicators(
     "/securities/batch-quotes",
     response_model=List[Quote],
 )
-def get_security_batch_quotes(
+def read_security_batch_quotes(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get quotes for multiple securities in a batch request."""
     try:
-        return market_man.get_security_quotes(payload.symbols)
+        return market_man.read_security_batch_quotes(payload.symbols)
     except Exception as e:
         _raise_http_error(e)
 
@@ -241,13 +257,13 @@ def get_security_batch_quotes(
     "/securities/batch-profiles",
     response_model=List[Profile],
 )
-def get_security_batch_profiles(
+def read_security_batch_profiles(
     payload: SymbolsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get profiles for multiple securities in a batch request."""
     try:
-        return market_man.get_security_profiles(payload.symbols)
+        return market_man.read_security_batch_profiles(payload.symbols)
     except Exception as e:
         _raise_http_error(e)
 
@@ -256,7 +272,7 @@ def get_security_batch_profiles(
     "/securities/batch-bars",
     response_model=Dict[str, List[Bar]],
 )
-def get_security_batch_bars(
+def read_security_batch_bars(
     payload: BatchBarsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
@@ -278,7 +294,7 @@ def get_security_batch_bars(
         )
 
     try:
-        return market_man.get_security_batch_bars(
+        return market_man.read_security_batch_bars(
             payload.symbols,
             payload.start_date,
             payload.end_date,
@@ -291,13 +307,15 @@ def get_security_batch_bars(
     "/securities/batch-metrics",
     response_model=List[PerformanceMetric],
 )
-def get_security_batch_metrics(
-    payload: SymbolsRequest,
+async def compute_security_batch_metrics(
+    payload: BatchBarsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get performance metrics for multiple securities in a batch request."""
     try:
-        return market_man.get_security_batch_metrics(payload.symbols)
+        return await market_man.compute_security_batch_metrics(
+            payload.symbols, payload.start_date, payload.end_date
+        )
     except Exception as e:
         _raise_http_error(e)
 
@@ -306,12 +324,31 @@ def get_security_batch_metrics(
     "/securities/batch-indicators",
     response_model=Dict[str, List[TimeseriesIndicator]],
 )
-def get_security_batch_indicators(
-    payload: SymbolsRequest,
+async def compute_security_batch_indicators(
+    payload: BatchBarsRequest,
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
     """Get timeseries indicators for multiple securities in a batch request."""
     try:
-        return market_man.get_security_batch_indicators(payload.symbols)
+        return await market_man.compute_security_batch_indicators(
+            payload.symbols, payload.start_date, payload.end_date
+        )
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post(
+    "/securities/batch-analytics",
+    response_model=Dict[str, SecurityAnalyticsResponse],
+)
+async def compute_security_batch_analytics(
+    payload: BatchAnalyticsRequest,
+    market_man: MarketDataManager = Depends(get_market_data_manager),
+):
+    """Get quote, profile, bars, metrics and indicators for multiple securities in a single request."""
+    try:
+        return await market_man.compute_security_batch_analytics(
+            payload.symbols, payload.start_date, payload.end_date
+        )
     except Exception as e:
         _raise_http_error(e)

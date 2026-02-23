@@ -15,6 +15,8 @@ def transaction_form(
     account_name: str,
     holdings: pd.DataFrame | None,
     fx_rate: float,
+    portfolio_value: float,
+    cash_balance: float,
 ) -> TransactionCreate | None:
     st.subheader(f"Add Transaction to {account_name} Account")
 
@@ -170,7 +172,7 @@ def transaction_form(
     with footer[0]:
         st.metric(
             label="Cash Available (CAD)",
-            value=f"{st.session_state['portfolio_summary']['cash_balance']:,.2f}",
+            value=f"{cash_balance:,.2f}",
         )
 
     with footer[1]:
@@ -185,7 +187,6 @@ def transaction_form(
         )
 
     with footer[3]:
-        portfolio_value = st.session_state["portfolio_summary"]["total_value"]
         with st.popover(
             icon=":material/info:",
             label="",

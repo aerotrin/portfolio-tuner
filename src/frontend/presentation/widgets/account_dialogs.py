@@ -44,7 +44,9 @@ def _account_form(
     )
 
     with st.form(f"{key_prefix}_form", clear_on_submit=False, border=False):
-        name = st.text_input("Name of Account Holder", value=d.name, key=f"{key_prefix}_name")
+        name = st.text_input(
+            "Name of Account Holder", value=d.name, key=f"{key_prefix}_name"
+        )
         account_type = st.text_input("Type", value=d.type, key=f"{key_prefix}_type")
 
         currency = st.radio(
@@ -72,9 +74,7 @@ def _account_form(
 
         submitted = st.form_submit_button("Save", type="primary")
 
-    return AccountFormValues(
-        name, account_type, currency, status, benchmark
-    ), submitted
+    return AccountFormValues(name, account_type, currency, status, benchmark), submitted
 
 
 @st.dialog("Create Account", width="small")
@@ -124,9 +124,9 @@ def create_account_dialog(benchmark_symbols: Sequence[str]) -> None:
 
 @st.dialog("Modify Account", width="small")
 def edit_account_dialog(
-    account_id: str, account_number: str, benchmark_symbols: Sequence[str]
+    account_id: str, account_display_label: str, benchmark_symbols: Sequence[str]
 ) -> None:
-    st.subheader(f"Modify Account #{account_number}")
+    st.subheader(f"Modify Account {account_display_label}")
 
     acct = get_account_details(account_id)
     if not acct:
