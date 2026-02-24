@@ -390,20 +390,22 @@ class Portfolio:
             neg_t_amounts = -times * amounts
 
             r = 0.10
+            solved = False
             for _ in range(100):
                 inv_r1 = 1.0 + r
                 inv_factors = inv_r1 ** (-times)  # (1+r)^(-t), one pow per iter
                 npv_val = float(np.dot(amounts, inv_factors))
                 dnpv_val = float(np.dot(neg_t_amounts, inv_factors)) / inv_r1
                 if abs(dnpv_val) < 1e-12:
-                    break
+                    break  # degenerate derivative — no valid IRR solution
                 r_new = max(r - npv_val / dnpv_val, -0.9999)
                 if abs(r_new - r) < 1e-10:
                     r = r_new
+                    solved = True
                     break
                 r = r_new
-
-            self.mwrr = r
+            if solved:
+                self.mwrr = r
         except Exception as e:
             logger.error(f"Error computing MWRR: {e}", exc_info=True)
 
@@ -437,10 +439,9 @@ class Portfolio:
             return
 
     def build(self) -> None:
-        if not self.positions:
-            return
-        self._build_holdings()
+        if self.positions:
+            self._build_holdings()
+            self._build_indicators()
+            self._build_metrics()
+            self._build_correlation_matrix()
         self._compute_mwrr()
-        self._build_indicators()
-        self._build_metrics()
-        self._build_correlation_matrix()

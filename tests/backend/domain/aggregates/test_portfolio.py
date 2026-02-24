@@ -463,3 +463,32 @@ class TestComputeMwrr:
         p.external_cash_flows = None  # type: ignore[assignment]
         p._compute_mwrr()
         assert p.mwrr == 0.0
+
+    def test_same_day_contribution_leaves_mwrr_zero(self):
+        """Regression: when the contribution date equals today all time-offsets are 0,
+        so the Newton derivative is zero on the first iteration. The solver must not
+        fall through and assign the 0.10 initial guess to mwrr."""
+        today = date.today()
+        p = _mwrr_subject([_cf(today, 1000.0)], total_value=1100.0)
+        p._compute_mwrr()
+        assert p.mwrr == 0.0
+
+    def test_cash_only_portfolio_computes_mwrr_and_net_investment(self):
+        """Regression: cash-only accounts (no open positions) must still compute mwrr
+        and net_investment via build(). Previously build() returned early before calling
+        _compute_mwrr(), leaving both fields at 0 and reporting the full cash balance as
+        profit in the UI."""
+        today = date.today()
+        cash = 1100.0
+        flows = [_cf(today - timedelta(days=365), 1000.0)]
+        p = Portfolio(
+            id="test-acct",
+            cash=cash,
+            positions=[],
+            external_cash_flows=flows,
+            securities={},
+            rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),
+        )
+
+        assert p.net_investment == pytest.approx(1000.0)
+        assert p.mwrr == pytest.approx(0.10, abs=1e-4)
