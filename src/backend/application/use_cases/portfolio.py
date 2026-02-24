@@ -45,8 +45,8 @@ class PortfolioManager:
         return Portfolio(
             id=account_number,
             cash=account.cash_balance,
-            net_investment=account.net_investment,
-            positions=positions,
+            external_cash_flows=account.external_cash_flows,
+            positions=account.open_positions,
             securities=securities,
             rates=rates,
         )
@@ -97,6 +97,7 @@ class PortfolioManager:
                 return_on_cost=portfolio.return_on_cost,
                 return_on_value=portfolio.return_on_value,
                 net_investment=portfolio.net_investment,
+                mwrr=portfolio.mwrr,
                 pnl_intraday=portfolio.pnl_intraday,
                 open_positions=[h.symbol for h in portfolio.holdings.values()],
             ),
