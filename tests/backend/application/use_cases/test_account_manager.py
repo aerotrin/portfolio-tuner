@@ -128,11 +128,11 @@ def test_build_account_and_summary_and_view_accessors(
     assert account.name == "Primary"
     assert account.cash_balance == pytest.approx(760.0)
     assert account.book_value_securities == pytest.approx(300.0)
-    assert account.net_investment == pytest.approx(1000.0)
+    assert sum(cf.amount for cf in account.external_cash_flows) == pytest.approx(1000.0)
 
     assert account.cash_balance == pytest.approx(760.0)
     assert account.book_value_securities == pytest.approx(300.0)
-    assert account.net_investment == pytest.approx(1000.0)
+    assert sum(cf.amount for cf in account.external_cash_flows) == pytest.approx(1000.0)
     assert [p.symbol for p in account.open_positions] == ["AAPL"]
 
     records = manager.get_account_records("ACC-1")

@@ -1,11 +1,18 @@
 from datetime import date, datetime, timedelta
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from src.backend.domain.aggregates.portfolio import Portfolio
 from src.backend.domain.aggregates.security import Security
-from src.backend.domain.entities.account import Category, OpenLot
+from src.backend.domain.entities.account import (
+    CashFlow,
+    Category,
+    Currency,
+    OpenLot,
+    TransactionKind,
+)
 from src.backend.domain.entities.security import (
     GlobalRates,
     Profile,
@@ -163,7 +170,7 @@ def test_portfolio_build_holdings_summary_and_contributions(
     portfolio = Portfolio(
         id="acct-1",
         cash=500.0,
-        net_investment=1000.0,
+        external_cash_flows=[],
         positions=positions,
         securities=securities,
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.25),
@@ -261,7 +268,7 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     portfolio = Portfolio(
         id="acct-2",
         cash=0.0,
-        net_investment=0.0,
+        external_cash_flows=[],
         positions=positions,
         securities=securities,
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.25),
@@ -282,7 +289,7 @@ def test_build_correlation_matrix_empty_securities_guard():
     portfolio = Portfolio(
         id="acct-3",
         cash=0.0,
-        net_investment=0.0,
+        external_cash_flows=[],
         positions=[],
         securities={},
         rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),
@@ -292,3 +299,167 @@ def test_build_correlation_matrix_empty_securities_guard():
 
     assert portfolio.correlation_matrix.symbols is None
     assert portfolio.correlation_matrix.entries is None
+
+
+# ---------------------------------------------------------------------------
+# Helpers for MWRR / XIRR tests
+# ---------------------------------------------------------------------------
+
+
+def _cf(transaction_date: date, amount: float) -> CashFlow:
+    """Build a minimal CashFlow for testing."""
+    kind = TransactionKind.CONTRIB if amount >= 0 else TransactionKind.WITHDRAWAL
+    return CashFlow(
+        transaction_date=transaction_date,
+        category=Category.CASH,
+        transaction_type=kind,
+        description="test",
+        market="",
+        currency=Currency.CAD,
+        amount=amount,
+    )
+
+
+def _mwrr_subject(cash_flows: list[CashFlow], total_value: float) -> Portfolio:
+    """Create a bare Portfolio instance so we can call _compute_mwrr() in isolation."""
+    p = Portfolio.__new__(Portfolio)
+    p.external_cash_flows = cash_flows
+    p.total_value = total_value
+    p.net_investment = 0.0
+    p.mwrr = 0.0
+    return p
+
+
+# ---------------------------------------------------------------------------
+# MWRR / XIRR unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestComputeMwrr:
+    def test_no_cash_flows_leaves_mwrr_zero(self):
+        """Guard: empty external_cash_flows → mwrr stays 0.0."""
+        p = _mwrr_subject([], total_value=1000.0)
+        p._compute_mwrr()
+        assert p.mwrr == 0.0
+
+    def test_total_value_zero_leaves_mwrr_zero(self):
+        """Guard: total_value = 0 → mwrr stays 0.0."""
+        today = date.today()
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), 1000.0)],
+            total_value=0.0,
+        )
+        p._compute_mwrr()
+        assert p.mwrr == 0.0
+
+    def test_no_sign_change_leaves_mwrr_zero(self):
+        """Guard: only withdrawals → all amounts negative → no IRR possible."""
+        today = date.today()
+        # amounts = [-1000 (withdrawal), -500 (terminal -total_value)] → all negative
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), -1000.0)],
+            total_value=500.0,
+        )
+        p._compute_mwrr()
+        assert p.mwrr == 0.0
+
+    def test_single_contribution_ten_percent_gain(self):
+        """Invest $1000 one year ago, value now $1100 → MWRR ≈ +10%."""
+        today = date.today()
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), 1000.0)],
+            total_value=1100.0,
+        )
+        p._compute_mwrr()
+        assert p.mwrr == pytest.approx(0.10, abs=1e-4)
+
+    def test_single_contribution_ten_percent_loss(self):
+        """Invest $1000 one year ago, value now $900 → MWRR ≈ -10%."""
+        today = date.today()
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), 1000.0)],
+            total_value=900.0,
+        )
+        p._compute_mwrr()
+        assert p.mwrr == pytest.approx(-0.10, abs=1e-4)
+
+    def test_multiple_flows_known_irr(self):
+        """
+        Two contributions with a known 20% IRR.
+
+        Invest $1000 two years ago (t=0) and $500 one year ago (t=1).
+        At r=0.20: terminal value = 1000*(1.2)^2 + 500*1.2 = 1440 + 600 = 2040.
+        """
+        today = date.today()
+        p = _mwrr_subject(
+            [
+                _cf(today - timedelta(days=730), 1000.0),
+                _cf(today - timedelta(days=365), 500.0),
+            ],
+            total_value=2040.0,
+        )
+        p._compute_mwrr()
+        assert p.mwrr == pytest.approx(0.20, abs=1e-3)
+
+    def test_net_investment_is_sum_of_flow_amounts(self):
+        """net_investment sums contributions (+) and withdrawals (-) across all flows."""
+        today = date.today()
+        p = _mwrr_subject(
+            [
+                _cf(today - timedelta(days=730), 2000.0),
+                _cf(today - timedelta(days=365), -500.0),
+            ],
+            total_value=2000.0,
+        )
+        p._compute_mwrr()
+        assert p.net_investment == pytest.approx(1500.0)
+
+    def test_npv_is_near_zero_at_solution(self):
+        """The solved MWRR rate annuls the NPV of all cash flows (Newton convergence check)."""
+        today = date.today()
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), 1000.0)],
+            total_value=1100.0,
+        )
+        p._compute_mwrr()
+
+        r = p.mwrr
+        amounts = np.array([1000.0, -1100.0])
+        times = np.array([0.0, 1.0])
+        npv = float(np.dot(amounts, (1.0 + r) ** (-times)))
+        assert abs(npv) < 1e-6
+
+    def test_near_total_loss_rate_above_floor(self):
+        """Extreme loss scenario: MWRR is clamped to >= -0.9999 (Newton floor)."""
+        today = date.today()
+        p = _mwrr_subject(
+            [_cf(today - timedelta(days=365), 1000.0)],
+            total_value=1.0,  # near-total loss
+        )
+        p._compute_mwrr()
+        assert p.mwrr >= -0.9999
+
+    def test_unsorted_flows_produce_same_result_as_sorted(self):
+        """Cash flows are sorted internally; input order must not affect the result."""
+        today = date.today()
+        flows_sorted = [
+            _cf(today - timedelta(days=730), 1000.0),
+            _cf(today - timedelta(days=365), 500.0),
+        ]
+        flows_reversed = list(reversed(flows_sorted))
+
+        p_sorted = _mwrr_subject(flows_sorted, total_value=2040.0)
+        p_reversed = _mwrr_subject(flows_reversed, total_value=2040.0)
+
+        p_sorted._compute_mwrr()
+        p_reversed._compute_mwrr()
+
+        assert p_sorted.mwrr == pytest.approx(p_reversed.mwrr, abs=1e-10)
+
+    def test_exception_leaves_mwrr_zero(self):
+        """Any unexpected exception inside _compute_mwrr is swallowed and mwrr stays 0."""
+        p = _mwrr_subject([], total_value=1000.0)
+        # Inject a bad type to force an exception path
+        p.external_cash_flows = None  # type: ignore[assignment]
+        p._compute_mwrr()
+        assert p.mwrr == 0.0
