@@ -4,9 +4,11 @@ import pandas as pd
 
 from backend.domain.analytics.account import run_records_parser
 from backend.domain.entities.account import (
+    CASH_TRANSACTIONS,
     CashFlow,
     ClosedLot,
-    CASH_TRANSACTIONS,
+    EXPENSE_TRANSACTIONS,
+    INCOME_TRANSACTIONS,
     OpenLot,
     Transaction,
 )
@@ -28,11 +30,13 @@ class Account:
         self.open_positions: list[OpenLot] = []
         self.closed_positions: list[ClosedLot] = []
         self.cash_flows: list[CashFlow] = []
+        self.external_cash_flows: list[CashFlow] = []
+        self.income: list[CashFlow] = []
+        self.expenses: list[CashFlow] = []
 
         # Quick attributes
         self.cash_balance: float = 0.0
         self.book_value_securities: float = 0.0
-        self.net_investment: float = 0.0
 
         if not self.transactions:
             return
@@ -50,12 +54,14 @@ class Account:
             run_records_parser(transactions_df)
         )
 
-        open_df = pd.DataFrame([o.model_dump() for o in self.open_positions])
-        if not open_df.empty:
-            self.book_value_securities = open_df["book_value"].sum()
+        self.book_value_securities = sum(o.book_value for o in self.open_positions)
 
-        cash_flows_df = pd.DataFrame([c.model_dump() for c in self.cash_flows])
-        if not cash_flows_df.empty:
-            self.net_investment = cash_flows_df[
-                cash_flows_df["transaction_type"].isin(list(CASH_TRANSACTIONS))
-            ]["amount"].sum()
+        self.external_cash_flows = [
+            c for c in self.cash_flows if c.transaction_type in CASH_TRANSACTIONS
+        ]
+        self.income = [
+            c for c in self.cash_flows if c.transaction_type in INCOME_TRANSACTIONS
+        ]
+        self.expenses = [
+            c for c in self.cash_flows if c.transaction_type in EXPENSE_TRANSACTIONS
+        ]

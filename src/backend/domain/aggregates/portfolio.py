@@ -12,7 +12,7 @@ from backend.domain.analytics.security import (
     compute_performance_metrics,
     compute_portfolio_timeseries_indicators,
 )
-from backend.domain.entities.account import Category, Holding, OpenLot
+from backend.domain.entities.account import Category, CashFlow, Holding, OpenLot
 from backend.domain.entities.security import (
     GlobalRates,
     PerformanceMetric,
@@ -49,6 +49,7 @@ class PortfolioSummaryDTO(BaseModel):
     return_on_cost: float
     return_on_value: float
     net_investment: float
+    mwrr: float
     pnl_intraday: float
     open_positions: List[str]
 
@@ -69,15 +70,15 @@ class Portfolio:
         self,
         id: str,
         cash: float,
-        net_investment: float,
         positions: List[OpenLot],
+        external_cash_flows: list[CashFlow],
         securities: dict[str, Security],
         rates: GlobalRates,
     ):
         self.id = id
         self.cash_balance = cash
-        self.net_investment = net_investment
         self.positions = positions
+        self.external_cash_flows = external_cash_flows
         self.securities = securities
         self.rf_rate = float(rates.rf_rate or 0.0) / 100
         self.fx_rate = float(rates.fx_rate or 1.0)
@@ -99,6 +100,9 @@ class Portfolio:
         self.return_on_cost: float = 0.0
         self.return_on_value: float = 0.0
         self.pnl_intraday: float = 0.0
+
+        self.net_investment: float = 0.0
+        self.mwrr: float = 0.0
 
         self.metrics = PerformanceMetric(
             symbol="PORTF",
@@ -262,7 +266,9 @@ class Portfolio:
                         previous_close=security.quote.previousClose,
                         timestamp=security.quote.timestamp,
                         holding_category=position.category,
-                        security_type=security.profile.type if security.profile else SecurityType.UNKNOWN,
+                        security_type=security.profile.type
+                        if security.profile
+                        else SecurityType.UNKNOWN,
                         fx_rate=fx_rate,
                         option_osi=position.option_osi,
                         open_date=position.open_date,
@@ -351,6 +357,58 @@ class Portfolio:
             logger.error(f"Error in building portfolio metrics: {e}", exc_info=True)
             return
 
+    def _compute_mwrr(self) -> None:
+        try:
+            if not self.external_cash_flows or self.total_value <= 0:
+                return
+
+            today = date.today()
+            n = len(self.external_cash_flows)
+
+            # net_investment: contributions +ve, withdrawals -ve → sum = net capital in
+            self.net_investment = sum(
+                float(cf.amount) for cf in self.external_cash_flows
+            )
+
+            # Sort flows by date, then append the terminal cash outflow (liquidation value)
+            flows = sorted(self.external_cash_flows, key=lambda cf: cf.transaction_date)
+
+            t0 = flows[0].transaction_date
+            times = np.empty(n + 1, dtype=float)
+            amounts = np.empty(n + 1, dtype=float)
+            for i, cf in enumerate(flows):
+                times[i] = (cf.transaction_date - t0).days / 365.0
+                amounts[i] = float(cf.amount)
+            times[n] = (today - t0).days / 365.0
+            amounts[n] = -self.total_value  # cash out to investor today
+
+            # IRR requires at least one sign change
+            if not (np.any(amounts > 0) and np.any(amounts < 0)):
+                return
+
+            # Precompute once — constant across Newton iterations
+            neg_t_amounts = -times * amounts
+
+            r = 0.10
+            solved = False
+            for _ in range(100):
+                inv_r1 = 1.0 + r
+                inv_factors = inv_r1 ** (-times)  # (1+r)^(-t), one pow per iter
+                npv_val = float(np.dot(amounts, inv_factors))
+                dnpv_val = float(np.dot(neg_t_amounts, inv_factors)) / inv_r1
+                if abs(dnpv_val) < 1e-12:
+                    break  # degenerate derivative — no valid IRR solution
+                r_new = max(r - npv_val / dnpv_val, -0.9999)
+                if abs(r_new - r) < 1e-10:
+                    r = r_new
+                    solved = True
+                    break
+                r = r_new
+            if solved:
+                self.mwrr = r
+        except Exception as e:
+            logger.error(f"Error computing MWRR: {e}", exc_info=True)
+
     def _build_correlation_matrix(self) -> None:
         if not self.securities:
             return
@@ -381,9 +439,9 @@ class Portfolio:
             return
 
     def build(self) -> None:
-        if not self.positions:
-            return
-        self._build_holdings()
-        self._build_indicators()
-        self._build_metrics()
-        self._build_correlation_matrix()
+        if self.positions:
+            self._build_holdings()
+            self._build_indicators()
+            self._build_metrics()
+            self._build_correlation_matrix()
+        self._compute_mwrr()

@@ -40,7 +40,7 @@ class FakeAccountManager:
     def build_account(self, account_number: str, account_name: str | None = None):
         self.calls.append((account_number, account_name))
         return SimpleNamespace(
-            open_positions=self.positions, cash_balance=self.cash_balance, net_investment=0.0
+            open_positions=self.positions, cash_balance=self.cash_balance, external_cash_flows=[]
         )
 
 
@@ -69,7 +69,7 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     captured = {}
 
     class CapturingPortfolio:
-        def __init__(self, id, cash, net_investment, positions, securities, rates):
+        def __init__(self, id, cash, external_cash_flows, positions, securities, rates):
             captured["id"] = id
             captured["cash"] = cash
             captured["positions"] = positions
@@ -99,7 +99,7 @@ def test_build_portfolio_from_account_forwards_date_filter(monkeypatch):
     fake_account = FakeAccountManager(positions=[], cash_balance=0.0)
 
     class CapturingPortfolio:
-        def __init__(self, id, cash, net_investment, positions, securities, rates):
+        def __init__(self, id, cash, external_cash_flows, positions, securities, rates):
             pass
 
     monkeypatch.setattr(
@@ -156,6 +156,7 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
         return_on_cost=0.1,
         return_on_value=0.083,
         net_investment=0.0,
+        mwrr=0.0,
         pnl_intraday=5.0,
         holdings={},
         indicators=[indicator],
@@ -203,6 +204,7 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
         return_on_cost=0.1,
         return_on_value=0.077,
         net_investment=0.0,
+        mwrr=0.0,
         pnl_intraday=2.0,
         holdings={},
         indicators=[],

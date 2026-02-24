@@ -41,11 +41,9 @@ def render_account_summary(
             delta_arrow="off",
         )
         st.metric(
-            "Return CAD/IRR%",
+            "Return CAD | MWRR (ann.)",
             f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f}",
-            "TBD",  # TODO: Add IRR calculation
-            delta_color="off",  # TODO: Remove
-            delta_arrow="off",  # TODO: Remove
+            f"{portfolio_summary['mwrr']:+.2%}",
         )
 
 
