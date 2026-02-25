@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -58,6 +59,21 @@ class BarDB(Base):
     low = mapped_column(Float, nullable=False)
     close = mapped_column(Float, nullable=False)
     volume = mapped_column(Float, nullable=False)
+
+
+class BarsSyncStateDB(Base):
+    __tablename__ = "bars_sync_state"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ok', 'skipped', 'error', 'pending')",
+            name="ck_bars_sync_state_status",
+        ),
+    )
+    symbol = mapped_column(String, primary_key=True, nullable=False)
+    last_bar_date = mapped_column(Date, nullable=True)
+    last_checked_at = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at = mapped_column(DateTime(timezone=True), nullable=True)
+    status = mapped_column(String, nullable=False)
 
 
 class GlobalRatesDB(Base):
