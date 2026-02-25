@@ -24,7 +24,7 @@ from src.backend.domain.entities.security import (
 def build_bars(
     symbol: str,
     closes: list[float],
-    start: datetime = datetime(2025, 1, 1, 16, 0, 0),
+    start: date = date(2025, 1, 1),
 ) -> list[Bar]:
     """Deterministic OHLCV bars from a provided close sequence."""
     bars: list[Bar] = []

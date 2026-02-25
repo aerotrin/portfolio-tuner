@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -49,18 +50,14 @@ class QuoteDB(Base):
 
 class BarDB(Base):
     __tablename__ = "bars"
-    __table_args__ = (
-        Index("ix_bars_symbol", "symbol"),
-        Index("ix_bars_symbol_date", "symbol", "date"),
-    )
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
-    open = mapped_column(Float)
-    high = mapped_column(Float)
-    low = mapped_column(Float)
-    close = mapped_column(Float)
-    volume = mapped_column(Float)
-    date = mapped_column(DateTime)
+    __table_args__ = (Index("ix_bars_symbol_date", "symbol", "date"),)
+    symbol = mapped_column(String, primary_key=True, nullable=False)
+    date = mapped_column(Date, primary_key=True, nullable=False)
+    open = mapped_column(Float, nullable=False)
+    high = mapped_column(Float, nullable=False)
+    low = mapped_column(Float, nullable=False)
+    close = mapped_column(Float, nullable=False)
+    volume = mapped_column(Float, nullable=False)
 
 
 class GlobalRatesDB(Base):

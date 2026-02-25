@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from enum import StrEnum
 from typing import List, Optional
 
@@ -74,7 +74,7 @@ class Bar(BaseModel):
     low: float = Field()
     close: float = Field()
     volume: float = Field()
-    date: datetime = Field()
+    date: dt_date = Field()
 
 
 class GlobalRates(BaseModel):
@@ -89,7 +89,7 @@ class TimeseriesIndicator(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     symbol: str = Field()
-    date: datetime = Field()
+    date: dt_date = Field()
     close: float = Field()
     close_norm: float = Field()
     daily_return: float = Field()
@@ -119,7 +119,7 @@ class PerformanceMetric(BaseModel):
     sharpe: float = Field(default=0.0)
     sortino: float = Field(default=0.0)
     max_drawdown: float = Field(default=0.0)
-    max_drawdown_date: Optional[date] = Field(default=None)
+    max_drawdown_date: Optional[dt_date] = Field(default=None)
     rsi_slope: float = Field(default=0.0)
     near_52wk_hi: bool = Field(default=False)
     near_52wk_lo: bool = Field(default=False)

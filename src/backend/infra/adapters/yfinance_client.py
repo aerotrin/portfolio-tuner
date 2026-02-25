@@ -106,7 +106,7 @@ class YFinanceClient(MarketDataProvider):
         return [
             Bar(
                 symbol=symbol,
-                date=ts.to_pydatetime(),
+                date=ts.date(),
                 open=row["Open"],
                 high=row["High"],
                 low=row["Low"],
