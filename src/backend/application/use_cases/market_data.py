@@ -34,28 +34,6 @@ class MarketDataManager:
         self.ds_backup = ds_backup  # retained but unused; reserved for future failover
         self.db = db
 
-    # Helper methods
-
-    # TODO: Deprecate this
-    def _profile_fixer(self, quote: Quote, profile: Profile) -> Profile:
-        # FTRK-351 infer missing profile fields from quote, if not present
-        if profile.type == SecurityType.UNKNOWN:
-            if "ETF" in quote.name:
-                profile.type = SecurityType.ETF
-            elif "INDEX" in quote.exchange:
-                profile.type = SecurityType.INDEX
-            elif "COMMODITY" in quote.exchange:
-                profile.type = SecurityType.COMMODITY
-            elif "CRYPTO" in quote.exchange:
-                profile.type = SecurityType.CRYPTO
-            elif "FOREX" in quote.exchange:
-                profile.type = SecurityType.FOREX
-            profile.name = quote.name
-            profile.exchange = quote.exchange
-            profile.currency = quote.currency
-            logger.info(f"Inferred profile fields from quote for {quote.symbol}")
-        return profile
-
     # --- DS passthrough use cases ---
 
     def fetch_quote(

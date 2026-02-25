@@ -28,13 +28,6 @@ class AccountDB(Base):
     last_modified = mapped_column(DateTime, nullable=False)
 
 
-class UserDB(Base):
-    __tablename__ = "users"
-    id = mapped_column(Integer, primary_key=True)
-    name = mapped_column(String)
-    email = mapped_column(String)
-
-
 class QuoteDB(Base):
     __tablename__ = "quotes"
     __table_args__ = (UniqueConstraint("symbol", name="uq_quotes_symbol"),)
