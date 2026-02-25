@@ -1,7 +1,13 @@
 from datetime import date
 from typing import List, Optional, Protocol
 
-from backend.domain.entities.security import Bar, GlobalRates, Profile, Quote
+from backend.domain.entities.security import (
+    Bar,
+    BarsSyncState,
+    GlobalRates,
+    Profile,
+    Quote,
+)
 
 
 class MarketDataRepository(Protocol):
@@ -28,6 +34,9 @@ class MarketDataRepository(Protocol):
         end_date: Optional[date] = None,
     ) -> dict[str, List[Bar]]: ...
     def upsert_bars(self, bars: List[Bar]) -> None: ...
+    def read_bars_sync_states(self, symbols: list[str]) -> dict[str, BarsSyncState]: ...
+    def upsert_bars_sync_states(self, states: list[BarsSyncState]) -> None: ...
+    def trim_bars_batch(self, symbols: list[str], before_date: date) -> None: ...
 
     def read_profile(self, symbol: str) -> Profile: ...
     def read_profiles(self, symbols: list[str]) -> list[Profile]: ...

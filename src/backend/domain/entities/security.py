@@ -77,6 +77,16 @@ class Bar(BaseModel):
     date: dt_date = Field()
 
 
+class BarsSyncState(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    symbol: str
+    last_bar_date: Optional[dt_date] = None
+    last_checked_at: Optional[datetime] = None
+    last_success_at: Optional[datetime] = None
+    status: str = "pending"
+
+
 class GlobalRates(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

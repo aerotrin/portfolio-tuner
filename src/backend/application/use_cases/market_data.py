@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import logging
 import time
 from typing import Callable, List, Optional
@@ -9,13 +9,13 @@ from backend.application.ports.market_data_repo import MarketDataRepository
 from backend.domain.aggregates.security import Security
 from backend.domain.entities.security import (
     Bar,
+    BarsSyncState,
     GlobalRates,
     PerformanceMetric,
     Profile,
     Quote,
     SecurityAnalyticsResponse,
     TimeseriesIndicator,
-    SecurityType,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,10 +80,123 @@ class MarketDataManager:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         max_concurrency: int = 10,
+        force: bool = False,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # TODO: Implement smart updating logic of bars
-        pass
+        if not symbols:
+            return
+
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        effective_end = yesterday
+        fetch_start_fallback = start_date or (today - timedelta(days=365))
+
+        # 1. Load sync states in a single query
+        sync_states = self.db.read_bars_sync_states(symbols)
+
+        # 2. Classify each symbol
+        skipped: list[str] = []
+        pending: list[tuple[str, date, date]] = []  # (symbol, fetch_start, fetch_end)
+
+        for symbol in symbols:
+            state = sync_states[symbol]
+            if (
+                not force
+                and state.last_checked_at
+                and state.last_checked_at.date() == today
+            ):
+                continue  # already evaluated today — skip entirely, no write
+            if force or state.last_bar_date is None:
+                pending.append((symbol, fetch_start_fallback, effective_end))
+            elif state.last_bar_date >= yesterday:
+                skipped.append(symbol)
+            else:
+                pending.append(
+                    (symbol, state.last_bar_date + timedelta(days=1), effective_end)
+                )
+
+        # 3. Stamp last_checked_at for skipped symbols so they won't be re-evaluated today
+        now = datetime.now(tz=timezone.utc)
+        if skipped:
+            self.db.upsert_bars_sync_states(
+                [
+                    BarsSyncState(
+                        symbol=s,
+                        status="skipped",
+                        last_checked_at=now,
+                        last_bar_date=sync_states[s].last_bar_date,
+                        last_success_at=sync_states[s].last_success_at,
+                    )
+                    for s in skipped
+                ]
+            )
+
+        # 4. Fetch pending symbols concurrently (thread-pool + semaphore)
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def fetch_one(symbol: str, fetch_start: date, fetch_end: date) -> None:
+            async with semaphore:
+                try:
+                    bars = await asyncio.to_thread(
+                        self.ds_primary.fetch_bars, symbol, fetch_start, fetch_end
+                    )
+                except Exception as exc:
+                    logger.error("fetch_bars failed for %s: %s", symbol, exc)
+                    self.db.upsert_bars_sync_states(
+                        [
+                            BarsSyncState(
+                                symbol=symbol,
+                                status="error",
+                                last_checked_at=now,
+                                last_bar_date=sync_states[symbol].last_bar_date,
+                                last_success_at=sync_states[symbol].last_success_at,
+                            )
+                        ]
+                    )
+                    return
+
+                if not bars:
+                    # No new data for the range (e.g. non-trading day) — still ok
+                    self.db.upsert_bars_sync_states(
+                        [
+                            BarsSyncState(
+                                symbol=symbol,
+                                status="ok",
+                                last_checked_at=now,
+                                last_bar_date=sync_states[symbol].last_bar_date,
+                                last_success_at=sync_states[symbol].last_success_at,
+                            )
+                        ]
+                    )
+                    return
+
+                self.db.upsert_bars(bars)
+                new_last_bar = max(b.date for b in bars)
+                self.db.upsert_bars_sync_states(
+                    [
+                        BarsSyncState(
+                            symbol=symbol,
+                            status="ok",
+                            last_checked_at=now,
+                            last_success_at=now,
+                            last_bar_date=new_last_bar,
+                        )
+                    ]
+                )
+
+        await asyncio.gather(*[fetch_one(s, fs, fe) for s, fs, fe in pending])
+
+        # 5. Trim all symbols to requested window
+        if start_date:
+            self.db.trim_bars_batch(symbols, before_date=start_date)
+
+        # 6. Report progress
+        if on_progress:
+            for symbol in symbols:
+                try:
+                    on_progress(symbol)
+                except Exception:
+                    pass
 
     async def refresh_batch_quotes_async(
         self,
@@ -201,34 +314,31 @@ class MarketDataManager:
     async def refresh_securities_batch_async(
         self,
         symbols: list[str],
-        intraday: bool,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        force: bool = False,
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        """Refresh global rates then all securities — intraday (quotes only) or EOD (full bars)."""
+        """Refresh global rates, quotes, and bars concurrently for all symbols."""
         self.refresh_global_rates()
-        if intraday:
-            await self.refresh_batch_quotes_async(
+        await asyncio.gather(
+            self.refresh_batch_quotes_async(
                 symbols,
                 batch_size=100,
                 max_concurrency=max_concurrency,
-                on_progress=on_progress,
-            )
-        else:
-            await self.refresh_batch_bars_async(
+                on_progress=None,  # bars owns progress tracking
+            ),
+            self.refresh_batch_bars_async(
                 symbols,
                 start_date=start_date,
                 end_date=end_date,
                 max_concurrency=max_concurrency,
+                force=force,
                 on_progress=on_progress,
-            )
-            await self.refresh_batch_profiles_async(
-                symbols,
-                max_concurrency=max_concurrency,
-                on_progress=on_progress,
-            )
+            ),
+        )
+        # await self.refresh_batch_profiles_async(symbols, max_concurrency=max_concurrency)  # TODO: re-enable
 
     # --- Read raw use cases ---
 

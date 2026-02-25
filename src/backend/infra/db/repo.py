@@ -1,13 +1,27 @@
 from datetime import date
 from typing import List, Optional
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from backend.application.ports.account_data_repo import AccountDataRepository
 from backend.application.ports.market_data_repo import MarketDataRepository
 from backend.domain.entities.account import AccountEntity, Transaction
-from backend.domain.entities.security import Bar, GlobalRates, Profile, Quote
-from backend.infra.db.models import AccountDB, BarDB, GlobalRatesDB, ProfileDB, QuoteDB
+from backend.domain.entities.security import (
+    Bar,
+    BarsSyncState,
+    GlobalRates,
+    Profile,
+    Quote,
+)
+from backend.infra.db.models import (
+    AccountDB,
+    BarDB,
+    BarsSyncStateDB,
+    GlobalRatesDB,
+    ProfileDB,
+    QuoteDB,
+)
 from backend.infra.db.models import TransactionDB
 
 
@@ -108,9 +122,63 @@ class PgMarketDataRepository(MarketDataRepository):
         return result
 
     def upsert_bars(self, bars: List[Bar]) -> None:
+        if not bars:
+            return
         try:
-            self.session.query(BarDB).filter(BarDB.symbol == bars[0].symbol).delete()
-            self.session.add_all([BarDB(**bar.model_dump()) for bar in bars])
+            stmt = pg_insert(BarDB).values([b.model_dump() for b in bars])
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol", "date"],
+                set_={
+                    col: stmt.excluded[col]
+                    for col in ("open", "high", "low", "close", "volume")
+                },
+            )
+            self.session.execute(stmt)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+    def read_bars_sync_states(self, symbols: list[str]) -> dict[str, BarsSyncState]:
+        rows = (
+            self.session.query(BarsSyncStateDB)
+            .filter(BarsSyncStateDB.symbol.in_(symbols))
+            .all()
+        )
+        result = {s: BarsSyncState(symbol=s) for s in symbols}
+        for row in rows:
+            result[row.symbol] = BarsSyncState.model_validate(row)
+        return result
+
+    def upsert_bars_sync_states(self, states: list[BarsSyncState]) -> None:
+        if not states:
+            return
+        try:
+            stmt = pg_insert(BarsSyncStateDB).values([s.model_dump() for s in states])
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol"],
+                set_={
+                    col: stmt.excluded[col]
+                    for col in (
+                        "last_bar_date",
+                        "last_checked_at",
+                        "last_success_at",
+                        "status",
+                    )
+                },
+            )
+            self.session.execute(stmt)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+    def trim_bars_batch(self, symbols: list[str], before_date: date) -> None:
+        try:
+            self.session.query(BarDB).filter(
+                BarDB.symbol.in_(symbols),
+                BarDB.date < before_date,
+            ).delete(synchronize_session=False)
             self.session.commit()
         except Exception:
             self.session.rollback()
