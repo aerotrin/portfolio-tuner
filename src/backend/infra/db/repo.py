@@ -185,7 +185,7 @@ class PgMarketDataRepository(MarketDataRepository):
             raise
 
     def check_symbols_availability(self, symbols: list[str]) -> list[str]:
-        """Returns symbols missing from quotes, bars_sync_state, OR profiles."""
+        """Returns symbols missing from quotes or bars_sync_state."""
         quoted = {
             row.symbol
             for row in self.session.query(QuoteDB.symbol)
@@ -198,13 +198,7 @@ class PgMarketDataRepository(MarketDataRepository):
             .filter(BarsSyncStateDB.symbol.in_(symbols))
             .all()
         }
-        profiled = {
-            row.symbol
-            for row in self.session.query(ProfileDB.symbol)
-            .filter(ProfileDB.symbol.in_(symbols))
-            .all()
-        }
-        available = quoted & synced & profiled
+        available = quoted & synced
         return [s for s in symbols if s not in available]
 
     def read_profile(self, symbol: str) -> Profile | None:
