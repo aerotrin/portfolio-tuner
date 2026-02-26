@@ -189,12 +189,16 @@ class TestRefreshBatchBarsAsync:
         assert state.status == "ok"
         assert state.last_bar_date == TWO_DAYS_AGO  # unchanged
 
-    def test_fetch_error_sets_error_status(self):
-        """Both primary and backup raise → status=error, last_bar_date preserved."""
+    def test_fetch_error_sets_error_status_for_previously_valid_symbol(self):
+        """Both providers raise for a symbol with prior last_success_at → status=error, last_bar_date preserved."""
+        last_success = datetime.now(tz=timezone.utc) - timedelta(days=1)
         db = FakeDB(
             {
                 "AAPL": BarsSyncState(
-                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                    symbol="AAPL",
+                    last_bar_date=TWO_DAYS_AGO,
+                    last_success_at=last_success,
+                    status="ok",
                 )
             }
         )
@@ -207,6 +211,23 @@ class TestRefreshBatchBarsAsync:
         state = db._final_state("AAPL")
         assert state.status == "error"
         assert state.last_bar_date == TWO_DAYS_AGO  # unchanged
+
+    def test_fetch_error_skips_write_for_never_valid_symbol(self):
+        """Both providers raise for a symbol with no last_success_at → no DB write (bad symbol)."""
+        db = FakeDB(
+            {
+                "QWERTY": BarsSyncState(
+                    symbol="QWERTY", last_bar_date=None, status="pending"
+                )
+            }
+        )
+        primary = FakePrimary(raises=True)
+        backup = FakePrimary(raises=True)
+        manager = MarketDataManager(ds_primary=primary, ds_backup=backup, db=db)
+        asyncio.run(manager.refresh_bars_async(["QWERTY"], start_date=START_DATE))
+
+        assert db.upserted_bars == []
+        assert db._final_state("QWERTY") is None  # no write for bad symbol
 
     def test_force_bypasses_sync_state_and_fetches_full_range(self):
         """force=True ignores last_checked_at and last_bar_date, fetches full range."""

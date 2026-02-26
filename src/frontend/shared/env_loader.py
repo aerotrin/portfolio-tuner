@@ -16,15 +16,13 @@ class Config(BaseSettings):
 
     project_name: str = "PortfolioTuner"
     api_prefix: str = "/api/v1"
-    debug: bool = False
 
     backend_url: str = "http://127.0.0.1:8000"
 
-    app_refresh_interval: int = 120_000  # ms
-    intraday_refresh_interval: int = 120_000  # ms
-
+    debug: bool = False
     connect_timeout: int = 5  # seconds
     read_timeout: int = 30  # seconds
+    app_refresh_interval: int = 120_000  # ms
 
     # Supabase auth
     supabase_url: str = ""

@@ -26,11 +26,11 @@ class MarketDataManager:
     def __init__(
         self,
         ds_primary: MarketDataProvider,
-        ds_backup: MarketDataProvider,
+        ds_backup: Optional[MarketDataProvider],
         db: MarketDataRepository,
     ):
         self.ds_primary = ds_primary
-        self.ds_backup = ds_backup  # retained but unused; reserved for future failover
+        self.ds_backup = ds_backup
         self.db = db
 
     # --- DS passthrough use cases ---
@@ -98,6 +98,8 @@ class MarketDataManager:
                     )
                     # Tier 2: Secondary
                     try:
+                        if self.ds_backup is None:
+                            raise RuntimeError("No backup datasource configured")
                         profile = await asyncio.to_thread(
                             self.ds_backup.fetch_stock_profile, symbol
                         )
@@ -172,6 +174,8 @@ class MarketDataManager:
                         symbol,
                     )
                     try:
+                        if self.ds_backup is None:
+                            raise RuntimeError("No backup datasource configured")
                         bars = await asyncio.to_thread(
                             self.ds_backup.fetch_bars, symbol, fetch_start, fetch_end
                         )
@@ -269,6 +273,8 @@ class MarketDataManager:
 
                 # Tier 2: Secondary batch
                 try:
+                    if self.ds_backup is None:
+                        raise RuntimeError("No backup datasource configured")
                     quotes = await asyncio.to_thread(
                         self.ds_backup.fetch_batch_quotes, batch
                     )
@@ -310,6 +316,8 @@ class MarketDataManager:
                     # Tier 4: Secondary single
                     if quote is None:
                         try:
+                            if self.ds_backup is None:
+                                raise RuntimeError("No backup datasource configured")
                             quote = await asyncio.to_thread(
                                 self.ds_backup.fetch_quote, symbol
                             )
@@ -347,7 +355,7 @@ class MarketDataManager:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         force: bool = False,
-        max_concurrency: int = 10,
+        max_concurrency: int = 5,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
         """Refresh global rates, quotes, and bars concurrently for all symbols."""
