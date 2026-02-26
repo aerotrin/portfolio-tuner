@@ -143,8 +143,11 @@ class FMPClient(MarketDataProvider):
             logger.error("Error retrieving batch quotes for %s: %s", symbols, e)
             raise
         if not data:
-            logger.warning("No batch quotes data retrieved for symbols %s", symbols)
-            return []
+            logger.warning(
+                "No batch quotes data retrieved for symbols %s",
+                symbols,
+            )
+            raise ValueError("No batch quotes data retrieved for symbols %s", symbols)
         return [
             Quote(
                 symbol=item.get("symbol", ""),
@@ -192,7 +195,7 @@ class FMPClient(MarketDataProvider):
 
         if not isinstance(data, list) or not data:
             logger.error("No bars data retrieved for symbol %s", symbol)
-            return []
+            raise ValueError("No bars data retrieved for symbol %s", symbol)
 
         bars = [
             Bar(
@@ -223,7 +226,7 @@ class FMPClient(MarketDataProvider):
 
         if not isinstance(data, list) or not data:
             logger.warning("No treasury rates data retrieved")
-            return GlobalRates()
+            raise ValueError("No treasury rates data retrieved")
 
         date = data[0].get("date", "")
         rf_rate = data[0].get("month6", "")  # use 6-month rate
@@ -240,7 +243,7 @@ class FMPClient(MarketDataProvider):
 
         if not data:
             logger.warning("No quote data retrieved for symbol USDCAD")
-            return GlobalRates(date=date, rf_rate=rf_rate, fx_rate=0.0)
+            raise ValueError("No quote data retrieved for symbol USDCAD")
 
         fx_rate = data[0].get("price", "")
 
@@ -254,9 +257,8 @@ class FMPClient(MarketDataProvider):
         """
         Fetches stock/ETF profile from FMP.
 
-        On HTTP/JSON failures or missing data, returns a Profile with type UNKNOWN,
-        matching your original behavior (no exception).
-        """
+        On HTTP/JSON failures or missing data, returns a Profile with type UNKNOWN
+        since Profile data is not critical for the application."""
         url = f"{self.cfg.base_url}/profile"
         params = {"symbol": symbol, "apikey": self.cfg.api_key}
 

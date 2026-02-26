@@ -64,7 +64,7 @@ class MarketDataManager:
     def refresh_global_rates(self):
         self.db.upsert_global_rates(self.ds_primary.fetch_global_rates())
 
-    async def refresh_batch_profiles_async(
+    async def refresh_profiles_async(
         self,
         symbols: list[str],
         max_concurrency: int = 10,
@@ -73,7 +73,7 @@ class MarketDataManager:
         # TODO: Implement smart updating logic of profiles
         pass
 
-    async def refresh_batch_bars_async(
+    async def refresh_bars_async(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
@@ -93,7 +93,7 @@ class MarketDataManager:
         # 1. Load sync states in a single query
         sync_states = self.db.read_bars_sync_states(symbols)
 
-        # 2. Identify symbols to fetch
+        # 2. Smart identify symbols that need to be fetched
         pending: list[tuple[str, date, date]] = []  # (symbol, fetch_start, fetch_end)
 
         for symbol in symbols:
@@ -126,9 +126,8 @@ class MarketDataManager:
                     )
                 except Exception:
                     logger.warning(
-                        "Fetch bars failed for symbol %s on primary datasource. Attempting backup datasource.",
+                        "Bars fetching failed for %s on primary. Trying alternate.",
                         symbol,
-                        exc_info=True,
                     )
                     try:
                         bars = await asyncio.to_thread(
@@ -136,9 +135,8 @@ class MarketDataManager:
                         )
                     except Exception:
                         logger.error(
-                            "Fetch bars failed for symbol %s on backup datasource",
+                            "Bars fetching failed for %s on alternate. Logging as error.",
                             symbol,
-                            exc_info=True,
                         )
                         self.db.upsert_bars_sync_states(
                             [
@@ -196,7 +194,7 @@ class MarketDataManager:
                 except Exception:
                     pass
 
-    async def refresh_batch_quotes_async(
+    async def refresh_quotes_async(
         self,
         symbols: list[str],
         batch_size: int = 100,
@@ -213,6 +211,7 @@ class MarketDataManager:
 
         async def fetch_batch(batch: list[str]) -> tuple[list[str], list[Quote]]:
             async with semaphore:
+                # Tier 1: Primary batch
                 try:
                     quotes = await asyncio.to_thread(
                         self.ds_primary.fetch_batch_quotes, batch
@@ -220,11 +219,21 @@ class MarketDataManager:
                     return batch, quotes
                 except Exception:
                     logger.warning(
-                        "fetch_batch_quotes failed for batch of %d symbols; falling back to single fetches",
-                        len(batch),
-                        exc_info=True,
+                        "Quotes batch fetching failed on primary. Trying alternate batch",
                     )
-                    return batch, []
+
+                # Tier 2: Secondary batch
+                try:
+                    quotes = await asyncio.to_thread(
+                        self.ds_backup.fetch_batch_quotes, batch
+                    )
+                    return batch, quotes
+                except Exception:
+                    logger.warning(
+                        "Quotes batch fetching failed on alternate. Will retry per-symbol",
+                    )
+
+                return batch, []
 
         all_quotes: list[Quote] = []
         all_symbols: list[str] = []
@@ -238,23 +247,35 @@ class MarketDataManager:
                 returned_syms = {q.symbol for q in returned_quotes}
                 missed = set(current_batch) - returned_syms
 
-                # --- Single-fetch retry with backup datasource for missed symbols ---
+                # --- Single-fetch retry for missed symbols ---
                 for symbol in missed:
+                    quote: Quote | None = None
+
+                    # Tier 3: Primary single
                     try:
-                        logger.warning(
-                            "Fetch quote failed for batch endpoint for symbol %s on primary datasource. Attempting backup datasource.",
-                            symbol,
-                            exc_info=True,
-                        )
                         quote = await asyncio.to_thread(
-                            self.ds_backup.fetch_quote, symbol
+                            self.ds_primary.fetch_quote, symbol
                         )
-                        returned_quotes.append(quote)
                     except Exception:
-                        logger.error(
-                            "Fetch quote failed for symbol %s on backup datasource",
+                        logger.warning(
+                            "%s quote fetch failed on primary. Trying alternate",
                             symbol,
                         )
+
+                    # Tier 4: Secondary single
+                    if quote is None:
+                        try:
+                            quote = await asyncio.to_thread(
+                                self.ds_backup.fetch_quote, symbol
+                            )
+                        except Exception:
+                            logger.error(
+                                "%s quote fetch failed on alternate. Giving up.",
+                                symbol,
+                            )
+
+                    if quote is not None:
+                        returned_quotes.append(quote)
                 all_quotes.extend(returned_quotes)
             except Exception:
                 if current_batch is None:
@@ -275,7 +296,7 @@ class MarketDataManager:
                 except Exception:
                     pass
 
-    async def refresh_securities_batch_async(
+    async def refresh_securities_async(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
@@ -287,13 +308,13 @@ class MarketDataManager:
         """Refresh global rates, quotes, and bars concurrently for all symbols."""
         self.refresh_global_rates()
         await asyncio.gather(
-            self.refresh_batch_quotes_async(
+            self.refresh_quotes_async(
                 symbols,
                 batch_size=100,
                 max_concurrency=max_concurrency,
                 on_progress=None,  # bars owns progress tracking
             ),
-            self.refresh_batch_bars_async(
+            self.refresh_bars_async(
                 symbols,
                 start_date=start_date,
                 end_date=end_date,
@@ -302,7 +323,7 @@ class MarketDataManager:
                 on_progress=on_progress,
             ),
         )
-        # await self.refresh_batch_profiles_async(symbols, max_concurrency=max_concurrency)  # TODO: re-enable
+        # await self.refresh_profiles_async(symbols, max_concurrency=max_concurrency)  # TODO: re-enable
 
     # --- Read raw use cases ---
 

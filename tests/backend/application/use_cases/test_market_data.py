@@ -1,4 +1,5 @@
-"""Tests for MarketDataManager.refresh_batch_bars_async smart sync logic."""
+"""Tests for MarketDataManager.refresh_bars_async smart sync logic."""
+
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
@@ -21,7 +22,9 @@ START_DATE = TODAY - timedelta(days=365)
 # Fakes
 # ---------------------------------------------------------------------------
 def _bar(symbol: str, d: date) -> Bar:
-    return Bar(symbol=symbol, date=d, open=1.0, high=2.0, low=0.5, close=1.5, volume=100_000)
+    return Bar(
+        symbol=symbol, date=d, open=1.0, high=2.0, low=0.5, close=1.5, volume=100_000
+    )
 
 
 class FakeDB:
@@ -74,22 +77,36 @@ def _manager(db: FakeDB, primary: FakePrimary) -> MarketDataManager:
 # Tests
 # ---------------------------------------------------------------------------
 class TestRefreshBatchBarsAsync:
-
     def test_already_checked_today_is_skipped_entirely(self):
         """Symbol checked earlier today → no fetch, no state write."""
         checked_today = datetime.now(tz=timezone.utc)
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_checked_at=checked_today, last_bar_date=YESTERDAY, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL",
+                    last_checked_at=checked_today,
+                    last_bar_date=YESTERDAY,
+                    status="ok",
+                )
+            }
+        )
         primary = FakePrimary()
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert primary.fetch_calls == []
         assert db.upserted_states == []
 
     def test_up_to_date_symbol_is_skipped_with_no_write(self):
         """last_bar_date >= yesterday → no fetch, no state write."""
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=YESTERDAY, status="ok")})
+        db = FakeDB(
+            {"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=YESTERDAY, status="ok")}
+        )
         primary = FakePrimary()
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert primary.fetch_calls == []
         assert db._final_state("AAPL") is None
@@ -97,9 +114,13 @@ class TestRefreshBatchBarsAsync:
     def test_null_last_bar_date_fetches_full_range(self):
         """No prior data → fetch from start_date through yesterday."""
         bars = [_bar("AAPL", YESTERDAY)]
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=None, status="pending")})
+        db = FakeDB(
+            {"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=None, status="pending")}
+        )
         primary = FakePrimary({"AAPL": bars})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert len(primary.fetch_calls) == 1
         sym, fetch_start, fetch_end = primary.fetch_calls[0]
@@ -110,9 +131,17 @@ class TestRefreshBatchBarsAsync:
     def test_stale_data_fetches_incremental_range(self):
         """last_bar_date is stale → fetch from last_bar_date+1 through yesterday."""
         bars = [_bar("AAPL", YESTERDAY)]
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                )
+            }
+        )
         primary = FakePrimary({"AAPL": bars})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert len(primary.fetch_calls) == 1
         _, fetch_start, fetch_end = primary.fetch_calls[0]
@@ -122,9 +151,17 @@ class TestRefreshBatchBarsAsync:
     def test_successful_fetch_upserts_bars_and_updates_state(self):
         """Bars returned → upsert_bars called, state updated with ok + new last_bar_date."""
         bars = [_bar("AAPL", YESTERDAY)]
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                )
+            }
+        )
         primary = FakePrimary({"AAPL": bars})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert db.upserted_bars == bars
         state = db._final_state("AAPL")
@@ -135,9 +172,17 @@ class TestRefreshBatchBarsAsync:
 
     def test_empty_bars_result_sets_ok_without_upsert(self):
         """Provider returns no bars (e.g. holiday) → status=ok, no upsert_bars."""
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                )
+            }
+        )
         primary = FakePrimary({"AAPL": []})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(["AAPL"], start_date=START_DATE)
+        )
 
         assert db.upserted_bars == []
         state = db._final_state("AAPL")
@@ -146,11 +191,17 @@ class TestRefreshBatchBarsAsync:
 
     def test_fetch_error_sets_error_status(self):
         """Both primary and backup raise → status=error, last_bar_date preserved."""
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                )
+            }
+        )
         primary = FakePrimary(raises=True)
         backup = FakePrimary(raises=True)
         manager = MarketDataManager(ds_primary=primary, ds_backup=backup, db=db)
-        asyncio.run(manager.refresh_batch_bars_async(["AAPL"], start_date=START_DATE))
+        asyncio.run(manager.refresh_bars_async(["AAPL"], start_date=START_DATE))
 
         assert db.upserted_bars == []
         state = db._final_state("AAPL")
@@ -160,9 +211,22 @@ class TestRefreshBatchBarsAsync:
     def test_force_bypasses_sync_state_and_fetches_full_range(self):
         """force=True ignores last_checked_at and last_bar_date, fetches full range."""
         checked_today = datetime.now(tz=timezone.utc)
-        db = FakeDB({"AAPL": BarsSyncState(symbol="AAPL", last_checked_at=checked_today, last_bar_date=YESTERDAY, status="ok")})
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL",
+                    last_checked_at=checked_today,
+                    last_bar_date=YESTERDAY,
+                    status="ok",
+                )
+            }
+        )
         primary = FakePrimary({"AAPL": [_bar("AAPL", YESTERDAY)]})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"], start_date=START_DATE, force=True))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(
+                ["AAPL"], start_date=START_DATE, force=True
+            )
+        )
 
         assert len(primary.fetch_calls) == 1
         _, fetch_start, fetch_end = primary.fetch_calls[0]
@@ -171,14 +235,22 @@ class TestRefreshBatchBarsAsync:
 
     def test_trim_called_for_all_symbols_when_start_date_provided(self):
         """trim_bars_batch is called with all symbols and start_date regardless of sync outcome."""
-        db = FakeDB({
-            "AAPL": BarsSyncState(symbol="AAPL", last_bar_date=YESTERDAY, status="ok"),  # skipped
-            "MSFT": BarsSyncState(symbol="MSFT", last_bar_date=TWO_DAYS_AGO, status="ok"),  # pending
-        })
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=YESTERDAY, status="ok"
+                ),  # skipped
+                "MSFT": BarsSyncState(
+                    symbol="MSFT", last_bar_date=TWO_DAYS_AGO, status="ok"
+                ),  # pending
+            }
+        )
         primary = FakePrimary({"MSFT": [_bar("MSFT", YESTERDAY)]})
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(
-            ["AAPL", "MSFT"], start_date=START_DATE
-        ))
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(
+                ["AAPL", "MSFT"], start_date=START_DATE
+            )
+        )
 
         assert len(db.trimmed) == 1
         trimmed_symbols, before_date = db.trimmed[0]
@@ -189,30 +261,44 @@ class TestRefreshBatchBarsAsync:
         """trim_bars_batch is not called when no start_date provided."""
         db = FakeDB()
         primary = FakePrimary()
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(["AAPL"]))
+        asyncio.run(_manager(db, primary).refresh_bars_async(["AAPL"]))
 
         assert db.trimmed == []
 
     def test_multiple_symbols_independent_classification(self):
         """Each symbol follows its own sync path independently."""
         checked_today = datetime.now(tz=timezone.utc)
-        db = FakeDB({
-            "ALREADY": BarsSyncState(symbol="ALREADY", last_checked_at=checked_today, status="ok"),
-            "UPTODATE": BarsSyncState(symbol="UPTODATE", last_bar_date=YESTERDAY, status="ok"),
-            "STALE": BarsSyncState(symbol="STALE", last_bar_date=TWO_DAYS_AGO, status="ok"),
-            "NEW": BarsSyncState(symbol="NEW", last_bar_date=None, status="pending"),
-        })
-        primary = FakePrimary({
-            "STALE": [_bar("STALE", YESTERDAY)],
-            "NEW": [_bar("NEW", YESTERDAY)],
-        })
-        asyncio.run(_manager(db, primary).refresh_batch_bars_async(
-            ["ALREADY", "UPTODATE", "STALE", "NEW"], start_date=START_DATE
-        ))
+        db = FakeDB(
+            {
+                "ALREADY": BarsSyncState(
+                    symbol="ALREADY", last_checked_at=checked_today, status="ok"
+                ),
+                "UPTODATE": BarsSyncState(
+                    symbol="UPTODATE", last_bar_date=YESTERDAY, status="ok"
+                ),
+                "STALE": BarsSyncState(
+                    symbol="STALE", last_bar_date=TWO_DAYS_AGO, status="ok"
+                ),
+                "NEW": BarsSyncState(
+                    symbol="NEW", last_bar_date=None, status="pending"
+                ),
+            }
+        )
+        primary = FakePrimary(
+            {
+                "STALE": [_bar("STALE", YESTERDAY)],
+                "NEW": [_bar("NEW", YESTERDAY)],
+            }
+        )
+        asyncio.run(
+            _manager(db, primary).refresh_bars_async(
+                ["ALREADY", "UPTODATE", "STALE", "NEW"], start_date=START_DATE
+            )
+        )
 
         fetched_symbols = {c[0] for c in primary.fetch_calls}
         assert fetched_symbols == {"STALE", "NEW"}
-        assert db._final_state("ALREADY") is None   # no write
+        assert db._final_state("ALREADY") is None  # no write
         assert db._final_state("UPTODATE") is None  # up to date, no write
         assert db._final_state("STALE").status == "ok"
         assert db._final_state("NEW").status == "ok"

@@ -251,7 +251,7 @@ async def _run_refresh_job(
             if job.symbols_remaining > 0:
                 job.symbols_remaining -= 1
 
-        await market_man.refresh_securities_batch_async(
+        await market_man.refresh_securities_async(
             job.symbols,
             start_date=start_date,
             end_date=end_date,
