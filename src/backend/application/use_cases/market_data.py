@@ -180,17 +180,20 @@ class MarketDataManager:
                             "Bars fetching failed for %s on alternate. Logging as error.",
                             symbol,
                         )
-                        self.db.upsert_bars_sync_states(
-                            [
-                                BarsSyncState(
-                                    symbol=symbol,
-                                    status="error",
-                                    last_checked_at=now,
-                                    last_bar_date=sync_states[symbol].last_bar_date,
-                                    last_success_at=sync_states[symbol].last_success_at,
-                                )
-                            ]
-                        )
+                        if sync_states[symbol].last_success_at is not None:
+                            self.db.upsert_bars_sync_states(
+                                [
+                                    BarsSyncState(
+                                        symbol=symbol,
+                                        status="error",
+                                        last_checked_at=now,
+                                        last_bar_date=sync_states[symbol].last_bar_date,
+                                        last_success_at=sync_states[
+                                            symbol
+                                        ].last_success_at,
+                                    )
+                                ]
+                            )
                         return
 
                 if not bars:

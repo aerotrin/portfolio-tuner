@@ -137,11 +137,14 @@ class YFinanceClient(MarketDataProvider):
             info: dict = yf.Ticker(symbol).info
         except Exception as e:
             logger.warning("Profile request failed for %s: %s", symbol, e)
-            return Profile(
-                symbol=symbol,
-                date=datetime.now(timezone.utc),
-                type=SecurityType.UNKNOWN,
-            )
+            raise
+
+        if (
+            not info.get("quoteType")
+            and not info.get("longName")
+            and not info.get("shortName")
+        ):
+            raise ValueError(f"No profile data for symbol {symbol}")
 
         quote_type = info.get("quoteType", "")
         security_type = _QUOTE_TYPE_MAP.get(quote_type, SecurityType.UNKNOWN)
