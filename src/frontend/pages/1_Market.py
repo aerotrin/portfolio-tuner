@@ -29,6 +29,7 @@ from frontend.utils.jobs import (
 logger = logging.getLogger(__name__)
 
 active_page = "market"
+st.session_state["active_page"] = active_page
 
 # --- Session state -----------------------------------------------------------
 try:
@@ -69,6 +70,7 @@ page_symbols = sorted(
         *market_symbols,
     }
 )
+st.session_state["page_symbols"] = page_symbols
 
 # --- Ensure all page symbols are available else blocking refresh job --------
 missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))

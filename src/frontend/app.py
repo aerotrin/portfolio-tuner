@@ -20,6 +20,7 @@ from frontend.services.streamlit_data import (
 from frontend.shared.config_loader import load_symbols_config
 from frontend.shared.env_loader import config
 from frontend.shared.logging import setup_logging
+from frontend.utils.jobs import start_refresh_job
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -415,12 +416,19 @@ with st.sidebar:
     st.subheader("Data Refresh Options")
 
     if st.button(
-        "Refresh All Data",
+        "Force Refresh Data",
         icon=":material/refresh:",
         type="primary",
         key="full_data_refresh_button",
     ):
-        pass
+        start_refresh_job(
+            symbols=st.session_state["page_symbols"],
+            blocking=True,
+            force=True,
+            active_page=st.session_state["active_page"],
+            start_date=st.session_state["start_date"],
+            end_date=st.session_state["end_date"],
+        )
 
     if config.debug:
         st.divider()
