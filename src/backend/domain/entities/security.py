@@ -99,7 +99,7 @@ class TimeseriesIndicator(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     symbol: str = Field()
-    date: dt_date = Field()
+    date: datetime = Field()
     close: float = Field()
     close_norm: float = Field()
     daily_return: float = Field()

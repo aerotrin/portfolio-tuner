@@ -49,19 +49,6 @@ class FMPClient(MarketDataProvider):
         self.cfg = config
         self._rate_limiter = RateLimiter(config.rate_limiter)
 
-        # Optional lookup lists (currently disabled)
-        self.index_list: dict[str, Any] = {}
-        self.commodity_list: dict[str, Any] = {}
-        self.crypto_list: dict[str, Any] = {}
-        self.forex_list: dict[str, Any] = {}
-
-        # If we decide to use these again:
-        # self.exchange_dir = self._fetch_exchange_directory()
-        # self.index_list = self._fetch_index_list()
-        # self.commodity_list = self._fetch_commodity_list()
-        # self.crypto_list = self._fetch_crypto_list()
-        # self.forex_list = self._fetch_forex_list()
-
     def _get(
         self, url: str, params: dict[str, Any] | None = None, *, max_retries: int = 3
     ) -> Any:
@@ -120,89 +107,6 @@ class FMPClient(MarketDataProvider):
                 logger.error("Invalid JSON from FMP for %s: %s", resp.url, e)
                 raise
 
-    # -------------------------------------------------------------------------
-    # Directory / list helpers (optional)
-    # -------------------------------------------------------------------------
-
-    def _fetch_exchange_directory(self) -> dict[str, Any]:
-        url = f"{self.cfg.base_url}/available-exchanges"
-        params = {"apikey": self.cfg.api_key}
-        try:
-            data = self._get(url, params=params)
-        except requests.exceptions.HTTPError as e:
-            logger.error("Error retrieving exchange directory: %s", e)
-            raise
-
-        if not isinstance(data, list) or not data:
-            logger.error("No exchange directory data retrieved")
-            raise RuntimeError("No exchange directory data")
-
-        return {item["exchange"]: item for item in data}
-
-    def _fetch_index_list(self) -> dict[str, Any]:
-        url = f"{self.cfg.base_url}/index-list"
-        params = {"apikey": self.cfg.api_key}
-        try:
-            data = self._get(url, params=params)
-        except requests.exceptions.HTTPError as e:
-            logger.error("Error retrieving index list: %s", e)
-            raise
-
-        if not isinstance(data, list) or not data:
-            logger.error("No index list data retrieved")
-            raise RuntimeError("No index list data")
-
-        return {item["symbol"]: item for item in data}
-
-    def _fetch_commodity_list(self) -> dict[str, Any]:
-        url = f"{self.cfg.base_url}/commodities-list"
-        params = {"apikey": self.cfg.api_key}
-        try:
-            data = self._get(url, params=params)
-        except requests.exceptions.HTTPError as e:
-            logger.error("Error retrieving commodity list: %s", e)
-            raise
-
-        if not isinstance(data, list) or not data:
-            logger.error("No commodity list data retrieved")
-            raise RuntimeError("No commodity list data")
-
-        return {item["symbol"]: item for item in data}
-
-    def _fetch_crypto_list(self) -> dict[str, Any]:
-        url = f"{self.cfg.base_url}/cryptocurrency-list"
-        params = {"apikey": self.cfg.api_key}
-        try:
-            data = self._get(url, params=params)
-        except requests.exceptions.HTTPError as e:
-            logger.error("Error retrieving crypto list: %s", e)
-            raise
-
-        if not isinstance(data, list) or not data:
-            logger.error("No crypto list data retrieved")
-            raise RuntimeError("No crypto list data")
-
-        return {item["symbol"]: item for item in data}
-
-    def _fetch_forex_list(self) -> dict[str, Any]:
-        url = f"{self.cfg.base_url}/forex-list"
-        params = {"apikey": self.cfg.api_key}
-        try:
-            data = self._get(url, params=params)
-        except requests.exceptions.HTTPError as e:
-            logger.error("Error retrieving forex list: %s", e)
-            raise
-
-        if not isinstance(data, list) or not data:
-            logger.error("No forex list data retrieved")
-            raise RuntimeError("No forex list data")
-
-        return {item["symbol"]: item for item in data}
-
-    # -------------------------------------------------------------------------
-    # Public fetch methods used by your app
-    # -------------------------------------------------------------------------
-
     def fetch_quote(self, symbol: str) -> Quote:
         url = f"{self.cfg.base_url}/quote"
         params = {"symbol": symbol, "apikey": self.cfg.api_key}
@@ -212,10 +116,6 @@ class FMPClient(MarketDataProvider):
         except requests.exceptions.HTTPError as e:
             logger.error("Error retrieving quote for %s: %s", symbol, e)
             raise
-
-        if not data:
-            logger.error("No quote data retrieved for symbol %s", symbol)
-            raise RuntimeError(f"No quote data for {symbol}")
 
         item = data[0]
         return Quote(
@@ -243,8 +143,8 @@ class FMPClient(MarketDataProvider):
             logger.error("Error retrieving batch quotes for %s: %s", symbols, e)
             raise
         if not data:
-            logger.error("No batch quotes data retrieved for symbols %s", symbols)
-            raise RuntimeError(f"No batch quotes data for {symbols}")
+            logger.warning("No batch quotes data retrieved for symbols %s", symbols)
+            return []
         return [
             Quote(
                 symbol=item.get("symbol", ""),
@@ -292,7 +192,7 @@ class FMPClient(MarketDataProvider):
 
         if not isinstance(data, list) or not data:
             logger.error("No bars data retrieved for symbol %s", symbol)
-            raise RuntimeError(f"No bars data for {symbol}")
+            return []
 
         bars = [
             Bar(
@@ -322,8 +222,8 @@ class FMPClient(MarketDataProvider):
             raise
 
         if not isinstance(data, list) or not data:
-            logger.error("No treasury rates data retrieved")
-            raise RuntimeError("No treasury rates data")
+            logger.warning("No treasury rates data retrieved")
+            return GlobalRates()
 
         date = data[0].get("date", "")
         rf_rate = data[0].get("month6", "")  # use 6-month rate
@@ -339,8 +239,8 @@ class FMPClient(MarketDataProvider):
             raise
 
         if not data:
-            logger.error("No quote data retrieved for symbol USDCAD")
-            raise RuntimeError("No FX quote for USDCAD")
+            logger.warning("No quote data retrieved for symbol USDCAD")
+            return GlobalRates(date=date, rf_rate=rf_rate, fx_rate=0.0)
 
         fx_rate = data[0].get("price", "")
 
@@ -407,96 +307,4 @@ class FMPClient(MarketDataProvider):
             industry=item.get("industry", ""),
             sector=item.get("sector", ""),
             country=item.get("country", ""),
-        )
-
-    # -------------------------------------------------------------------------
-    # Helper profile builders for non-stock assets (using pre-fetched lists)
-    # -------------------------------------------------------------------------
-
-    def fetch_index_profile(self, symbol: str) -> Profile:
-        item = self.index_list[symbol]
-        return Profile(
-            symbol=symbol,
-            date=datetime.now(timezone.utc),
-            name=item.get("name", ""),
-            type=SecurityType.INDEX,
-            exchange=item.get("exchange", ""),
-            currency=item.get("currency", ""),
-            marketCap=None,
-            beta=None,
-            lastDividend=None,
-            averageVolume=None,
-            yearHigh=None,
-            yearLow=None,
-            isin=None,
-            cusip=None,
-            industry=None,
-            sector=None,
-            country=None,
-        )
-
-    def fetch_commodity_profile(self, symbol: str) -> Profile:
-        item = self.commodity_list[symbol]
-        return Profile(
-            symbol=symbol,
-            date=datetime.now(timezone.utc),
-            name=item.get("name", ""),
-            type=SecurityType.COMMODITY,
-            exchange="",
-            currency=item.get("currency", ""),
-            marketCap=None,
-            beta=None,
-            lastDividend=None,
-            averageVolume=None,
-            yearHigh=None,
-            yearLow=None,
-            isin=None,
-            cusip=None,
-            industry=None,
-            sector=None,
-            country=None,
-        )
-
-    def fetch_crypto_profile(self, symbol: str) -> Profile:
-        item = self.crypto_list[symbol]
-        return Profile(
-            symbol=symbol,
-            date=datetime.now(timezone.utc),
-            name=item.get("name", ""),
-            type=SecurityType.CRYPTO,
-            exchange=item.get("exchange", ""),
-            currency="",
-            marketCap=None,
-            beta=None,
-            lastDividend=None,
-            averageVolume=None,
-            yearHigh=None,
-            yearLow=None,
-            isin=None,
-            cusip=None,
-            industry=None,
-            sector=None,
-            country=None,
-        )
-
-    def fetch_forex_profile(self, symbol: str) -> Profile:
-        item = self.forex_list[symbol]
-        return Profile(
-            symbol=symbol,
-            date=datetime.now(timezone.utc),
-            name=item.get("fromName", "") + " to " + item.get("toName", ""),
-            type=SecurityType.FOREX,
-            exchange="",
-            currency="",
-            marketCap=None,
-            beta=None,
-            lastDividend=None,
-            averageVolume=None,
-            yearHigh=None,
-            yearLow=None,
-            isin=None,
-            cusip=None,
-            industry=None,
-            sector=None,
-            country=None,
         )

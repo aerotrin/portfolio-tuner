@@ -17,6 +17,7 @@ from frontend.presentation.widgets.kpis import (
     render_status_strip,
 )
 from frontend.services.streamlit_data import (
+    check_missing_symbols,
     load_account_details,
     load_account_records,
     load_portfolio_snapshot,
@@ -54,7 +55,6 @@ try:
 
     benchmark = st.session_state["benchmark"]
 
-    available_symbols = st.session_state["available_symbols"]
     rates = st.session_state["rates"]
 
 except KeyError as exc:
@@ -82,17 +82,15 @@ portfolio_symbols = sorted(set(p["symbol"] for p in records.open_positions))
 page_symbols = sorted(set(portfolio_symbols + base_symbols))
 
 # --- Ensure all page symbols are available else blocking refresh job --------
-missing_symbols = sorted(set(page_symbols) - set(available_symbols))
+missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
 if missing_symbols:
     start_refresh_job(
         symbols=missing_symbols,
         blocking=True,
-        intraday=True,
         active_page=active_page,
         start_date=start_date,
         end_date=end_date,
     )
-
 
 # --- Load base data (header + benchmark only) ------------------------------
 securities = load_security_data(base_symbols, start_date, end_date)
@@ -113,7 +111,6 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=True,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,

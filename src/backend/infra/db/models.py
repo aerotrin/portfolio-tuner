@@ -7,7 +7,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
@@ -32,9 +31,7 @@ class AccountDB(Base):
 
 class QuoteDB(Base):
     __tablename__ = "quotes"
-    __table_args__ = (UniqueConstraint("symbol", name="uq_quotes_symbol"),)
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
+    symbol = mapped_column(String, primary_key=True)
     name = mapped_column(String)
     exchange = mapped_column(String)
     open = mapped_column(Float)
@@ -86,9 +83,7 @@ class GlobalRatesDB(Base):
 
 class ProfileDB(Base):
     __tablename__ = "profiles"
-    __table_args__ = (UniqueConstraint("symbol", name="uq_profiles_symbol"),)
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
+    symbol = mapped_column(String, primary_key=True)
     name = mapped_column(String)
     date = mapped_column(DateTime)
     type = mapped_column(String)

@@ -10,7 +10,7 @@ from frontend.presentation.widgets.kpis import (
     render_market_snapshot,
     render_status_strip,
 )
-from frontend.services.streamlit_data import load_security_data
+from frontend.services.streamlit_data import check_missing_symbols, load_security_data
 from frontend.shared.config_loader import SymbolGroup, load_symbols_config
 from frontend.utils.dataframe import (
     add_last_indicators,
@@ -42,7 +42,6 @@ try:
     market_symbols = st.session_state["market_symbols"]
     benchmark = st.session_state["benchmark"]
 
-    available_symbols = st.session_state["available_symbols"]
     rates = st.session_state["rates"]
 
 except KeyError as exc:
@@ -50,7 +49,7 @@ except KeyError as exc:
     logger.exception("Missing session key on Market page: %s", exc)
     st.stop()
 
-symbols_config = load_symbols_config()  # TODO: Duplication with app.py
+symbols_config = load_symbols_config()
 
 
 # -- Render header ------------------------------------------------------------
@@ -72,12 +71,11 @@ page_symbols = sorted(
 )
 
 # --- Ensure all page symbols are available else blocking refresh job --------
-missing_symbols = sorted(set(page_symbols) - set(available_symbols))
+missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
 if missing_symbols:
     start_refresh_job(
         symbols=missing_symbols,
         blocking=True,
-        intraday=True,
         active_page=active_page,
         start_date=start_date,
         end_date=end_date,
@@ -99,7 +97,6 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=True,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,

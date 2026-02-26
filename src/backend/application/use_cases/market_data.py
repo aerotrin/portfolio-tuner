@@ -1,7 +1,6 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 import logging
-import time
 from typing import Callable, List, Optional
 
 from backend.application.ports.market_data_provider import MarketDataProvider
@@ -86,7 +85,7 @@ class MarketDataManager:
         if not symbols:
             return
 
-        today = date.today()
+        today = datetime.now(tz=timezone.utc).date()
         yesterday = today - timedelta(days=1)
         effective_end = yesterday
         fetch_start_fallback = start_date or (today - timedelta(days=365))
@@ -94,8 +93,7 @@ class MarketDataManager:
         # 1. Load sync states in a single query
         sync_states = self.db.read_bars_sync_states(symbols)
 
-        # 2. Classify each symbol
-        skipped: list[str] = []
+        # 2. Identify symbols to fetch
         pending: list[tuple[str, date, date]] = []  # (symbol, fetch_start, fetch_end)
 
         for symbol in symbols:
@@ -108,52 +106,52 @@ class MarketDataManager:
                 continue  # already evaluated today — skip entirely, no write
             if force or state.last_bar_date is None:
                 pending.append((symbol, fetch_start_fallback, effective_end))
-            elif state.last_bar_date >= yesterday:
-                skipped.append(symbol)
-            else:
+            elif state.last_bar_date < yesterday:
                 pending.append(
                     (symbol, state.last_bar_date + timedelta(days=1), effective_end)
                 )
+            # else: bars already current, nothing to fetch
 
-        # 3. Stamp last_checked_at for skipped symbols so they won't be re-evaluated today
+        # 3. Fetch pending symbols concurrently (thread-pool + semaphore)
         now = datetime.now(tz=timezone.utc)
-        if skipped:
-            self.db.upsert_bars_sync_states(
-                [
-                    BarsSyncState(
-                        symbol=s,
-                        status="skipped",
-                        last_checked_at=now,
-                        last_bar_date=sync_states[s].last_bar_date,
-                        last_success_at=sync_states[s].last_success_at,
-                    )
-                    for s in skipped
-                ]
-            )
 
-        # 4. Fetch pending symbols concurrently (thread-pool + semaphore)
         semaphore = asyncio.Semaphore(max_concurrency)
 
         async def fetch_one(symbol: str, fetch_start: date, fetch_end: date) -> None:
             async with semaphore:
+                bars: list[Bar] | None = None
                 try:
                     bars = await asyncio.to_thread(
                         self.ds_primary.fetch_bars, symbol, fetch_start, fetch_end
                     )
-                except Exception as exc:
-                    logger.error("fetch_bars failed for %s: %s", symbol, exc)
-                    self.db.upsert_bars_sync_states(
-                        [
-                            BarsSyncState(
-                                symbol=symbol,
-                                status="error",
-                                last_checked_at=now,
-                                last_bar_date=sync_states[symbol].last_bar_date,
-                                last_success_at=sync_states[symbol].last_success_at,
-                            )
-                        ]
+                except Exception:
+                    logger.warning(
+                        "Fetch bars failed for symbol %s on primary datasource. Attempting backup datasource.",
+                        symbol,
+                        exc_info=True,
                     )
-                    return
+                    try:
+                        bars = await asyncio.to_thread(
+                            self.ds_backup.fetch_bars, symbol, fetch_start, fetch_end
+                        )
+                    except Exception:
+                        logger.error(
+                            "Fetch bars failed for symbol %s on backup datasource",
+                            symbol,
+                            exc_info=True,
+                        )
+                        self.db.upsert_bars_sync_states(
+                            [
+                                BarsSyncState(
+                                    symbol=symbol,
+                                    status="error",
+                                    last_checked_at=now,
+                                    last_bar_date=sync_states[symbol].last_bar_date,
+                                    last_success_at=sync_states[symbol].last_success_at,
+                                )
+                            ]
+                        )
+                        return
 
                 if not bars:
                     # No new data for the range (e.g. non-trading day) — still ok
@@ -170,7 +168,6 @@ class MarketDataManager:
                     )
                     return
 
-                self.db.upsert_bars(bars)
                 new_last_bar = max(b.date for b in bars)
                 self.db.upsert_bars_sync_states(
                     [
@@ -183,6 +180,7 @@ class MarketDataManager:
                         )
                     ]
                 )
+                self.db.upsert_bars(bars)
 
         await asyncio.gather(*[fetch_one(s, fs, fe) for s, fs, fe in pending])
 
@@ -211,34 +209,24 @@ class MarketDataManager:
         batches = [
             symbols[i : i + batch_size] for i in range(0, len(symbols), batch_size)
         ]
-        sem = asyncio.Semaphore(max_concurrency)
+        semaphore = asyncio.Semaphore(max_concurrency)
 
         async def fetch_batch(batch: list[str]) -> tuple[list[str], list[Quote]]:
-            await sem.acquire()
-            try:
-                t0 = time.perf_counter()
-                quotes = await asyncio.to_thread(
-                    self.ds_primary.fetch_batch_quotes, batch
-                )
-                elapsed = time.perf_counter() - t0
-                logger.info(
-                    "fetch_batch_quotes: %d symbols in %.3fs",
-                    len(batch),
-                    elapsed,
-                )
-                return batch, quotes
-            except Exception:
-                logger.warning(
-                    "fetch_batch_quotes failed for batch of %d symbols; falling back to single fetches",
-                    len(batch),
-                    exc_info=True,
-                )
-                return batch, []
-            finally:
-                sem.release()
+            async with semaphore:
+                try:
+                    quotes = await asyncio.to_thread(
+                        self.ds_primary.fetch_batch_quotes, batch
+                    )
+                    return batch, quotes
+                except Exception:
+                    logger.warning(
+                        "fetch_batch_quotes failed for batch of %d symbols; falling back to single fetches",
+                        len(batch),
+                        exc_info=True,
+                    )
+                    return batch, []
 
         all_quotes: list[Quote] = []
-        all_bars: list[Bar] = []
         all_symbols: list[str] = []
 
         tasks = {asyncio.create_task(fetch_batch(b)): b for b in batches}
@@ -253,29 +241,20 @@ class MarketDataManager:
                 # --- Single-fetch retry with backup datasource for missed symbols ---
                 for symbol in missed:
                     try:
-                        logger.info(f"Fetching backup quote for symbol: {symbol}")
+                        logger.warning(
+                            "Fetch quote failed for batch endpoint for symbol %s on primary datasource. Attempting backup datasource.",
+                            symbol,
+                            exc_info=True,
+                        )
                         quote = await asyncio.to_thread(
                             self.ds_backup.fetch_quote, symbol
                         )
                         returned_quotes.append(quote)
                     except Exception:
-                        logger.warning(
-                            "Single-fetch retry failed for symbol %s; skipping",
+                        logger.error(
+                            "Fetch quote failed for symbol %s on backup datasource",
                             symbol,
                         )
-
-                    try:
-                        logger.info(f"Fetching backup bars for symbol: {symbol}")
-                        bars = await asyncio.to_thread(
-                            self.ds_backup.fetch_bars, symbol
-                        )
-                        all_bars.extend(bars)
-                    except Exception:
-                        logger.warning(
-                            "Backup fetch_bars failed for symbol %s; skipping",
-                            symbol,
-                        )
-
                 all_quotes.extend(returned_quotes)
             except Exception:
                 if current_batch is None:
@@ -287,22 +266,7 @@ class MarketDataManager:
                 )
                 all_symbols.extend(batch_for_progress)
 
-        t1 = time.perf_counter()
         self.db.upsert_quotes_batch(all_quotes)
-        logger.info(
-            "upsert_quotes_batch: %d quotes in %.3fs",
-            len(all_quotes),
-            time.perf_counter() - t1,
-        )
-
-        if all_bars:
-            t2 = time.perf_counter()
-            self.db.upsert_bars(all_bars)
-            logger.info(
-                "upsert_bars (backup): %d bars in %.3fs",
-                len(all_bars),
-                time.perf_counter() - t2,
-            )
 
         for sym in all_symbols:
             if on_progress:

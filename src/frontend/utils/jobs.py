@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def _clear_job_state() -> None:
     for k in [
         "job_id",
-        "job_intraday",
+        "job_force",
         "job_blocking",
         "job_status",
         "job_page",
@@ -25,7 +25,7 @@ def _clear_job_state() -> None:
 def start_refresh_job(
     symbols: list[str],
     blocking: bool,
-    intraday: bool,
+    force: bool = False,
     active_page: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -41,16 +41,16 @@ def start_refresh_job(
         api = get_api_client()
         resp = api.refresh_securities(
             symbols,
-            intraday=intraday,
+            force=force,
             start_date=start_date,
             end_date=end_date,
         )
         status = resp.get("status")
-        job_type = "Intraday" if intraday else "Full"
+        job_type = "Forced" if force else "Smart"
         if status == "accepted":
             job_id = resp["job_id"]
             st.session_state["job_id"] = job_id
-            st.session_state["job_intraday"] = intraday
+            st.session_state["job_force"] = force
             st.session_state["job_blocking"] = blocking
             st.session_state["job_status"] = "pending"
             st.session_state["job_page"] = active_page  # may be None
@@ -90,7 +90,7 @@ def check_job_status() -> None:
         st.session_state["last_job_completed_at"] = job.get("finished_at")
         st.session_state["last_job_id"] = job_id
         st.session_state["last_job_type"] = (
-            "intraday" if st.session_state.get("job_intraday") else "full"
+            "forced" if st.session_state.get("job_force") else "smart"
         )
         st.session_state["job_just_completed"] = True
 
@@ -113,7 +113,7 @@ def render_refresh_job_ui(active_page: str) -> None:
     Rules:
     - If job_blocking AND job_page == active_page:
         * block rendering (st.stop)
-        * fast poll (500ms)
+        * fast poll (1000ms)
         * show progress bar in MAIN area (not sidebar)
     - Else:
         * show ONLY a sidebar-bottom caption (no progress)
@@ -147,7 +147,7 @@ def render_refresh_job_ui(active_page: str) -> None:
         )
 
         # fast refresh + stop page content rendering
-        st_autorefresh(interval=500, key="job_autorefresh_blocking")
+        st_autorefresh(interval=1000, key="job_autorefresh_blocking")
         st.stop()
 
     # ---- SIDEBAR bottom caption only ----

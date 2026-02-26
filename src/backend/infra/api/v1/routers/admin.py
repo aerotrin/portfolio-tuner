@@ -231,7 +231,7 @@ async def _run_refresh_job(
     job.started_at = datetime.now(timezone.utc)
 
     logger.info(
-        "Background securities refresh started, job_id=%s, symbols=%d, force=%s",
+        "Securities refresh job started, job_id=%s, symbols=%d, force=%s",
         job_id,
         len(job.symbols),
         job.force,
@@ -261,10 +261,10 @@ async def _run_refresh_job(
         )
 
         job.status = "success"
-        logger.info("Background refresh job %s completed successfully", job_id)
+        logger.info("Securities refresh job %s completed successfully", job_id)
 
     except Exception as e:
-        logger.exception("Error in background refresh job %s", job_id)
+        logger.exception("Error in securities refresh job %s", job_id)
         job.status = "error"
         job.error = str(e)
 

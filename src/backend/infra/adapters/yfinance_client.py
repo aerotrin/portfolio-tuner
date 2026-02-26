@@ -84,7 +84,9 @@ class YFinanceClient(MarketDataProvider):
             try:
                 quotes.append(self.fetch_quote(symbol))
             except Exception:
-                logger.warning("Failed to fetch quote for %s", symbol, exc_info=True)
+                logger.warning(
+                    "Fetch quote failed for symbol %s", symbol, exc_info=True
+                )
         return quotes
 
     def fetch_bars(
