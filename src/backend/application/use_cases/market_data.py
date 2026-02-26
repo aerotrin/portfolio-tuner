@@ -68,10 +68,52 @@ class MarketDataManager:
         self,
         symbols: list[str],
         max_concurrency: int = 10,
+        force: bool = False,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # TODO: Implement smart updating logic of profiles
-        pass
+        if not symbols:
+            return
+
+        existing_syms = {p.symbol for p in self.db.read_profiles(symbols)}
+        pending = [s for s in symbols if force or s not in existing_syms]
+
+        if not pending:
+            return
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+        profiles: list[Profile] = []
+
+        async def fetch_one(symbol: str) -> None:
+            async with semaphore:
+                profile: Profile | None = None
+                # Tier 1: Primary
+                try:
+                    profile = await asyncio.to_thread(
+                        self.ds_primary.fetch_stock_profile, symbol
+                    )
+                except Exception:
+                    logger.warning(
+                        "Profile fetch failed for %s on primary. Trying secondary.",
+                        symbol,
+                    )
+                    # Tier 2: Secondary
+                    try:
+                        profile = await asyncio.to_thread(
+                            self.ds_backup.fetch_stock_profile, symbol
+                        )
+                    except Exception:
+                        logger.error(
+                            "Profile fetch failed for %s on secondary. Giving up.",
+                            symbol,
+                        )
+
+                if profile is not None:
+                    profiles.append(profile)
+
+        await asyncio.gather(*[fetch_one(s) for s in pending])
+
+        if profiles:
+            self.db.upsert_profiles_batch(profiles)
 
     async def refresh_bars_async(
         self,
@@ -322,8 +364,12 @@ class MarketDataManager:
                 force=force,
                 on_progress=on_progress,
             ),
+            self.refresh_profiles_async(
+                symbols,
+                max_concurrency=max_concurrency,
+                force=force,
+            ),
         )
-        # await self.refresh_profiles_async(symbols, max_concurrency=max_concurrency)  # TODO: re-enable
 
     # --- Read raw use cases ---
 

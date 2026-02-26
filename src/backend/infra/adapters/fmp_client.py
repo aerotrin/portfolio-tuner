@@ -254,11 +254,6 @@ class FMPClient(MarketDataProvider):
         )
 
     def fetch_stock_profile(self, symbol: str) -> Profile:
-        """
-        Fetches stock/ETF profile from FMP.
-
-        On HTTP/JSON failures or missing data, returns a Profile with type UNKNOWN
-        since Profile data is not critical for the application."""
         url = f"{self.cfg.base_url}/profile"
         params = {"symbol": symbol, "apikey": self.cfg.api_key}
 
@@ -266,19 +261,11 @@ class FMPClient(MarketDataProvider):
             data = self._get(url, params=params)
         except requests.exceptions.HTTPError as e:
             logger.warning("Profile request failed for %s: %s", symbol, e)
-            return Profile(
-                symbol=symbol,
-                date=datetime.now(timezone.utc),
-                type=SecurityType.UNKNOWN,
-            )
+            raise
 
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             logger.warning("No profile data retrieved for symbol %s", symbol)
-            return Profile(
-                symbol=symbol,
-                date=datetime.now(timezone.utc),
-                type=SecurityType.UNKNOWN,
-            )
+            raise ValueError("No profile data retrieved for symbol %s" % symbol)
 
         item = data[0]
         range_str = item.get("range", None)
