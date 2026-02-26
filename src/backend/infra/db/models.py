@@ -1,11 +1,12 @@
 from sqlalchemy import (
+    CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
     String,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
@@ -30,9 +31,7 @@ class AccountDB(Base):
 
 class QuoteDB(Base):
     __tablename__ = "quotes"
-    __table_args__ = (UniqueConstraint("symbol", name="uq_quotes_symbol"),)
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
+    symbol = mapped_column(String, primary_key=True)
     name = mapped_column(String)
     exchange = mapped_column(String)
     open = mapped_column(Float)
@@ -49,18 +48,29 @@ class QuoteDB(Base):
 
 class BarDB(Base):
     __tablename__ = "bars"
+    __table_args__ = (Index("ix_bars_symbol_date", "symbol", "date"),)
+    symbol = mapped_column(String, primary_key=True, nullable=False)
+    date = mapped_column(Date, primary_key=True, nullable=False)
+    open = mapped_column(Float, nullable=False)
+    high = mapped_column(Float, nullable=False)
+    low = mapped_column(Float, nullable=False)
+    close = mapped_column(Float, nullable=False)
+    volume = mapped_column(Float, nullable=False)
+
+
+class BarsSyncStateDB(Base):
+    __tablename__ = "bars_sync_state"
     __table_args__ = (
-        Index("ix_bars_symbol", "symbol"),
-        Index("ix_bars_symbol_date", "symbol", "date"),
+        CheckConstraint(
+            "status IN ('ok', 'skipped', 'error', 'pending')",
+            name="ck_bars_sync_state_status",
+        ),
     )
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
-    open = mapped_column(Float)
-    high = mapped_column(Float)
-    low = mapped_column(Float)
-    close = mapped_column(Float)
-    volume = mapped_column(Float)
-    date = mapped_column(DateTime)
+    symbol = mapped_column(String, primary_key=True, nullable=False)
+    last_bar_date = mapped_column(Date, nullable=True)
+    last_checked_at = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at = mapped_column(DateTime(timezone=True), nullable=True)
+    status = mapped_column(String, nullable=False)
 
 
 class GlobalRatesDB(Base):
@@ -73,9 +83,7 @@ class GlobalRatesDB(Base):
 
 class ProfileDB(Base):
     __tablename__ = "profiles"
-    __table_args__ = (UniqueConstraint("symbol", name="uq_profiles_symbol"),)
-    id = mapped_column(Integer, primary_key=True)
-    symbol = mapped_column(String, nullable=False)
+    symbol = mapped_column(String, primary_key=True)
     name = mapped_column(String)
     date = mapped_column(DateTime)
     type = mapped_column(String)

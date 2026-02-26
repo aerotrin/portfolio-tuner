@@ -24,7 +24,7 @@ async def lifespan(app):
     logger.info("Starting up...")
 
     engine = create_engine(
-        config.db_url,
+        config.postgres_url,
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,
@@ -33,23 +33,24 @@ async def lifespan(app):
 
     # Client setup
     records_importer = ExcelPandasClient()
-    fmp_client = FMPClient(
-        FMPConfig(
-            api_key=config.fmp_api_key,
-            base_url=config.fmp_base_url,
-            timeout_sec=config.fmp_timeout_sec,
-            default_days_back=config.fmp_default_days_back,
-            rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_max_per_minute),
-        )
-    )
 
-    yfinance_client = YFinanceClient()
+    if config.enable_fmp_as_primary:
+        primary_ds = FMPClient(
+            FMPConfig(
+                api_key=config.fmp_api_key,
+                rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_rate_limit),
+            )
+        )
+        backup_ds = YFinanceClient()
+    else:
+        primary_ds = YFinanceClient()
+        backup_ds = None
 
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal
     app.state.records_importer = records_importer
-    app.state.primary_market_datasource = fmp_client
-    app.state.backup_market_datasource = yfinance_client
+    app.state.primary_market_datasource = primary_ds
+    app.state.backup_market_datasource = backup_ds
 
     yield
     engine.dispose()

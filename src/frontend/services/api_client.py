@@ -71,14 +71,14 @@ class APIClient:
     def refresh_securities(
         self,
         symbols: list[str],
-        intraday: bool = False,
+        force: bool = False,
         start_date: str | None = None,
         end_date: str | None = None,
     ):
         return self._post(
             "/admin/refresh-securities",
             params={
-                "intraday": intraday,
+                "force": force,
                 "start_date": start_date,
                 "end_date": end_date,
             },
@@ -135,6 +135,10 @@ class APIClient:
 
     def get_available_symbols(self):
         return self._get("/securities")
+
+    def check_symbols_availability(self, symbols: list[str]) -> list[str]:
+        """Returns symbols missing from quotes or bars_sync_state."""
+        return self._post("/securities/availability", json=symbols)
 
     def get_security_quote(self, symbol: str):
         return self._get(f"/securities/{symbol}")

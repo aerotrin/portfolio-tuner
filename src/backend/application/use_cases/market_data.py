@@ -1,7 +1,6 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import logging
-import time
 from typing import Callable, List, Optional
 
 from backend.application.ports.market_data_provider import MarketDataProvider
@@ -9,13 +8,13 @@ from backend.application.ports.market_data_repo import MarketDataRepository
 from backend.domain.aggregates.security import Security
 from backend.domain.entities.security import (
     Bar,
+    BarsSyncState,
     GlobalRates,
     PerformanceMetric,
     Profile,
     Quote,
     SecurityAnalyticsResponse,
     TimeseriesIndicator,
-    SecurityType,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,11 +26,11 @@ class MarketDataManager:
     def __init__(
         self,
         ds_primary: MarketDataProvider,
-        ds_backup: MarketDataProvider,
+        ds_backup: Optional[MarketDataProvider],
         db: MarketDataRepository,
     ):
         self.ds_primary = ds_primary
-        self.ds_backup = ds_backup  # retained but unused; reserved for future failover
+        self.ds_backup = ds_backup
         self.db = db
 
     # --- DS passthrough use cases ---
@@ -65,27 +64,186 @@ class MarketDataManager:
     def refresh_global_rates(self):
         self.db.upsert_global_rates(self.ds_primary.fetch_global_rates())
 
-    async def refresh_batch_profiles_async(
+    async def refresh_profiles_async(
         self,
         symbols: list[str],
         max_concurrency: int = 10,
+        force: bool = False,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # TODO: Implement smart updating logic of profiles
-        pass
+        if not symbols:
+            return
 
-    async def refresh_batch_bars_async(
+        existing_syms = {p.symbol for p in self.db.read_profiles(symbols)}
+        pending = [s for s in symbols if force or s not in existing_syms]
+
+        if not pending:
+            return
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+        profiles: list[Profile] = []
+
+        async def fetch_one(symbol: str) -> None:
+            async with semaphore:
+                profile: Profile | None = None
+                # Tier 1: Primary
+                try:
+                    profile = await asyncio.to_thread(
+                        self.ds_primary.fetch_stock_profile, symbol
+                    )
+                except Exception:
+                    logger.warning(
+                        "Profile fetch failed for %s on primary. Trying secondary.",
+                        symbol,
+                    )
+                    # Tier 2: Secondary
+                    try:
+                        if self.ds_backup is None:
+                            raise RuntimeError("No backup datasource configured")
+                        profile = await asyncio.to_thread(
+                            self.ds_backup.fetch_stock_profile, symbol
+                        )
+                    except Exception:
+                        logger.error(
+                            "Profile fetch failed for %s on secondary. Giving up.",
+                            symbol,
+                        )
+
+                if profile is not None:
+                    profiles.append(profile)
+
+        await asyncio.gather(*[fetch_one(s) for s in pending])
+
+        if profiles:
+            self.db.upsert_profiles_batch(profiles)
+
+    async def refresh_bars_async(
         self,
         symbols: list[str],
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         max_concurrency: int = 10,
+        force: bool = False,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # TODO: Implement smart updating logic of bars
-        pass
+        if not symbols:
+            return
 
-    async def refresh_batch_quotes_async(
+        today = datetime.now(tz=timezone.utc).date()
+        yesterday = today - timedelta(days=1)
+        effective_end = yesterday
+        fetch_start_fallback = start_date or (today - timedelta(days=365))
+
+        # 1. Load sync states in a single query
+        sync_states = self.db.read_bars_sync_states(symbols)
+
+        # 2. Smart identify symbols that need to be fetched
+        pending: list[tuple[str, date, date]] = []  # (symbol, fetch_start, fetch_end)
+
+        for symbol in symbols:
+            state = sync_states[symbol]
+            if (
+                not force
+                and state.last_checked_at
+                and state.last_checked_at.date() == today
+            ):
+                continue  # already evaluated today — skip entirely, no write
+            if force or state.last_bar_date is None:
+                pending.append((symbol, fetch_start_fallback, effective_end))
+            elif state.last_bar_date < yesterday:
+                pending.append(
+                    (symbol, state.last_bar_date + timedelta(days=1), effective_end)
+                )
+            # else: bars already current, nothing to fetch
+
+        # 3. Fetch pending symbols concurrently (thread-pool + semaphore)
+        now = datetime.now(tz=timezone.utc)
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def fetch_one(symbol: str, fetch_start: date, fetch_end: date) -> None:
+            async with semaphore:
+                bars: list[Bar] | None = None
+                try:
+                    bars = await asyncio.to_thread(
+                        self.ds_primary.fetch_bars, symbol, fetch_start, fetch_end
+                    )
+                except Exception:
+                    logger.warning(
+                        "Bars fetching failed for %s on primary. Trying alternate.",
+                        symbol,
+                    )
+                    try:
+                        if self.ds_backup is None:
+                            raise RuntimeError("No backup datasource configured")
+                        bars = await asyncio.to_thread(
+                            self.ds_backup.fetch_bars, symbol, fetch_start, fetch_end
+                        )
+                    except Exception:
+                        logger.error(
+                            "Bars fetching failed for %s on alternate. Logging as error.",
+                            symbol,
+                        )
+                        if sync_states[symbol].last_success_at is not None:
+                            self.db.upsert_bars_sync_states(
+                                [
+                                    BarsSyncState(
+                                        symbol=symbol,
+                                        status="error",
+                                        last_checked_at=now,
+                                        last_bar_date=sync_states[symbol].last_bar_date,
+                                        last_success_at=sync_states[
+                                            symbol
+                                        ].last_success_at,
+                                    )
+                                ]
+                            )
+                        return
+
+                if not bars:
+                    # No new data for the range (e.g. non-trading day) — still ok
+                    self.db.upsert_bars_sync_states(
+                        [
+                            BarsSyncState(
+                                symbol=symbol,
+                                status="ok",
+                                last_checked_at=now,
+                                last_bar_date=sync_states[symbol].last_bar_date,
+                                last_success_at=sync_states[symbol].last_success_at,
+                            )
+                        ]
+                    )
+                    return
+
+                new_last_bar = max(b.date for b in bars)
+                self.db.upsert_bars_sync_states(
+                    [
+                        BarsSyncState(
+                            symbol=symbol,
+                            status="ok",
+                            last_checked_at=now,
+                            last_success_at=now,
+                            last_bar_date=new_last_bar,
+                        )
+                    ]
+                )
+                self.db.upsert_bars(bars)
+
+        await asyncio.gather(*[fetch_one(s, fs, fe) for s, fs, fe in pending])
+
+        # 5. Trim all symbols to requested window
+        if start_date:
+            self.db.trim_bars_batch(symbols, before_date=start_date)
+
+        # 6. Report progress
+        if on_progress:
+            for symbol in symbols:
+                try:
+                    on_progress(symbol)
+                except Exception:
+                    pass
+
+    async def refresh_quotes_async(
         self,
         symbols: list[str],
         batch_size: int = 100,
@@ -98,34 +256,37 @@ class MarketDataManager:
         batches = [
             symbols[i : i + batch_size] for i in range(0, len(symbols), batch_size)
         ]
-        sem = asyncio.Semaphore(max_concurrency)
+        semaphore = asyncio.Semaphore(max_concurrency)
 
         async def fetch_batch(batch: list[str]) -> tuple[list[str], list[Quote]]:
-            await sem.acquire()
-            try:
-                t0 = time.perf_counter()
-                quotes = await asyncio.to_thread(
-                    self.ds_primary.fetch_batch_quotes, batch
-                )
-                elapsed = time.perf_counter() - t0
-                logger.info(
-                    "fetch_batch_quotes: %d symbols in %.3fs",
-                    len(batch),
-                    elapsed,
-                )
-                return batch, quotes
-            except Exception:
-                logger.warning(
-                    "fetch_batch_quotes failed for batch of %d symbols; falling back to single fetches",
-                    len(batch),
-                    exc_info=True,
-                )
+            async with semaphore:
+                # Tier 1: Primary batch
+                try:
+                    quotes = await asyncio.to_thread(
+                        self.ds_primary.fetch_batch_quotes, batch
+                    )
+                    return batch, quotes
+                except Exception:
+                    logger.warning(
+                        "Quotes batch fetching failed on primary. Trying alternate batch",
+                    )
+
+                # Tier 2: Secondary batch
+                try:
+                    if self.ds_backup is None:
+                        raise RuntimeError("No backup datasource configured")
+                    quotes = await asyncio.to_thread(
+                        self.ds_backup.fetch_batch_quotes, batch
+                    )
+                    return batch, quotes
+                except Exception:
+                    logger.warning(
+                        "Quotes batch fetching failed on alternate. Will retry per-symbol",
+                    )
+
                 return batch, []
-            finally:
-                sem.release()
 
         all_quotes: list[Quote] = []
-        all_bars: list[Bar] = []
         all_symbols: list[str] = []
 
         tasks = {asyncio.create_task(fetch_batch(b)): b for b in batches}
@@ -137,32 +298,37 @@ class MarketDataManager:
                 returned_syms = {q.symbol for q in returned_quotes}
                 missed = set(current_batch) - returned_syms
 
-                # --- Single-fetch retry with backup datasource for missed symbols ---
+                # --- Single-fetch retry for missed symbols ---
                 for symbol in missed:
+                    quote: Quote | None = None
+
+                    # Tier 3: Primary single
                     try:
-                        logger.info(f"Fetching backup quote for symbol: {symbol}")
                         quote = await asyncio.to_thread(
-                            self.ds_backup.fetch_quote, symbol
+                            self.ds_primary.fetch_quote, symbol
                         )
+                    except Exception:
+                        logger.warning(
+                            "%s quote fetch failed on primary. Trying alternate",
+                            symbol,
+                        )
+
+                    # Tier 4: Secondary single
+                    if quote is None:
+                        try:
+                            if self.ds_backup is None:
+                                raise RuntimeError("No backup datasource configured")
+                            quote = await asyncio.to_thread(
+                                self.ds_backup.fetch_quote, symbol
+                            )
+                        except Exception:
+                            logger.error(
+                                "%s quote fetch failed on alternate. Giving up.",
+                                symbol,
+                            )
+
+                    if quote is not None:
                         returned_quotes.append(quote)
-                    except Exception:
-                        logger.warning(
-                            "Single-fetch retry failed for symbol %s; skipping",
-                            symbol,
-                        )
-
-                    try:
-                        logger.info(f"Fetching backup bars for symbol: {symbol}")
-                        bars = await asyncio.to_thread(
-                            self.ds_backup.fetch_bars, symbol
-                        )
-                        all_bars.extend(bars)
-                    except Exception:
-                        logger.warning(
-                            "Backup fetch_bars failed for symbol %s; skipping",
-                            symbol,
-                        )
-
                 all_quotes.extend(returned_quotes)
             except Exception:
                 if current_batch is None:
@@ -174,22 +340,7 @@ class MarketDataManager:
                 )
                 all_symbols.extend(batch_for_progress)
 
-        t1 = time.perf_counter()
         self.db.upsert_quotes_batch(all_quotes)
-        logger.info(
-            "upsert_quotes_batch: %d quotes in %.3fs",
-            len(all_quotes),
-            time.perf_counter() - t1,
-        )
-
-        if all_bars:
-            t2 = time.perf_counter()
-            self.db.upsert_bars(all_bars)
-            logger.info(
-                "upsert_bars (backup): %d bars in %.3fs",
-                len(all_bars),
-                time.perf_counter() - t2,
-            )
 
         for sym in all_symbols:
             if on_progress:
@@ -198,37 +349,38 @@ class MarketDataManager:
                 except Exception:
                     pass
 
-    async def refresh_securities_batch_async(
+    async def refresh_securities_async(
         self,
         symbols: list[str],
-        intraday: bool,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        max_concurrency: int = 10,
+        force: bool = False,
+        max_concurrency: int = 5,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
-        """Refresh global rates then all securities — intraday (quotes only) or EOD (full bars)."""
+        """Refresh global rates, quotes, and bars concurrently for all symbols."""
         self.refresh_global_rates()
-        if intraday:
-            await self.refresh_batch_quotes_async(
+        await asyncio.gather(
+            self.refresh_quotes_async(
                 symbols,
                 batch_size=100,
                 max_concurrency=max_concurrency,
-                on_progress=on_progress,
-            )
-        else:
-            await self.refresh_batch_bars_async(
+                on_progress=None,  # bars owns progress tracking
+            ),
+            self.refresh_bars_async(
                 symbols,
                 start_date=start_date,
                 end_date=end_date,
                 max_concurrency=max_concurrency,
+                force=force,
                 on_progress=on_progress,
-            )
-            await self.refresh_batch_profiles_async(
+            ),
+            self.refresh_profiles_async(
                 symbols,
                 max_concurrency=max_concurrency,
-                on_progress=on_progress,
-            )
+                force=force,
+            ),
+        )
 
     # --- Read raw use cases ---
 

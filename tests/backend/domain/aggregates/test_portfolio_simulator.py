@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -10,11 +10,11 @@ from src.backend.domain.entities.security import Bar, GlobalRates, Profile, Quot
 
 
 def _build_security(symbol: str, prices: list[float], rates: GlobalRates) -> Security:
-    now = datetime(2024, 1, 1)
+    start = date(2024, 1, 1)
     bars = [
         Bar(
             symbol=symbol,
-            date=now + timedelta(days=i),
+            date=start + timedelta(days=i),
             open=price,
             high=price * 1.01,
             low=price * 0.99,
@@ -37,9 +37,9 @@ def _build_security(symbol: str, prices: list[float], rates: GlobalRates) -> Sec
         change=0.0,
         change_percent=0.0,
         previousClose=prices[-1],
-        timestamp=now,
+        timestamp=datetime(2024, 1, 1),
     )
-    profile = Profile(symbol=symbol, date=now)
+    profile = Profile(symbol=symbol, date=datetime(2024, 1, 1))
     return Security(quote=quote, bars=bars, rates=rates, profile=profile)
 
 

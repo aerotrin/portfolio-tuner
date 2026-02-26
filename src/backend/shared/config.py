@@ -19,22 +19,14 @@ class Config(BaseSettings):
     backend_url: str = "http://127.0.0.1:8000"
     api_prefix: str = "/api/v1"
 
-    admin_enabled: bool = False
-    debug: bool = False
-
-    max_concurrency: int = 5
-
     # DB
-    db_url: str = "sqlite:///./data/dev.db"
-    db_user: str = ""
-    db_password: str = ""
+    postgres_url: str = ""
 
     # FMP settings
+    max_concurrency: int = 5
+    enable_fmp_as_primary: bool = False
     fmp_api_key: str = Field(default="")
-    fmp_base_url: str = "https://financialmodelingprep.com/stable"
-    fmp_timeout_sec: float = 10.0
-    fmp_default_days_back: int = 365
-    fmp_max_per_minute: int = 300
+    fmp_rate_limit: int = 100
 
     # Supabase auth (ES256 / P-256 asymmetric signing)
     supabase_jwt_public_key: str = Field(default="")

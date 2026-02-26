@@ -10,7 +10,7 @@ from frontend.presentation.widgets.kpis import (
     render_market_snapshot,
     render_status_strip,
 )
-from frontend.services.streamlit_data import load_security_data
+from frontend.services.streamlit_data import check_missing_symbols, load_security_data
 from frontend.shared.config_loader import SymbolGroup, load_symbols_config
 from frontend.utils.dataframe import (
     add_last_indicators,
@@ -21,6 +21,7 @@ from frontend.utils.dataframe import (
     make_timeseries_wide_df,
 )
 from frontend.utils.jobs import (
+    auto_refresh_if_missing,
     check_job_status,
     render_refresh_job_ui,
     start_refresh_job,
@@ -29,6 +30,7 @@ from frontend.utils.jobs import (
 logger = logging.getLogger(__name__)
 
 active_page = "market"
+st.session_state["active_page"] = active_page
 
 # --- Session state -----------------------------------------------------------
 try:
@@ -42,7 +44,6 @@ try:
     market_symbols = st.session_state["market_symbols"]
     benchmark = st.session_state["benchmark"]
 
-    available_symbols = st.session_state["available_symbols"]
     rates = st.session_state["rates"]
 
 except KeyError as exc:
@@ -50,7 +51,7 @@ except KeyError as exc:
     logger.exception("Missing session key on Market page: %s", exc)
     st.stop()
 
-symbols_config = load_symbols_config()  # TODO: Duplication with app.py
+symbols_config = load_symbols_config()
 
 
 # -- Render header ------------------------------------------------------------
@@ -70,18 +71,11 @@ page_symbols = sorted(
         *market_symbols,
     }
 )
+st.session_state["page_symbols"] = page_symbols
 
 # --- Ensure all page symbols are available else blocking refresh job --------
-missing_symbols = sorted(set(page_symbols) - set(available_symbols))
-if missing_symbols:
-    start_refresh_job(
-        symbols=missing_symbols,
-        blocking=True,
-        intraday=True,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
+missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
+auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
 
 # --- Load base + market securities data ---------------------------------------
 securities = load_security_data(page_symbols, start_date, end_date)
@@ -99,7 +93,6 @@ with h[1]:
         start_refresh_job(
             symbols=page_symbols,
             blocking=True,
-            intraday=True,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,

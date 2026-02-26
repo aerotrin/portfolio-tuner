@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 import logging
-from typing import Any
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -15,7 +14,6 @@ from frontend.services.streamlit_data import (
     get_api_client,
     import_account_records,
     load_accounts_list,
-    load_available_securities_list,
     load_rates,
 )
 from frontend.shared.config_loader import load_symbols_config
@@ -251,27 +249,12 @@ api = get_api_client()
 # -----------------------------------------------------------------------------
 # Cached boot data (API calls)
 # -----------------------------------------------------------------------------
-@st.cache_data(ttl=60, show_spinner=False)
-def get_accounts_cached(user_id: str) -> list[Any]:
-    return load_accounts_list(user_id)
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def get_available_symbols_cached() -> list[str]:
-    return load_available_securities_list()
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def get_rates_cached() -> Any:
-    return load_rates()
-
 
 # Load accounts for sidebar selection; keep expensive loads lazy.
-accounts = get_accounts_cached(st.session_state["user_id"])
+accounts = load_accounts_list(st.session_state["user_id"])
 
 # Load cached data to session state
-st.session_state["available_symbols"] = get_available_symbols_cached()
-st.session_state["rates"] = get_rates_cached()
+st.session_state["rates"] = load_rates()
 
 # Benchmarks from bootstrap
 benchmark_symbols = st.session_state.get("benchmark_symbols", [])
@@ -323,7 +306,7 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
 # -----------------------------------------------------------------------------
 with st.sidebar:
     if config.debug:
-        st.warning("Developer mode active", icon="⚠️")
+        st.warning("Developer mode on", icon="⚠️")
 
     st.subheader("Portfolio Options")
 
@@ -432,12 +415,22 @@ with st.sidebar:
     st.subheader("Data Refresh Options")
 
     if st.button(
-        "Refresh All Data",
+        "Force Refresh Data",
         icon=":material/refresh:",
         type="primary",
         key="full_data_refresh_button",
     ):
-        pass
+        st.session_state["_last_missing_attempted"] = set(
+            st.session_state["page_symbols"]
+        )
+        start_refresh_job(
+            symbols=st.session_state["page_symbols"],
+            blocking=True,
+            force=True,
+            active_page=st.session_state["active_page"],
+            start_date=st.session_state["start_date"],
+            end_date=st.session_state["end_date"],
+        )
 
     if config.debug:
         st.divider()

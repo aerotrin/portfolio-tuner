@@ -50,7 +50,7 @@ class Security:
                 low=self.quote.low,
                 close=self.quote.close,
                 volume=self.quote.volume,
-                date=self.quote.timestamp,
+                date=self.quote.timestamp.date(),
             )
             bars_df = pd.DataFrame(
                 [bar.model_dump() for bar in self.bars + [quote_as_bar]]

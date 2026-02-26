@@ -49,7 +49,7 @@ JobStatus = Literal["pending", "running", "success", "error"]
 class RefreshJob:
     id: str
     symbols: list[str]
-    intraday: bool
+    force: bool = False
     status: JobStatus = "pending"
     error: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -72,7 +72,7 @@ class RefreshJobResponse(BaseModel):
     job_id: str
     status: JobStatus
     symbols: list[str]
-    intraday: bool
+    force: bool
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
@@ -88,7 +88,7 @@ class RefreshSecuritiesResponse(BaseModel):
     status: str
     job_id: str | None = None
     symbols: list[str] | None = None
-    intraday: bool | None = None
+    force: bool | None = None
     reason: str | None = None
     cooldown_seconds_remaining: float | None = None
 
@@ -231,10 +231,10 @@ async def _run_refresh_job(
     job.started_at = datetime.now(timezone.utc)
 
     logger.info(
-        "Background %s securities refresh started, job_id=%s, symbols=%d",
-        "intraday" if job.intraday else "EOD",
+        "Securities refresh job started, job_id=%s, symbols=%d, force=%s",
         job_id,
         len(job.symbols),
+        job.force,
     )
 
     SessionLocal = app.state.SessionLocal
@@ -251,20 +251,20 @@ async def _run_refresh_job(
             if job.symbols_remaining > 0:
                 job.symbols_remaining -= 1
 
-        await market_man.refresh_securities_batch_async(
+        await market_man.refresh_securities_async(
             job.symbols,
-            intraday=job.intraday,
             start_date=start_date,
             end_date=end_date,
+            force=job.force,
             max_concurrency=config.max_concurrency,
             on_progress=on_progress,
         )
 
         job.status = "success"
-        logger.info("Background refresh job %s completed successfully", job_id)
+        logger.info("Securities refresh job %s completed successfully", job_id)
 
     except Exception as e:
-        logger.exception("Error in background refresh job %s", job_id)
+        logger.exception("Error in securities refresh job %s", job_id)
         job.status = "error"
         job.error = str(e)
 
@@ -283,14 +283,14 @@ async def _run_refresh_job(
 async def refresh_securities(
     request: Request,
     symbols: list[str] = Body(...),
-    intraday: bool = False,
+    force: bool = False,
     start_date: date | None = None,
     end_date: date | None = None,
     bg_task: BackgroundTasks = None,
 ):
     """
-    Trigger a batch refresh of market data for multiple securities by symbol.
-    Note: If intraday=True, only quote data (not full bars/history) will be refreshed for the given symbols.
+    Trigger a batch refresh of quotes and bars for the given symbols.
+    Set force=True to bypass smart sync state and re-fetch the full date range for all symbols.
     """
 
     global _LAST_REFRESH
@@ -320,7 +320,7 @@ async def refresh_securities(
     job = RefreshJob(
         id=job_id,
         symbols=list(symbols),
-        intraday=intraday,
+        force=force,
     )
     _JOBS[job_id] = job
 
@@ -335,19 +335,19 @@ async def refresh_securities(
     )
 
     logger.info(
-        "Scheduled %s securities refresh job_id=%s for %d symbols from %s to %s",
-        "intraday" if intraday else "EOD",
+        "Scheduled securities refresh job_id=%s for %d symbols from %s to %s (force=%s)",
         job_id,
         len(symbols),
         start_date,
         end_date,
+        force,
     )
 
     return RefreshSecuritiesResponse(
         status="accepted",
         job_id=job_id,
         symbols=symbols,
-        intraday=intraday,
+        force=force,
     )
 
 
@@ -376,7 +376,7 @@ def get_refresh_job(job_id: str):
         job_id=job.id,
         status=job.status,
         symbols=job.symbols,
-        intraday=job.intraday,
+        force=job.force,
         created_at=job.created_at,
         started_at=job.started_at,
         finished_at=job.finished_at,

@@ -12,7 +12,12 @@ from src.backend.domain.entities.security import (
     PerformanceMetric,
     TimeseriesIndicator,
 )
-from tests.backend.conftest import build_bars, build_global_rates, build_profile, build_quote
+from tests.backend.conftest import (
+    build_bars,
+    build_global_rates,
+    build_profile,
+    build_quote,
+)
 
 
 class FakeMarketDataManager:
@@ -40,7 +45,9 @@ class FakeAccountManager:
     def build_account(self, account_number: str, account_name: str | None = None):
         self.calls.append((account_number, account_name))
         return SimpleNamespace(
-            open_positions=self.positions, cash_balance=self.cash_balance, external_cash_flows=[]
+            open_positions=self.positions,
+            cash_balance=self.cash_balance,
+            external_cash_flows=[],
         )
 
 
@@ -121,7 +128,7 @@ def test_build_portfolio_from_account_forwards_date_filter(monkeypatch):
 def test_portfolio_read_methods_pass_through(monkeypatch):
     indicator = TimeseriesIndicator(
         symbol="PORTF",
-        date=datetime(2024, 1, 1),
+        date=date(2024, 1, 1),
         close=101.0,
         close_norm=1.01,
         daily_return=0.01,
@@ -217,7 +224,9 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
 
     build_calls: list[dict] = []
 
-    async def fake_build(account_number, account_name=None, start_date=None, end_date=None):
+    async def fake_build(
+        account_number, account_name=None, start_date=None, end_date=None
+    ):
         build_calls.append({"start_date": start_date, "end_date": end_date})
         return stub_portfolio
 
@@ -228,9 +237,7 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
 
     start = date(2024, 1, 1)
     end = date(2024, 12, 31)
-    snap = asyncio.run(
-        manager.get_portfolio("ACC-1", start_date=start, end_date=end)
-    )
+    snap = asyncio.run(manager.get_portfolio("ACC-1", start_date=start, end_date=end))
 
     assert build_calls == [{"start_date": start, "end_date": end}]
     assert snap.summary.id == "ACC-1"

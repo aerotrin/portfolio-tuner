@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -104,6 +104,21 @@ def read_available_symbols(
     try:
         symbols = market_man.read_available_symbols()
         return symbols
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post(
+    "/securities/availability",
+    response_model=list[str],
+)
+def check_symbols_availability(
+    symbols: list[str] = Body(...),
+    market_man: MarketDataManager = Depends(get_market_data_manager),
+):
+    """Returns the subset of requested symbols not yet available (missing quotes or bars sync state)."""
+    try:
+        return market_man.db.check_symbols_availability(symbols)
     except Exception as e:
         _raise_http_error(e)
 

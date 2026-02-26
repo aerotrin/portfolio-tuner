@@ -114,6 +114,16 @@ def load_available_securities_list() -> list[str]:
     return symbols
 
 
+def check_missing_symbols(symbols: tuple[str, ...]) -> list[str]:
+    """Returns symbols not yet available (missing quotes or bars sync state)."""
+    api = get_api_client()
+    try:
+        return api.check_symbols_availability(list(symbols))
+    except Exception:
+        logger.exception("Failed to check symbol availability")
+        return []
+
+
 @st.cache_data(show_spinner="Loading account records…")
 def load_account_records(account_id: str) -> AccountRecords:
     """Load transactions, closed lots, and cash flows for given account id in a single request."""
