@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 import logging
+import re
 from typing import Any
 
 import requests
@@ -49,6 +50,19 @@ class FMPClient(MarketDataProvider):
         self.cfg = config
         self._rate_limiter = RateLimiter(config.rate_limiter)
 
+    def _redact(self, text: str) -> str:
+        """Redact the apikey query parameter value from any string."""
+        return re.sub(r"(?i)([?&]apikey=)[^&\s]*", r"\1***", text)
+
+    def _raise_sanitized(self, resp: requests.Response) -> None:
+        """Call raise_for_status() and re-raise with the API key redacted."""
+        try:
+            resp.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            # `from None` suppresses the exception chain so the original
+            # (unredacted) URL doesn't appear in tracebacks.
+            raise requests.exceptions.HTTPError(self._redact(str(e))) from None
+
     def _get(
         self, url: str, params: dict[str, Any] | None = None, *, max_retries: int = 3
     ) -> Any:
@@ -64,11 +78,14 @@ class FMPClient(MarketDataProvider):
         while True:
             # Reserve rate-limit slot before issuing the HTTP request
             self._rate_limiter.acquire_slot()
-            resp = requests.get(
-                url,
-                params=params,
-                timeout=self.cfg.timeout_sec,
-            )
+            try:
+                resp = requests.get(
+                    url,
+                    params=params,
+                    timeout=self.cfg.timeout_sec,
+                )
+            except requests.exceptions.RequestException as e:
+                raise type(e)(self._redact(str(e))) from None
 
             # Too Many Requests – retry with backoff
             if resp.status_code == 429:
@@ -82,29 +99,31 @@ class FMPClient(MarketDataProvider):
                 logger.warning(
                     "FMP 429 Too Many Requests for %s, attempt %d/%d, "
                     "Retry-After=%s, body=%s",
-                    resp.url,
+                    self._redact(resp.url),
                     attempt,
                     max_retries,
                     retry_after_raw,
-                    resp.text[:200],
+                    self._redact(resp.text[:200]),
                 )
 
                 if attempt > max_retries:
                     # Give up and raise the HTTPError
-                    resp.raise_for_status()
+                    self._raise_sanitized(resp)
 
                 # Handle rate limit with exponential backoff
                 self._rate_limiter.handle_rate_limit(retry_after, attempt)
                 continue  # retry loop
 
             # Other HTTP errors
-            resp.raise_for_status()
+            self._raise_sanitized(resp)
 
             # Parse JSON
             try:
                 return resp.json()
             except ValueError as e:
-                logger.error("Invalid JSON from FMP for %s: %s", resp.url, e)
+                logger.error(
+                    "Invalid JSON from FMP for %s: %s", self._redact(resp.url), e
+                )
                 raise
 
     def fetch_quote(self, symbol: str) -> Quote:
