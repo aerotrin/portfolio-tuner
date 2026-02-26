@@ -71,6 +71,49 @@ def start_refresh_job(
         return None
 
 
+def auto_refresh_if_missing(
+    missing_symbols: list[str],
+    active_page: str,
+    start_date: str | None,
+    end_date: str | None,
+) -> None:
+    """Trigger a blocking auto-refresh for missing symbols.
+
+    If any missing symbol was already attempted in a previous job and is still
+    unavailable, show an error for all missing symbols and stop rendering.
+    Otherwise, attempt to fetch all missing symbols.
+
+    Clear ``_last_missing_attempted`` (e.g. on Force Refresh) to allow retrying.
+    """
+    if not missing_symbols:
+        return
+
+    last_attempted: set[str] = st.session_state.get("_last_missing_attempted", set())
+
+    # Any missing symbol that was already attempted → fetch failed; error and stop.
+    if set(missing_symbols) & last_attempted:
+        logger.warning(
+            "Symbols still missing after refresh attempt, stopping render: %s",
+            sorted(missing_symbols),
+        )
+        st.error(
+            f"The following symbols could not be fetched"
+            f": **{', '.join(sorted(missing_symbols))}**. Unable to proceed. "
+            f"Use **Force Refresh Data** in the sidebar to retry.",
+            icon="❌",
+        )
+        st.stop()
+
+    st.session_state["_last_missing_attempted"] = set(missing_symbols)
+    start_refresh_job(
+        symbols=missing_symbols,
+        blocking=True,
+        active_page=active_page,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
 def check_job_status() -> None:
     job_id = st.session_state.get("job_id")
     if not job_id:

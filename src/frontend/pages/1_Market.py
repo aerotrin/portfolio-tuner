@@ -21,6 +21,7 @@ from frontend.utils.dataframe import (
     make_timeseries_wide_df,
 )
 from frontend.utils.jobs import (
+    auto_refresh_if_missing,
     check_job_status,
     render_refresh_job_ui,
     start_refresh_job,
@@ -74,14 +75,7 @@ st.session_state["page_symbols"] = page_symbols
 
 # --- Ensure all page symbols are available else blocking refresh job --------
 missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
-if missing_symbols:
-    start_refresh_job(
-        symbols=missing_symbols,
-        blocking=True,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
+auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
 
 # --- Load base + market securities data ---------------------------------------
 securities = load_security_data(page_symbols, start_date, end_date)

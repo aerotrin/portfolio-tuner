@@ -307,7 +307,7 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
 # -----------------------------------------------------------------------------
 with st.sidebar:
     if config.debug:
-        st.warning("Developer mode active", icon="⚠️")
+        st.warning("Developer mode on", icon="⚠️")
 
     st.subheader("Portfolio Options")
 
@@ -421,6 +421,9 @@ with st.sidebar:
         type="primary",
         key="full_data_refresh_button",
     ):
+        st.session_state["_last_missing_attempted"] = set(
+            st.session_state["page_symbols"]
+        )
         start_refresh_job(
             symbols=st.session_state["page_symbols"],
             blocking=True,

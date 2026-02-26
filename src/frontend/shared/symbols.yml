@@ -33,9 +33,12 @@ snapshot:
     - ^DJI
     - ^GSPTSE
     - ^VIX
-    - GCUSD
-    - SIUSD
-    - BZUSD
+    - GC=F
+    - SI=F
+    - BZ=F
+    # - GCUSD # Only works with FMP API
+    # - SIUSD # Only works with FMP API
+    # - BZUSD # Only works with FMP API
 
 # Select market ETFs labelled by theme. Do not add stocks here.
 base_market_etfs:
