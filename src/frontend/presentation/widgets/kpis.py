@@ -18,31 +18,31 @@ def render_account_summary(
             account_owner,
         )
         st.metric(
-            "Current Value CAD",
-            f"${portfolio_summary['total_value']:,.2f}",
+            "Total Value",
+            f"${portfolio_summary['total_value']:,.2f} CAD",
         )
         st.metric(
-            "Unrealized P/L CAD",
-            f"${portfolio_summary['unrealized_gain']:,.2f}",
-            f"{portfolio_summary['pnl_intraday']:+,.2f}",
-        )
-        st.metric(
-            "Cash CAD",
-            f"${portfolio_summary['cash_balance']:,.2f}",
+            "Cash",
+            f"${portfolio_summary['cash_balance']:,.2f} CAD",
             f"{portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
         )
         st.metric(
-            "Securities CAD",
-            f"${portfolio_summary['market_value']:,.2f}",
+            "Securities",
+            f"${portfolio_summary['market_value']:,.2f} CAD",
             f"{1 - portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
         )
         st.metric(
-            "Return CAD | MWRR (ann.)",
-            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f}",
+            "Unrealized P/L",
+            f"${portfolio_summary['unrealized_gain']:,.2f} CAD",
+            f"{portfolio_summary['return_on_cost']:+.2%}",
+        )
+        st.metric(
+            "Return | MWRR",
+            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f} CAD",
             f"{portfolio_summary['mwrr']:+.2%}",
         )
 
@@ -107,23 +107,23 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
 def render_portfolio_kpis(df: pd.DataFrame) -> None:
     """Render the portfolio KPIs."""
     st.metric(
-        "Current P/L CAD",
-        f"${df['gain'].sum():,.2f}",
-        f"{df['intraday_change'].sum():+,.2f}",
+        "Market Value",
+        f"${df['market_value'].sum():,.2f} CAD",
+        f"{df['intraday_change'].sum():+,.2f}",  # TODO: Add intraday chg percent
     )
     st.metric(
-        "Day Best Performer CAD",
+        "Best Intraday",
         f"{df['symbol'][df['intraday_change'].idxmax()]}",
         f"{df['intraday_change'].max():+,.2f}",
     )
     st.metric(
-        "Day Worst Performer CAD",
+        "Worst Intraday",
         f"{df['symbol'][df['intraday_change'].idxmin()]}",
         f"{df['intraday_change'].min():+,.2f}",
     )
     st.metric(
         "Total FX Exposure",
-        f"${df['fx_exposure'].sum():,.2f}",
+        f"${df['fx_exposure'].sum():,.2f} CAD",
     )
     st.metric("No. of Holdings", f"{len(df)}")
     st.metric(
@@ -132,9 +132,17 @@ def render_portfolio_kpis(df: pd.DataFrame) -> None:
     )
 
 
-def render_health_bar(df: pd.DataFrame) -> None:
+def render_positions_health_bar(df: pd.DataFrame) -> None:
     """Render the health bar."""
-    g = df["gain_pct"].gt(0).sum()
-    l = df["gain_pct"].lt(0).sum()
-    health_bar = "🟩" * g + "🟥" * l
-    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {g}, ↓ {l})")
+    gainers = df["gain_pct"].gt(0).sum()
+    losers = df["gain_pct"].lt(0).sum()
+    health_bar = "🟩" * gainers + "🟥" * losers
+    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})")
+
+
+def render_intraday_health_bar(df: pd.DataFrame) -> None:
+    """Render the health bar."""
+    gainers = df["change_percent"].gt(0).sum()
+    losers = df["change_percent"].lt(0).sum()
+    health_bar = "🟩" * gainers + "🟥" * losers
+    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})")
