@@ -41,7 +41,6 @@ from frontend.widgets.reports import (
     render_records_header,
     render_transactions_table,
 )
-from frontend.widgets.statistics import render_statistics_table
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +230,7 @@ if not cash_flows.empty:
 
 
 # --- Render tabs --------------------------------------------------------------------
-tabs = st.tabs(
-    ["Positions", "Allocation", "Performance", "Statistics", "Correlation", "Records"]
-)
+tabs = st.tabs(["Positions", "Allocation", "Performance", "Correlation", "Records"])
 
 with tabs[0]:
     render_portfolio_positions(holdings_data)
@@ -255,17 +252,9 @@ with tabs[2]:
     )
 
 with tabs[3]:
-    render_statistics_table(
-        benchmark_metrics=benchmark_data,
-        securities_metrics=holdings_data,
-        portfolio_metrics=portfolio_metrics,
-        key_prefix="holdings",
-    )
-
-with tabs[4]:
     render_correlation_matrix(portfolio_correlation_matrix)
 
-with tabs[5]:
+with tabs[4]:
     start_date, end_date = render_records_header(transactions)
     if start_date:
         render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)

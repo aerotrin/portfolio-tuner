@@ -20,7 +20,6 @@ from frontend.widgets.intraday import render_market_intraday
 from frontend.widgets.kpis import render_market_snapshot, render_status_strip
 from frontend.widgets.movers import create_mover_groups, render_market_movers
 from frontend.widgets.performance import render_performance_view
-from frontend.widgets.statistics import render_statistics_table
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +114,9 @@ benchmark_analytics = build_security_analytics([benchmark], securities)
 benchmark_close_norm = benchmark_analytics.close_norm
 
 new_cols = benchmark_analytics.metrics.columns.difference(benchmark_quotes.columns)
-benchmark_data = benchmark_quotes.join(benchmark_analytics.metrics[new_cols], how="left")
+benchmark_data = benchmark_quotes.join(
+    benchmark_analytics.metrics[new_cols], how="left"
+)
 
 # --- Market dataframes -------------------------------------------------------
 market_quotes = make_scalar_wide_df(
@@ -125,7 +126,9 @@ market_quotes["symbol"] = market_quotes.index
 
 market_analytics = build_security_analytics(market_stock_symbols, securities)
 market_close_norm = market_analytics.close_norm
-market_quotes = add_sparkline(market_quotes, market_analytics.closes, add_intraday_close=True)
+market_quotes = add_sparkline(
+    market_quotes, market_analytics.closes, add_intraday_close=True
+)
 
 new_cols = market_analytics.metrics.columns.difference(market_quotes.columns)
 market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
@@ -134,7 +137,7 @@ market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
 stock_groups = create_mover_groups(market_data, symbols_config.base_market_stocks)
 
 # --- Tabs ----------------------------------------
-tabs = st.tabs(["Movers", "Intraday", "Performance", "Statistics"])
+tabs = st.tabs(["Movers", "Intraday", "Performance"])
 
 with tabs[0]:
     render_market_movers(market_data, market_type="stock")
@@ -157,12 +160,4 @@ with tabs[2]:
         close_norm_eod=market_close_norm,
         use_group_filter=True,
         groups=stock_groups,
-    )
-
-with tabs[3]:
-    render_statistics_table(
-        key_prefix="market-stock",
-        benchmark_metrics=benchmark_data,
-        securities_metrics=market_data,
-        portfolio_metrics=None,
     )
