@@ -13,12 +13,12 @@ from frontend.services.streamlit_data import (
 from frontend.shared.dataframe import (
     add_last_indicators,
     add_sparkline,
+    add_trade_signal,
     build_security_analytics,
     combine_header_data,
     make_scalar_wide_df,
     make_timeseries_long_df,
     make_timeseries_wide_df,
-    add_trade_signal,
 )
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
@@ -86,6 +86,7 @@ records = load_account_records(account.id)
 
 # --- Load portfolio symbols -------------------------------------------------------
 portfolio_symbols = sorted(set(p["symbol"] for p in records.open_positions))
+st.session_state["portfolio_symbols"] = portfolio_symbols
 page_symbols = sorted(set(portfolio_symbols + base_symbols))
 st.session_state["page_symbols"] = page_symbols
 
@@ -98,6 +99,8 @@ securities = load_security_data(base_symbols, start_date, end_date)
 
 # --- Load portfolio data ---------------------------------------------------
 portfolio = load_portfolio_snapshot(account.id, start_date, end_date)
+st.session_state["portfolio_value"] = portfolio.summary["total_value"]
+st.session_state["cash_balance"] = portfolio.summary["cash_balance"]
 
 # --- Render refresh data button -----------------------------------------------
 with h[1]:
@@ -179,6 +182,11 @@ if portfolio_symbols:
     holdings_data = holdings_positions.join(
         holdings_analytics.metrics[new_cols], how="left"
     )
+    st.session_state["portfolio_holdings_qty"] = {
+        s: int(holdings_positions.loc[s, "open_qty"])
+        for s in portfolio_symbols
+        if s in holdings_positions.index
+    }
 
     # Portfolio dataframes
     portfolio_metrics = make_scalar_wide_df(portfolio.metrics)
@@ -228,13 +236,7 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    render_portfolio_positions(
-        holdings_data,
-        portfolio.summary,
-        account.id,
-        account.name,
-        rates["fx_rate"],
-    )
+    render_portfolio_positions(holdings_data)
 
 with tabs[1]:
     render_portfolio_allocation(portfolio.summary, holdings_data)

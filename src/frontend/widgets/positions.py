@@ -15,21 +15,13 @@ from frontend.widgets.kpis import (
     render_portfolio_kpis,
     render_positions_health_bar,
 )
-from frontend.widgets.transaction_form import transaction_form
 from frontend.widgets.treemaps import render_treemap_intraday, render_treemap_positions
 
 
 def render_portfolio_positions(
     holdings: pd.DataFrame | None,
-    portfolio_summary: dict,
-    account_id: str,
-    account_name: str,
-    fx_rate: float,
 ) -> None:
     """Intraday view for current account holdings."""
-
-    portfolio_value = portfolio_summary["total_value"]
-    cash_balance = portfolio_summary["cash_balance"]
 
     header = st.columns([0.8, 0.2])
     with header[0]:
@@ -116,16 +108,3 @@ def render_portfolio_positions(
                 st.caption(
                     "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
                 )
-
-    record_transaction = st.button(
-        "Record Transaction", icon=":material/edit:", type="secondary"
-    )
-    if record_transaction:
-        transaction_form(
-            account_id,
-            account_name,
-            holdings,
-            fx_rate,
-            portfolio_value,
-            cash_balance,
-        )

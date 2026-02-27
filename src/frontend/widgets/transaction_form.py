@@ -1,4 +1,3 @@
-import pandas as pd
 import streamlit as st
 
 from frontend.services.streamlit_data import (
@@ -13,10 +12,11 @@ from frontend.shared.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 def transaction_form(
     account_id: str,
     account_name: str,
-    holdings: pd.DataFrame | None,
+    portfolio_symbols: list[str] | None,
     fx_rate: float,
     portfolio_value: float,
     cash_balance: float,
+    holdings_qty: dict[str, int] | None = None,
 ) -> TransactionCreate | None:
     st.subheader(f"Add Transaction to {account_name} Account")
 
@@ -32,7 +32,7 @@ def transaction_form(
     if transaction_type == TransactionKind.BUY:
         symbol = st.selectbox(
             "Symbol",
-            holdings.index if holdings is not None else [],
+            portfolio_symbols or [],
             index=None,
             accept_new_options=True,
             key="tx_symbol_buy",
@@ -40,7 +40,7 @@ def transaction_form(
     elif transaction_type == TransactionKind.SELL:
         symbol = st.selectbox(
             "Symbol",
-            holdings.index if holdings is not None else [],
+            portfolio_symbols or [],
             key="tx_symbol_sell",
         )
 
@@ -72,12 +72,12 @@ def transaction_form(
                 currency_default = Currency.CAD
 
         if (
-            holdings is not None
-            and symbol in holdings.index
+            portfolio_symbols is not None
+            and symbol in portfolio_symbols
             and transaction_type == TransactionKind.SELL
         ):
-            quantity_default = int(holdings.loc[symbol, "open_qty"])
-            max_qty = quantity_default
+            quantity_default = (holdings_qty or {}).get(symbol, 0)
+            max_qty = quantity_default or None
 
         # -----------------------------------------------------------------
         # Reset quote-driven widget state when symbol changes
@@ -209,7 +209,11 @@ def transaction_form(
         return None
 
     # --- Guard: BUY must not exceed available cash balance ---
-    if transaction_type == TransactionKind.BUY and abs(amount) > cash_balance:
+    if (
+        transaction_type == TransactionKind.BUY
+        and cash_balance > 0
+        and abs(amount) > cash_balance
+    ):
         st.toast(
             f"Insufficient funds — amount **{abs(amount):,.2f} CAD** exceeds available cash balance of **{cash_balance:,.2f} CAD**.",
             icon="🚫",
