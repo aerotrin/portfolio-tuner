@@ -44,14 +44,20 @@ def get_date_filter_options(
     return date_options
 
 
-def render_reports_header(
-    transactions: pd.DataFrame,
-) -> tuple[pd.Timestamp, pd.Timestamp | None]:
-    df = transactions.copy()
+def render_records_header(
+    transactions: pd.DataFrame | None,
+) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+
     header = st.columns([0.8, 0.2])
-    date_options = get_date_filter_options(df)
     with header[0]:
-        st.markdown("#### :material/account_balance: Account Reports")
+        st.markdown("#### :material/account_balance: Account Records")
+
+    if transactions is None or transactions.empty:
+        st.info("No transactions found")
+        return None, None
+
+    df = transactions.copy()
+    date_options = get_date_filter_options(df)
     with header[1]:
         range_selection = st.selectbox(
             "Reporting Period",

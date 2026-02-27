@@ -3,14 +3,17 @@ import logging
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.tabs.intraday import render_portfolio_intraday
+from frontend.presentation.tabs.intraday import render_portfolio_positions
 from frontend.presentation.tabs.performance import render_performance_view
+from frontend.presentation.tabs.performance import render_statistics_table
 from frontend.presentation.tabs.reports import (
     render_cash_flows_table,
     render_closed_lots_table,
-    render_reports_header,
+    render_records_header,
     render_transactions_table,
 )
+from frontend.presentation.widgets.allocation_charts import render_portfolio_allocation
+from frontend.presentation.widgets.correlation_charts import render_correlation_matrix
 from frontend.presentation.widgets.kpis import (
     render_account_summary,
     render_market_snapshot,
@@ -241,10 +244,12 @@ if not cash_flows.empty:
 
 
 # --- Render tabs --------------------------------------------------------------------
-tabs = st.tabs(["Positions", "Performance", "Reports"])
+tabs = st.tabs(
+    ["Positions", "Allocation", "Performance", "Statistics", "Correlation", "Records"]
+)
 
 with tabs[0]:
-    render_portfolio_intraday(
+    render_portfolio_positions(
         holdings_positions,
         portfolio.summary,
         account.id,
@@ -253,35 +258,35 @@ with tabs[0]:
     )
 
 with tabs[1]:
-    if not portfolio_symbols:
-        st.info("No open positions found for account.")
-    else:
-        assert (
-            holdings_metrics is not None
-            and holdings_close_norm is not None
-            and portfolio_metrics is not None
-            and portfolio_close_norm is not None
-            and portfolio_correlation_matrix is not None
-        )
-
-        render_performance_view(
-            metrics_eod=holdings_metrics,
-            close_norm_eod=holdings_close_norm,
-            benchmark_metrics_eod=benchmark_metrics,
-            benchmark_close_norm_eod=benchmark_close_norm,
-            risk_free_rate=rates["rf_rate"],
-            key_prefix="holdings",
-            portfolio_metrics_eod=portfolio_metrics,
-            portfolio_close_norm_eod=portfolio_close_norm,
-            correlation_matrix=portfolio_correlation_matrix,
-            use_group_filter=False,
-        )
+    render_portfolio_allocation(portfolio.summary, holdings_positions)
 
 with tabs[2]:
-    if not transactions.empty:
-        start_date, end_date = render_reports_header(transactions)
+    render_performance_view(
+        metrics=holdings_metrics,
+        close_norm_eod=holdings_close_norm,
+        benchmark_metrics=benchmark_metrics,
+        benchmark_close_norm_eod=benchmark_close_norm,
+        risk_free_rate=rates["rf_rate"],
+        key_prefix="holdings",
+        portfolio_metrics=portfolio_metrics,
+        portfolio_close_norm_eod=portfolio_close_norm,
+        use_group_filter=False,
+    )
+
+with tabs[3]:
+    render_statistics_table(
+        benchmark_metrics=benchmark_metrics,
+        securities_metrics=holdings_metrics,
+        portfolio_metrics=portfolio_metrics,
+        key_prefix="holdings",
+    )
+
+with tabs[4]:
+    render_correlation_matrix(portfolio_correlation_matrix)
+
+with tabs[5]:
+    start_date, end_date = render_records_header(transactions)
+    if start_date:
         render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)
         render_cash_flows_table(cash_flows, start_date, end_date)
         render_transactions_table(transactions, start_date, end_date)
-    else:
-        st.info("No transactions found.")

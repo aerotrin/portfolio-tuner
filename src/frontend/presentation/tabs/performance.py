@@ -6,7 +6,6 @@ from frontend.presentation.styles import (
     PERFORMANCE_TABLE_CONFIG,
     performance_table_styler,
 )
-from frontend.presentation.widgets.correlation_charts import render_correlation_matrix
 from frontend.presentation.widgets.growth_chart import render_growth_chart
 from frontend.presentation.widgets.risk_chart import render_risk_chart
 from frontend.shared.config_loader import SymbolGroup
@@ -34,37 +33,41 @@ def _render_footer(metrics: pd.DataFrame, bars: pd.DataFrame) -> None:
 
 
 def render_performance_view(
-    metrics_eod: pd.DataFrame,
-    close_norm_eod: pd.DataFrame,
-    benchmark_metrics_eod: pd.DataFrame,
-    benchmark_close_norm_eod: pd.DataFrame,
     risk_free_rate: float,
     key_prefix: str,
-    portfolio_metrics_eod: pd.DataFrame | None = None,
+    benchmark_metrics: pd.DataFrame | None = None,
+    benchmark_close_norm_eod: pd.DataFrame | None = None,
+    metrics: pd.DataFrame | None = None,
+    close_norm_eod: pd.DataFrame | None = None,
+    portfolio_metrics: pd.DataFrame | None = None,
     portfolio_close_norm_eod: pd.DataFrame | None = None,
-    correlation_matrix: pd.DataFrame | None = None,
     use_group_filter: bool = False,
     groups: list[SymbolGroup] = [],
 ) -> None:
     """EOD performance view: growth, risk, tables.
 
     Args:
-        metrics_eod: Metrics dataframe for securities
+        metrics: Metrics dataframe for securities
         close_norm_eod: Normalized close prices for securities
-        benchmark_metrics_eod: Benchmark metrics
+        benchmark_metrics: Benchmark metrics
         benchmark_close_norm_eod: Benchmark normalized close prices
         risk_free_rate: Risk-free rate
         key_prefix: Prefix for Streamlit widget keys (e.g., "market" or "holdings")
-        portfolio_metrics_eod: Optional portfolio metrics (for holdings view)
+        portfolio_metrics: Optional portfolio metrics (for holdings view)
         portfolio_close_norm_eod: Optional portfolio normalized close prices
         use_group_filter: If True, use group-based filtering; if False, use symbol-based
         groups: List of symbol groups to filter by
     """
+    st.markdown("#### :material/trending_up: Performance")
+    if metrics is None or metrics.empty:
+        st.info("No metrics found")
+        return
+
     c = st.columns(2)
 
     # Growth chart
     with c[0]:
-        st.markdown("#### :material/trending_up: Growth of $10,000")
+        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
 
         # Filtering logic
         if use_group_filter:
@@ -89,14 +92,14 @@ def render_performance_view(
                     {symbol for group in groups for symbol in group.symbols}
                 )
         else:
-            labels = sorted(metrics_eod.index.unique())
+            labels = sorted(metrics.index.unique())
             selection = st.multiselect(
                 "Filter by symbols",
                 labels,
                 key=f"{key_prefix}-symbols-selector",
             )
             sel_symbols = (
-                metrics_eod.loc[metrics_eod.index.isin(selection)].index.tolist()
+                metrics.loc[metrics.index.isin(selection)].index.tolist()
                 if selection
                 else []
             )
@@ -104,7 +107,7 @@ def render_performance_view(
         sub_close_norm = (
             close_norm_eod.loc[:, sel_symbols] if sel_symbols else close_norm_eod
         )
-        sub_metrics = metrics_eod.loc[sel_symbols] if sel_symbols else metrics_eod
+        sub_metrics = metrics.loc[sel_symbols] if sel_symbols else metrics
 
         with st.container(border=True):
             growth_chart_args = [sub_close_norm, benchmark_close_norm_eod]
@@ -114,8 +117,10 @@ def render_performance_view(
             st.plotly_chart(fig, key=f"chart-{key_prefix}-growth")
 
     # Risk/Return chart
+    sub_metrics = metrics.loc[sel_symbols] if sel_symbols else metrics
+
     with c[1]:
-        st.markdown("#### :material/scatter_plot: Risk/Return")
+        st.markdown("##### :material/scatter_plot: Risk/Return")
 
         sel_horizon_label = st.radio(
             "Select return range",
@@ -136,20 +141,29 @@ def render_performance_view(
                 horizon_days=sel_horizon_days,
                 horizon_trading_days=sel_horizon_trading_days,
                 horizon_label=sel_horizon_label,
-                benchmark=benchmark_metrics_eod,
-                portfolio=portfolio_metrics_eod,
+                benchmark=benchmark_metrics,
+                portfolio=portfolio_metrics,
             )
             st.altair_chart(chart, key=f"chart-{key_prefix}-risk-return")
 
-    st.divider()
 
+def render_statistics_table(
+    key_prefix: str,
+    benchmark_metrics: pd.DataFrame | None = None,
+    securities_metrics: pd.DataFrame | None = None,
+    portfolio_metrics: pd.DataFrame | None = None,
+) -> None:
     # Tables
-    st.markdown("#### :material/calculate: Metrics")
-    if portfolio_metrics_eod is not None:
-        st.markdown("##### Portfolio Statistics")
+    st.markdown("#### :material/calculate: Statistics")
+
+    if securities_metrics is None or securities_metrics.empty:
+        st.info("No securities metrics found")
+        return
+
+    if portfolio_metrics is not None:
         with st.container(border=True, horizontal=True):
-            pm = portfolio_metrics_eod.iloc[0]
-            bm = benchmark_metrics_eod.iloc[0]
+            pm = portfolio_metrics.iloc[0]
+            bm = benchmark_metrics.iloc[0]
 
             # Returns
             annual_return = pm["return1Y"]
@@ -210,7 +224,7 @@ def render_performance_view(
 
         st.markdown("##### Portfolio")
         st.dataframe(
-            performance_table_styler(portfolio_metrics_eod),
+            performance_table_styler(portfolio_metrics),
             hide_index=True,
             column_order=PERFORMANCE_TABLE_CONFIG.keys(),
             column_config=PERFORMANCE_TABLE_CONFIG,
@@ -219,25 +233,21 @@ def render_performance_view(
 
     st.markdown("##### Benchmark")
     st.dataframe(
-        performance_table_styler(benchmark_metrics_eod),
+        performance_table_styler(benchmark_metrics),
         hide_index=True,
         column_order=PERFORMANCE_TABLE_CONFIG.keys(),
         column_config=PERFORMANCE_TABLE_CONFIG,
         key=f"table-{key_prefix}-benchmark-performance",
     )
 
-    st.markdown("##### Securities")
-    st.dataframe(
-        performance_table_styler(sub_metrics),
-        hide_index=True,
-        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-        column_config=PERFORMANCE_TABLE_CONFIG,
-        key=f"table-{key_prefix}-security-performance",
-    )
+    if securities_metrics is not None:
+        st.markdown("##### Securities")
+        st.dataframe(
+            performance_table_styler(securities_metrics),
+            hide_index=True,
+            column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+            column_config=PERFORMANCE_TABLE_CONFIG,
+            key=f"table-{key_prefix}-security-performance",
+        )
 
-    _render_footer(sub_metrics, sub_close_norm)
-
-    st.divider()
-
-    if correlation_matrix is not None:
-        render_correlation_matrix(correlation_matrix)
+    # _render_footer(securities_metrics, sub_close_norm)

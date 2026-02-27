@@ -9,8 +9,11 @@ from frontend.presentation.styles import (
     positions_table_styler,
     quote_table_styler,
 )
-from frontend.presentation.widgets.allocation_charts import render_portfolio_allocation
-from frontend.presentation.widgets.kpis import render_health_bar, render_portfolio_kpis
+from frontend.presentation.widgets.kpis import (
+    render_intraday_health_bar,
+    render_portfolio_kpis,
+    render_positions_health_bar,
+)
 from frontend.presentation.widgets.transaction_form import transaction_form
 from frontend.presentation.widgets.treemaps import (
     render_treemap_intraday,
@@ -19,7 +22,7 @@ from frontend.presentation.widgets.treemaps import (
 from frontend.shared.config_loader import SymbolGroup
 
 
-def render_portfolio_intraday(
+def render_portfolio_positions(
     holdings: pd.DataFrame | None,
     portfolio_summary: dict,
     account_id: str,
@@ -31,42 +34,89 @@ def render_portfolio_intraday(
     portfolio_value = portfolio_summary["total_value"]
     cash_balance = portfolio_summary["cash_balance"]
 
-    st.markdown("#### :material/show_chart: Intraday")
+    header = st.columns([0.8, 0.2])
+    with header[0]:
+        st.markdown("#### :material/table_rows: Positions")
+    with header[1]:
+        view = st.radio(
+            "Select view",
+            options=["Intraday", "Holdings"],
+            index=0,
+            label_visibility="collapsed",
+            horizontal=True,
+            key="intraday-view-selector",
+        )
 
     if holdings is None:
         st.info("No holdings found")
     else:
-        fig = render_treemap_intraday(holdings, top_label="Holdings", has_weight=False)
-        st.plotly_chart(fig, key="chart-holdings-securities")
-        # st.caption("Size is based on weight in portfolio")
-        with st.expander(
-            "Holdings Quote Table", icon=":material/table:", expanded=False
-        ):
-            st.dataframe(
-                quote_table_styler(holdings),
-                hide_index=True,
-                column_order=QUOTE_TABLE_CONFIG.keys(),
-                column_config=QUOTE_TABLE_CONFIG,
-                key="table-holdings-quote",
-            )
+        df = holdings.copy()
+        equity_df = df[df["holding_category"] == "Equity"]
+        option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
 
-    st.divider()
-
-    st.markdown("#### :material/table_rows: Positions")
-
-    if holdings is None:
-        st.info("No holdings found")
-    else:
         # Metrics
         with st.container(border=True, horizontal=True):
             render_portfolio_kpis(holdings)
 
         # Treemap
-        fig = render_treemap_positions(holdings)
-        st.plotly_chart(fig, key="chart-holdings-open")
+        if view == "Intraday":
+            fig = render_treemap_intraday(
+                holdings, top_label="Intraday", has_weight=True
+            )
+            st.plotly_chart(fig, key="chart-holdings-securities")
 
-        # Health bar
-        render_health_bar(holdings)
+            # Health bar
+            render_intraday_health_bar(df)
+
+            # Quote table
+            if not equity_df.empty:
+                st.markdown("###### Stocks & ETFs")
+                st.dataframe(
+                    quote_table_styler(equity_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-quote",
+                )
+            if not option_df.empty:
+                st.markdown("###### Options")
+                st.dataframe(
+                    quote_table_styler(option_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-quote",
+                )
+
+        else:
+            fig = render_treemap_positions(df)
+            st.plotly_chart(fig, key="chart-holdings-open")
+
+            # Health bar
+            render_positions_health_bar(df)
+
+            # Positions Table
+            if not equity_df.empty:
+                st.markdown("###### Stocks & ETFs")
+                st.dataframe(
+                    positions_table_styler(equity_df),
+                    hide_index=True,
+                    column_order=POSITIONS_EQUITY_TABLE_CONFIG.keys(),
+                    column_config=POSITIONS_EQUITY_TABLE_CONFIG,
+                    key="table-holdings-open",
+                )
+            if not option_df.empty:
+                st.markdown("###### Options")
+                st.dataframe(
+                    positions_table_styler(option_df),
+                    hide_index=True,
+                    column_order=POSITIONS_OPTION_TABLE_CONFIG.keys(),
+                    column_config=POSITIONS_OPTION_TABLE_CONFIG,
+                    key="table-holdings-open-option-osi",
+                )
+                st.caption(
+                    "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
+                )
 
     record_transaction = st.button(
         "Record Transaction", icon=":material/edit:", type="secondary"
@@ -75,48 +125,11 @@ def render_portfolio_intraday(
         transaction_form(
             account_id,
             account_name,
-            holdings,
+            df,
             fx_rate,
             portfolio_value,
             cash_balance,
         )
-
-    if holdings is None:
-        return
-
-    # Table
-    equity_df = holdings[holdings["holding_category"] == "Equity"]
-    if not equity_df.empty:
-        st.markdown("###### Stocks & ETFs")
-        st.dataframe(
-            positions_table_styler(equity_df),
-            hide_index=True,
-            column_order=POSITIONS_EQUITY_TABLE_CONFIG.keys(),
-            column_config=POSITIONS_EQUITY_TABLE_CONFIG,
-            key="table-holdings-open",
-        )
-
-    option_df = holdings[
-        holdings["holding_category"].isin(["Call Option", "Put Option"])
-    ]
-
-    if not option_df.empty:
-        st.markdown("###### Options")
-        st.dataframe(
-            positions_table_styler(option_df),
-            hide_index=True,
-            column_order=POSITIONS_OPTION_TABLE_CONFIG.keys(),
-            column_config=POSITIONS_OPTION_TABLE_CONFIG,
-            key="table-holdings-open-option-osi",
-        )
-
-        st.caption(
-            "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
-        )
-
-    st.divider()
-
-    render_portfolio_allocation(portfolio_summary, holdings)
 
 
 def render_market_intraday(
@@ -167,16 +180,17 @@ def render_market_intraday(
 
     st.divider()
 
-    c = st.columns([7, 1])
+    c = st.columns([5, 1])
     with c[0]:
         st.markdown(f"#### :material/notifications_active: {t_str} Market Movers")
 
     with c[1]:
-        market = st.segmented_control(
+        market = st.radio(
             "Select market",
-            ["US", "Canada"],
-            default="US",
+            options=["US", "Canada"],
+            index=0,
             label_visibility="collapsed",
+            horizontal=True,
             key=f"market-movers-selector-{type}",
         )
     currency = "CAD" if market == "Canada" else "USD"

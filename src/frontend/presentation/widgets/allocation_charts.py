@@ -11,6 +11,10 @@ def render_portfolio_allocation(
 
     st.markdown("#### :material/pie_chart: Allocation")
 
+    if df.empty:
+        st.info("No holdings found")
+        return
+
     cash_value = portfolio_summary["cash_balance"]
     cash_weight = portfolio_summary["cash_pct"]
     cash_row = {
