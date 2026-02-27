@@ -1,17 +1,21 @@
 import logging
-from typing import Any
 
 import streamlit as st
 
-from frontend.presentation.settings import MOVER_SHOW_COUNT
-from frontend.presentation.tabs.intraday import render_market_intraday
-from frontend.presentation.tabs.performance import render_performance_view
+from frontend.presentation.tabs.intraday import (
+    render_market_intraday,
+    render_market_movers,
+)
+from frontend.presentation.tabs.performance import (
+    render_performance_view,
+    render_statistics_table,
+)
 from frontend.presentation.widgets.kpis import (
     render_market_snapshot,
     render_status_strip,
 )
 from frontend.services.streamlit_data import check_missing_symbols, load_security_data
-from frontend.shared.config_loader import SymbolGroup, load_symbols_config
+from frontend.shared.config_loader import load_symbols_config
 from frontend.utils.dataframe import (
     add_last_indicators,
     add_sparkline,
@@ -26,10 +30,11 @@ from frontend.utils.jobs import (
     render_refresh_job_ui,
     start_refresh_job,
 )
+from frontend.utils.market import create_mover_groups
 
 logger = logging.getLogger(__name__)
 
-active_page = "market"
+active_page = "market_stock"
 st.session_state["active_page"] = active_page
 
 # --- Session state -----------------------------------------------------------
@@ -41,7 +46,7 @@ try:
     benchmark_symbols = st.session_state["benchmark_symbols"]
     base_symbols = st.session_state["base_symbols"]
 
-    market_symbols = st.session_state["market_symbols"]
+    market_stock_symbols = st.session_state["market_stock_symbols"]
     benchmark = st.session_state["benchmark"]
 
     rates = st.session_state["rates"]
@@ -57,7 +62,7 @@ symbols_config = load_symbols_config()
 # -- Render header ------------------------------------------------------------
 h = st.columns([6, 1], vertical_alignment="center")
 with h[0]:
-    st.markdown("## 🏦 Market Watch")
+    st.markdown("## 🏦 Stock Market")
 
 # --- Auto job status checking ------------------------------------------------
 check_job_status()
@@ -68,7 +73,7 @@ page_symbols = sorted(
     {
         *header_symbols,
         *benchmark_symbols,
-        *market_symbols,
+        *market_stock_symbols,
     }
 )
 st.session_state["page_symbols"] = page_symbols
@@ -143,19 +148,25 @@ benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
 
 # --- Market dataframes -------------------------------------------------------
 # Market quotes
-market_quotes = make_scalar_wide_df({s: securities.quote[s] for s in market_symbols})
+market_quotes = make_scalar_wide_df(
+    {s: securities.quote[s] for s in market_stock_symbols}
+)
 market_quotes["symbol"] = market_quotes.index
 
 # Market metrics
-market_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in market_symbols})
+market_metrics = make_scalar_wide_df(
+    {s: securities.metrics[s] for s in market_stock_symbols}
+)
 market_profiles = make_scalar_wide_df(
-    {s: securities.profile[s] for s in market_symbols}
+    {s: securities.profile[s] for s in market_stock_symbols}
 )
 
 # Market bars & indicators
-market_bars = make_timeseries_long_df({s: securities.bars[s] for s in market_symbols})
+market_bars = make_timeseries_long_df(
+    {s: securities.bars[s] for s in market_stock_symbols}
+)
 market_indicators = make_timeseries_long_df(
-    {s: securities.indicators[s] for s in market_symbols}
+    {s: securities.indicators[s] for s in market_stock_symbols}
 )
 
 # Market closes & close norms
@@ -167,129 +178,39 @@ market_quotes = add_sparkline(market_quotes, market_closes, add_intraday_close=T
 market_metrics = add_sparkline(market_metrics, market_closes)
 market_metrics = add_last_indicators(market_metrics, market_indicators)
 
-# Filter stocks and etfs
-stocks_symbols = st.session_state["market_stock_symbols"]
-etfs_symbols = st.session_state["market_etf_symbols"]
-
-mask_stocks = market_quotes.index.isin(stocks_symbols)
-mask_etfs = market_quotes.index.isin(etfs_symbols)
-stocks_quotes = market_quotes.loc[mask_stocks]
-etfs_quotes = market_quotes.loc[mask_etfs]
-
-stocks_metrics = market_metrics.loc[market_metrics.index.isin(stocks_symbols)]
-etfs_metrics = market_metrics.loc[market_metrics.index.isin(etfs_symbols)]
-
-
-def create_mover_groups(
-    quotes: Any,
-    base_groups: list[SymbolGroup],
-) -> list[SymbolGroup]:
-    """Create mover groups (most active, gainers, losers) for CAD and USD currencies."""
-    mover_groups = []
-
-    for currency in ["USD", "CAD"]:
-        sub_quotes = quotes[quotes["currency"] == currency]
-        country = "US" if currency == "USD" else "Canada"
-
-        # Most active (by volume)
-        most_active = (
-            sub_quotes.sort_values(by="volume", ascending=False)
-            .head(MOVER_SHOW_COUNT)
-            .index.tolist()
-        )
-        if most_active:
-            mover_groups.append(
-                SymbolGroup(
-                    label=f"Most Active {country}",
-                    symbols=tuple(most_active),
-                )
-            )
-
-        # Top gainers (by change_percent descending)
-        gainers = (
-            sub_quotes[sub_quotes["change_percent"] > 0]
-            .sort_values(by="change_percent", ascending=False)
-            .head(MOVER_SHOW_COUNT)
-            .index.tolist()
-        )
-        if gainers:
-            mover_groups.append(
-                SymbolGroup(
-                    label=f"Top Gainers {country}",
-                    symbols=tuple(gainers),
-                )
-            )
-
-        # Top losers (by change_percent ascending)
-        losers = (
-            sub_quotes[sub_quotes["change_percent"] < 0]
-            .sort_values(by="change_percent", ascending=True)
-            .head(MOVER_SHOW_COUNT)
-            .index.tolist()
-        )
-        if losers:
-            mover_groups.append(
-                SymbolGroup(
-                    label=f"Top Losers {country}",
-                    symbols=tuple(losers),
-                )
-            )
-
-    return mover_groups + base_groups
-
-
 # Create extended groups for market movers
-etf_groups = create_mover_groups(etfs_quotes, symbols_config.base_market_etfs)
-stock_groups = create_mover_groups(stocks_quotes, symbols_config.base_market_stocks)
+stock_groups = create_mover_groups(market_quotes, symbols_config.base_market_stocks)
 
-# --- Tabs (all use prebuilt market and benchmark data) ----------------------------------------
-tabs = st.tabs(
-    [
-        "ETF Movers",
-        "ETF Performance",
-        "Stock Movers",
-        "Stock Performance",
-    ]
-)
+# --- Tabs ----------------------------------------
+tabs = st.tabs(["Movers", "Intraday", "Performance", "Statistics"])
 
-with tabs[0]:  # ETF Movers
+with tabs[0]:
+    render_market_movers(market_quotes, market_type="stock")
+
+with tabs[1]:
     render_market_intraday(
-        etfs_quotes,
-        symbols_config.base_market_etfs,
-        type="ETF",
-        key_prefix="market-etf",
-    )
-
-
-with tabs[1]:  # ETF Performance
-    render_performance_view(
-        metrics_eod=etfs_metrics,
-        close_norm_eod=market_close_norm,
-        benchmark_metrics_eod=benchmark_metrics,
-        benchmark_close_norm_eod=benchmark_close_norm,
-        risk_free_rate=rates["rf_rate"],
-        key_prefix="market-etf",
-        use_group_filter=True,
-        groups=etf_groups,
-    )
-
-with tabs[2]:  # Stock Movers
-    render_market_intraday(
-        stocks_quotes,
-        symbols_config.base_market_stocks,
-        type="stock",
+        market_data=market_quotes,
+        groups=symbols_config.base_market_stocks,
+        market_type="stock",
         key_prefix="market-stock",
     )
 
-
-with tabs[3]:  # Stock Performance
+with tabs[2]:
     render_performance_view(
-        metrics_eod=stocks_metrics,
-        close_norm_eod=market_close_norm,
-        benchmark_metrics_eod=benchmark_metrics,
-        benchmark_close_norm_eod=benchmark_close_norm,
         risk_free_rate=rates["rf_rate"],
         key_prefix="market-stock",
+        benchmark_metrics=benchmark_metrics,
+        benchmark_close_norm_eod=benchmark_close_norm,
+        metrics=market_metrics,
+        close_norm_eod=market_close_norm,
         use_group_filter=True,
         groups=stock_groups,
+    )
+
+with tabs[3]:
+    render_statistics_table(
+        key_prefix="market-stock",
+        benchmark_metrics=benchmark_metrics,
+        securities_metrics=market_metrics,
+        portfolio_metrics=None,
     )

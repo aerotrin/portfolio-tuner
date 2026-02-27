@@ -133,15 +133,17 @@ def render_portfolio_positions(
 
 
 def render_market_intraday(
-    market_intraday: pd.DataFrame, groups: list[SymbolGroup], type: str, key_prefix: str
+    market_data: pd.DataFrame,
+    market_type: str,
+    groups: list[SymbolGroup],
+    key_prefix: str,
 ) -> None:
     """Intraday view for market-wide symbols, grouped by thematic group."""
 
-    df = market_intraday.copy()
+    t_str = market_type if market_type.isupper() else market_type.title()
+    df = market_data.copy()
 
-    t_str = type if type.isupper() else type.title()
-
-    st.markdown(f"#### :material/show_chart: {t_str} Intraday")
+    st.markdown("#### :material/show_chart: Intraday")
 
     label = st.segmented_control(
         f"Select {t_str} group",
@@ -166,23 +168,26 @@ def render_market_intraday(
     )
     st.plotly_chart(fig, key=f"{key_prefix}-chart-intraday-viewer-{group.label}")
 
-    with st.expander(
-        f"{group.label} {t_str} Quote Table",
-        icon=":material/table:",
-    ):
-        st.dataframe(
-            quote_table_styler(sub),
-            hide_index=True,
-            column_order=QUOTE_TABLE_CONFIG.keys(),
-            column_config=QUOTE_TABLE_CONFIG,
-            key=f"{key_prefix}-table-intraday-viewer-{group.label}-quote",
-        )
+    render_intraday_health_bar(sub)
 
-    st.divider()
+    st.markdown(f"###### {group.label} {t_str} Quotes")
+    st.dataframe(
+        quote_table_styler(sub),
+        hide_index=True,
+        column_order=QUOTE_TABLE_CONFIG.keys(),
+        column_config=QUOTE_TABLE_CONFIG,
+        key=f"{key_prefix}-table-intraday-viewer-{group.label}-quote",
+    )
+
+
+def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
+    """Render market movers for a given market_type of security."""
+    t_str = market_type if market_type.isupper() else market_type.title()
+    df = market_data.copy()
 
     c = st.columns([5, 1])
     with c[0]:
-        st.markdown(f"#### :material/notifications_active: {t_str} Market Movers")
+        st.markdown("#### :material/notifications_active: Market Movers")
 
     with c[1]:
         market = st.radio(
@@ -191,7 +196,7 @@ def render_market_intraday(
             index=0,
             label_visibility="collapsed",
             horizontal=True,
-            key=f"market-movers-selector-{type}",
+            key=f"market-movers-selector-{market_type}",
         )
     currency = "CAD" if market == "Canada" else "USD"
     sub_df = df[df["currency"] == currency]

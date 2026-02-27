@@ -154,8 +154,9 @@ if not st.session_state["disclaimer_accepted"]:
 # Navigation
 # -----------------------------------------------------------------------------
 pages = [
-    st.Page(page="pages/1_Market.py", title="🏦 Market Watch", default=False),
-    st.Page(page="pages/2_Portfolio.py", title="📊 Portfolio", default=True),
+    st.Page(page="pages/1_Market_ETFs.py", title="🏦 ETF Research", default=False),
+    st.Page(page="pages/2_Market_Stocks.py", title="🏦 Stocks Research", default=False),
+    st.Page(page="pages/3_Portfolios.py", title="📊 Portfolios", default=True),
     st.Page(page="pages/9_About.py", title="ℹ️ About", default=False),
 ]
 pg = st.navigation(pages)

@@ -145,4 +145,4 @@ def render_intraday_health_bar(df: pd.DataFrame) -> None:
     gainers = df["change_percent"].gt(0).sum()
     losers = df["change_percent"].lt(0).sum()
     health_bar = "🟩" * gainers + "🟥" * losers
-    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})")
+    st.caption(f"{health_bar}   |   {len(df)} securities (↑ {gainers}, ↓ {losers})")

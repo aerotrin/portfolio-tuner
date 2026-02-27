@@ -149,7 +149,7 @@ def render_performance_view(
 
 def render_statistics_table(
     key_prefix: str,
-    benchmark_metrics: pd.DataFrame | None = None,
+    benchmark_metrics: pd.DataFrame,
     securities_metrics: pd.DataFrame | None = None,
     portfolio_metrics: pd.DataFrame | None = None,
 ) -> None:
