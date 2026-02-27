@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from pandas.io.formats.style import Styler
 import streamlit as st
@@ -21,7 +20,8 @@ QUOTE_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "close": st.column_config.NumberColumn("Last", format="accounting"),
+    "signal": st.column_config.TextColumn("Signal"),
+    "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
     "change": st.column_config.NumberColumn("Change", format="%+.2f"),
     "change_percent": st.column_config.NumberColumn("Change %", format="percent"),
@@ -207,25 +207,8 @@ PERFORMANCE_TABLE_CONFIG = {
 }
 
 
-def _add_custom_signals(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    macd_pos = df["macd_histogram"] > 0
-    rsi_pos = df["rsi"] > 50
-    rsi_up = df["rsi_slope"] > 0
-
-    df["signal"] = np.select(
-        [macd_pos & rsi_pos & rsi_up, macd_pos, rsi_pos & rsi_up],
-        ["●●●", "●●○", "●○○"],
-        default="",
-    )
-
-    return df
-
-
 def performance_table_styler(df: pd.DataFrame) -> Styler:
     RETURN_COLS = ["return5D", "return1M", "return3M", "return6M", "return1Y"]
-
-    df = _add_custom_signals(df)
 
     def style_row(row):
         # --- Row background rules ---

@@ -13,10 +13,12 @@ from frontend.services.streamlit_data import (
 from frontend.shared.dataframe import (
     add_last_indicators,
     add_sparkline,
+    build_security_analytics,
     combine_header_data,
     make_scalar_wide_df,
     make_timeseries_long_df,
     make_timeseries_wide_df,
+    add_trade_signal,
 )
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
@@ -136,36 +138,18 @@ if not hide_balances:
 render_market_snapshot(header_quotes)
 
 # --- Benchmark dataframes ---------------------------------------------------
-# Benchmark quotes
 benchmark_quotes = combine_header_data([benchmark], securities)
+benchmark_analytics = build_security_analytics([benchmark], securities)
+benchmark_close_norm = benchmark_analytics.close_norm
 
-# Benchmark metrics
-benchmark_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in [benchmark]})
-benchmark_profiles = make_scalar_wide_df(
-    {s: securities.profile[s] for s in [benchmark]}
+new_cols = benchmark_analytics.metrics.columns.difference(benchmark_quotes.columns)
+benchmark_data = benchmark_quotes.join(
+    benchmark_analytics.metrics[new_cols], how="left"
 )
-
-# Benchmark bars & indicators
-benchmark_bars = make_timeseries_long_df({s: securities.bars[s] for s in [benchmark]})
-benchmark_indicators = make_timeseries_long_df(
-    {s: securities.indicators[s] for s in [benchmark]}
-)
-
-# Benchmark closes & close norms
-benchmark_closes = make_timeseries_wide_df(benchmark_indicators, "close")
-benchmark_close_norm = make_timeseries_wide_df(benchmark_indicators, "close_norm")
-
-# Add sparklines
-benchmark_quotes = add_sparkline(
-    benchmark_quotes, benchmark_closes, add_intraday_close=True
-)
-benchmark_metrics = add_sparkline(benchmark_metrics, benchmark_closes)
-benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
 
 
 # --- Holdings + portfolio data (only when account has positions) -------------
-holdings_positions = None
-holdings_metrics = None
+holdings_data = None
 holdings_close_norm = None
 portfolio_metrics = None
 portfolio_close_norm = None
@@ -175,32 +159,26 @@ if portfolio_symbols:
     holdings_positions = make_scalar_wide_df(portfolio.holdings)
     holdings_positions["symbol"] = holdings_positions.index
 
-    holdings_metrics = make_scalar_wide_df(
-        {s: portfolio.securities.metrics[s] for s in portfolio_symbols}
+    holdings_analytics = build_security_analytics(
+        portfolio_symbols, portfolio.securities
     )
-    holdings_profiles = make_scalar_wide_df(
-        {s: portfolio.securities.profile[s] for s in portfolio_symbols}
-    )
+    holdings_close_norm = holdings_analytics.close_norm
 
-    holdings_bars = make_timeseries_long_df(
-        {s: portfolio.securities.bars[s] for s in portfolio_symbols}
-    )
-    holdings_indicators = make_timeseries_long_df(
-        {s: portfolio.securities.indicators[s] for s in portfolio_symbols}
-    )
-    holdings_closes = make_timeseries_wide_df(holdings_indicators, "close")
-    holdings_close_norm = make_timeseries_wide_df(holdings_indicators, "close_norm")
-
-    prof_df = holdings_profiles.loc[
-        :, ~holdings_profiles.columns.isin(holdings_positions.columns)
-    ]
-    holdings_positions = holdings_positions.join(prof_df, how="left")
-
+    # holdings_profiles = make_scalar_wide_df(
+    #     {s: portfolio.securities.profile[s] for s in portfolio_symbols}
+    # )
+    # new_cols = holdings_profiles.columns.difference(holdings_positions.columns)
+    # holdings_positions = holdings_positions.join(
+    #     holdings_profiles[new_cols], how="left"
+    # )
     holdings_positions = add_sparkline(
-        holdings_positions, holdings_closes, add_intraday_close=True
+        holdings_positions, holdings_analytics.closes, add_intraday_close=True
     )
-    holdings_metrics = add_sparkline(holdings_metrics, holdings_closes)
-    holdings_metrics = add_last_indicators(holdings_metrics, holdings_indicators)
+
+    new_cols = holdings_analytics.metrics.columns.difference(holdings_positions.columns)
+    holdings_data = holdings_positions.join(
+        holdings_analytics.metrics[new_cols], how="left"
+    )
 
     # Portfolio dataframes
     portfolio_metrics = make_scalar_wide_df(portfolio.metrics)
@@ -217,6 +195,7 @@ if portfolio_symbols:
 
     portfolio_metrics = add_sparkline(portfolio_metrics, portfolio_closes)
     portfolio_metrics = add_last_indicators(portfolio_metrics, portfolio_indicators)
+    portfolio_metrics = add_trade_signal(portfolio_metrics)
 
 # --- Account records dataframes ---------------------------------------------------
 transactions = pd.DataFrame.from_records(records.transactions)
@@ -250,7 +229,7 @@ tabs = st.tabs(
 
 with tabs[0]:
     render_portfolio_positions(
-        holdings_positions,
+        holdings_data,
         portfolio.summary,
         account.id,
         account.name,
@@ -258,13 +237,13 @@ with tabs[0]:
     )
 
 with tabs[1]:
-    render_portfolio_allocation(portfolio.summary, holdings_positions)
+    render_portfolio_allocation(portfolio.summary, holdings_data)
 
 with tabs[2]:
     render_performance_view(
-        metrics=holdings_metrics,
+        metrics=holdings_data,
         close_norm_eod=holdings_close_norm,
-        benchmark_metrics=benchmark_metrics,
+        benchmark_metrics=benchmark_data,
         benchmark_close_norm_eod=benchmark_close_norm,
         risk_free_rate=rates["rf_rate"],
         key_prefix="holdings",
@@ -275,8 +254,8 @@ with tabs[2]:
 
 with tabs[3]:
     render_statistics_table(
-        benchmark_metrics=benchmark_metrics,
-        securities_metrics=holdings_metrics,
+        benchmark_metrics=benchmark_data,
+        securities_metrics=holdings_data,
         portfolio_metrics=portfolio_metrics,
         key_prefix="holdings",
     )

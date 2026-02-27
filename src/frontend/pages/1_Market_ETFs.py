@@ -5,12 +5,10 @@ import streamlit as st
 from frontend.services.streamlit_data import check_missing_symbols, load_security_data
 from frontend.shared.config_loader import load_symbols_config
 from frontend.shared.dataframe import (
-    add_last_indicators,
     add_sparkline,
+    build_security_analytics,
     combine_header_data,
     make_scalar_wide_df,
-    make_timeseries_long_df,
-    make_timeseries_wide_df,
 )
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
@@ -112,76 +110,38 @@ render_status_strip(rates)
 render_market_snapshot(header_quotes)
 
 # --- Benchmark dataframes ---------------------------------------------------
-# Benchmark quotes
 benchmark_quotes = combine_header_data([benchmark], securities)
+benchmark_analytics = build_security_analytics([benchmark], securities)
+benchmark_close_norm = benchmark_analytics.close_norm
 
-# Benchmark metrics
-benchmark_metrics = make_scalar_wide_df({s: securities.metrics[s] for s in [benchmark]})
-benchmark_profiles = make_scalar_wide_df(
-    {s: securities.profile[s] for s in [benchmark]}
-)
-
-# Benchmark bars & indicators
-benchmark_bars = make_timeseries_long_df({s: securities.bars[s] for s in [benchmark]})
-benchmark_indicators = make_timeseries_long_df(
-    {s: securities.indicators[s] for s in [benchmark]}
-)
-
-# Benchmark closes & close norms
-benchmark_closes = make_timeseries_wide_df(benchmark_indicators, "close")
-benchmark_close_norm = make_timeseries_wide_df(benchmark_indicators, "close_norm")
-
-# Add sparklines
-benchmark_quotes = add_sparkline(
-    benchmark_quotes, benchmark_closes, add_intraday_close=True
-)
-benchmark_metrics = add_sparkline(benchmark_metrics, benchmark_closes)
-benchmark_metrics = add_last_indicators(benchmark_metrics, benchmark_indicators)
+new_cols = benchmark_analytics.metrics.columns.difference(benchmark_quotes.columns)
+benchmark_data = benchmark_quotes.join(benchmark_analytics.metrics[new_cols], how="left")
 
 # --- Market dataframes -------------------------------------------------------
-# Market quotes
 market_quotes = make_scalar_wide_df(
     {s: securities.quote[s] for s in market_etf_symbols}
 )
 market_quotes["symbol"] = market_quotes.index
 
-# Market metrics
-market_metrics = make_scalar_wide_df(
-    {s: securities.metrics[s] for s in market_etf_symbols}
-)
-market_profiles = make_scalar_wide_df(
-    {s: securities.profile[s] for s in market_etf_symbols}
-)
+market_analytics = build_security_analytics(market_etf_symbols, securities)
+market_close_norm = market_analytics.close_norm
+market_quotes = add_sparkline(market_quotes, market_analytics.closes, add_intraday_close=True)
 
-# Market bars & indicators
-market_bars = make_timeseries_long_df(
-    {s: securities.bars[s] for s in market_etf_symbols}
-)
-market_indicators = make_timeseries_long_df(
-    {s: securities.indicators[s] for s in market_etf_symbols}
-)
-
-# Market closes & close norms
-market_closes = make_timeseries_wide_df(market_indicators, "close")
-market_close_norm = make_timeseries_wide_df(market_indicators, "close_norm")
-
-# Add sparklines
-market_quotes = add_sparkline(market_quotes, market_closes, add_intraday_close=True)
-market_metrics = add_sparkline(market_metrics, market_closes)
-market_metrics = add_last_indicators(market_metrics, market_indicators)
+new_cols = market_analytics.metrics.columns.difference(market_quotes.columns)
+market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
 
 # Create extended groups for market movers
-etf_groups = create_mover_groups(market_quotes, symbols_config.base_market_etfs)
+etf_groups = create_mover_groups(market_data, symbols_config.base_market_etfs)
 
 # --- Tabs ----------------------------------------
 tabs = st.tabs(["Movers", "Intraday", "Performance", "Statistics"])
 
 with tabs[0]:
-    render_market_movers(market_quotes, market_type="ETF")
+    render_market_movers(market_data, market_type="ETF")
 
 with tabs[1]:
     render_market_intraday(
-        market_data=market_quotes,
+        market_data=market_data,
         groups=symbols_config.base_market_etfs,
         market_type="ETF",
         key_prefix="market-etf",
@@ -191,9 +151,9 @@ with tabs[2]:
     render_performance_view(
         risk_free_rate=rates["rf_rate"],
         key_prefix="market-etf",
-        benchmark_metrics=benchmark_metrics,
+        benchmark_metrics=benchmark_data,
         benchmark_close_norm_eod=benchmark_close_norm,
-        metrics=market_metrics,
+        metrics=market_data,
         close_norm_eod=market_close_norm,
         use_group_filter=True,
         groups=etf_groups,
@@ -202,7 +162,7 @@ with tabs[2]:
 with tabs[3]:
     render_statistics_table(
         key_prefix="market-etf",
-        benchmark_metrics=benchmark_metrics,
-        securities_metrics=market_metrics,
+        benchmark_metrics=benchmark_data,
+        securities_metrics=market_data,
         portfolio_metrics=None,
     )

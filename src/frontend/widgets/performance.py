@@ -96,13 +96,20 @@ def render_performance_view(
 
     with c[1]:
         st.markdown("##### :material/scatter_plot: Risk/Return")
-
-        sel_horizon_label = st.radio(
-            "Select return range",
-            RETURN_HORIZONS.keys(),
-            horizontal=True,
-            key=f"{key_prefix}-horizon-selector",
-        )
+        rc = st.columns([4, 1], vertical_alignment="bottom")
+        with rc[0]:
+            sel_horizon_label = st.radio(
+                "Select return range",
+                RETURN_HORIZONS.keys(),
+                horizontal=True,
+                key=f"{key_prefix}-horizon-selector",
+            )
+        with rc[1]:
+            show_signal = st.checkbox(
+                "Signal",
+                value=True,
+                key=f"{key_prefix}-signal-checkbox",
+            )
 
         sel_horizon_metric = RETURN_HORIZONS[sel_horizon_label]["metric"]
         sel_horizon_days = RETURN_HORIZONS[sel_horizon_label]["days"]
@@ -118,5 +125,6 @@ def render_performance_view(
                 horizon_label=sel_horizon_label,
                 benchmark=benchmark_metrics,
                 portfolio=portfolio_metrics,
+                show_signal=show_signal,
             )
             st.altair_chart(chart, key=f"chart-{key_prefix}-risk-return")
