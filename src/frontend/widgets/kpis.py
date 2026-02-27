@@ -3,8 +3,8 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.settings import HEIGHT_MARKET_SNAPSHOT
-from frontend.utils.time import humanize_timestamp
+from frontend.shared.settings import HEIGHT_MARKET_SNAPSHOT
+from frontend.shared.time import humanize_timestamp
 
 
 def render_account_summary(

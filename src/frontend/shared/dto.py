@@ -1,7 +1,8 @@
-from pydantic import BaseModel, ConfigDict
-from enum import StrEnum
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
 class Currency(StrEnum):

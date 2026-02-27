@@ -2,21 +2,9 @@ import logging
 
 import streamlit as st
 
-from frontend.presentation.tabs.intraday import (
-    render_market_intraday,
-    render_market_movers,
-)
-from frontend.presentation.tabs.performance import (
-    render_performance_view,
-    render_statistics_table,
-)
-from frontend.presentation.widgets.kpis import (
-    render_market_snapshot,
-    render_status_strip,
-)
 from frontend.services.streamlit_data import check_missing_symbols, load_security_data
 from frontend.shared.config_loader import load_symbols_config
-from frontend.utils.dataframe import (
+from frontend.shared.dataframe import (
     add_last_indicators,
     add_sparkline,
     combine_header_data,
@@ -24,13 +12,17 @@ from frontend.utils.dataframe import (
     make_timeseries_long_df,
     make_timeseries_wide_df,
 )
-from frontend.utils.jobs import (
+from frontend.shared.jobs import (
     auto_refresh_if_missing,
     check_job_status,
     render_refresh_job_ui,
     start_refresh_job,
 )
-from frontend.utils.market import create_mover_groups
+from frontend.widgets.intraday import render_market_intraday
+from frontend.widgets.kpis import render_market_snapshot, render_status_strip
+from frontend.widgets.movers import create_mover_groups, render_market_movers
+from frontend.widgets.performance import render_performance_view
+from frontend.widgets.statistics import render_statistics_table
 
 logger = logging.getLogger(__name__)
 

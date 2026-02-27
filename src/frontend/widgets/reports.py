@@ -1,13 +1,13 @@
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.styles import (
+from frontend.services.streamlit_data import delete_transaction
+from frontend.shared.styles import (
     CASH_FLOWS_TABLE_CONFIG,
     CLOSED_LOTS_TABLE_CONFIG,
     TRANSACTIONS_TABLE_CONFIG,
     closed_lots_table_styler,
 )
-from frontend.services.streamlit_data import delete_transaction
 
 BUY_SELL_TRANSACTIONS = {"Buy", "Purchase", "Sell", "Sold"}
 CASH_TRANSACTIONS = {"Contrib", "Transf In", "EFT", "Transfer", "Withdrawal"}

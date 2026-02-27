@@ -1,12 +1,12 @@
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 from frontend.services.streamlit_data import (
     create_transaction,
     load_single_security_quote,
 )
 from frontend.shared.dto import Currency, TransactionCreate, TransactionKind
+from frontend.shared.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 
 
 @st.dialog("Record Transaction", width="medium")

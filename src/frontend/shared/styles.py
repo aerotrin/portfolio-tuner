@@ -3,7 +3,7 @@ import pandas as pd
 from pandas.io.formats.style import Styler
 import streamlit as st
 
-from frontend.presentation.settings import (
+from frontend.shared.settings import (
     GREEN,
     GREEN_BG,
     LOSS_LIMIT,

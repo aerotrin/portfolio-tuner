@@ -5,7 +5,7 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from supabase import create_client
 
-from frontend.presentation.widgets.account_dialogs import (
+from frontend.widgets.account_dialogs import (
     create_account_dialog,
     edit_account_dialog,
 )
@@ -19,7 +19,7 @@ from frontend.services.streamlit_data import (
 from frontend.shared.config_loader import load_symbols_config
 from frontend.shared.env_loader import config
 from frontend.shared.logging import setup_logging
-from frontend.utils.jobs import start_refresh_job
+from frontend.shared.jobs import start_refresh_job
 
 # -----------------------------------------------------------------------------
 # Logging

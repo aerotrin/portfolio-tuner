@@ -3,10 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.settings import (
-    HEIGHT_RISK_RETURN_CHART,
-    TRADING_DAYS_PER_YEAR,
-)
+from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART, TRADING_DAYS_PER_YEAR
 
 
 def render_risk_chart(

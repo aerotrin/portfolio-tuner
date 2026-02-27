@@ -3,22 +3,6 @@ import logging
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.tabs.intraday import render_portfolio_positions
-from frontend.presentation.tabs.performance import render_performance_view
-from frontend.presentation.tabs.performance import render_statistics_table
-from frontend.presentation.tabs.reports import (
-    render_cash_flows_table,
-    render_closed_lots_table,
-    render_records_header,
-    render_transactions_table,
-)
-from frontend.presentation.widgets.allocation_charts import render_portfolio_allocation
-from frontend.presentation.widgets.correlation_charts import render_correlation_matrix
-from frontend.presentation.widgets.kpis import (
-    render_account_summary,
-    render_market_snapshot,
-    render_status_strip,
-)
 from frontend.services.streamlit_data import (
     check_missing_symbols,
     load_account_details,
@@ -26,7 +10,7 @@ from frontend.services.streamlit_data import (
     load_portfolio_snapshot,
     load_security_data,
 )
-from frontend.utils.dataframe import (
+from frontend.shared.dataframe import (
     add_last_indicators,
     add_sparkline,
     combine_header_data,
@@ -34,12 +18,28 @@ from frontend.utils.dataframe import (
     make_timeseries_long_df,
     make_timeseries_wide_df,
 )
-from frontend.utils.jobs import (
+from frontend.shared.jobs import (
     auto_refresh_if_missing,
     check_job_status,
     render_refresh_job_ui,
     start_refresh_job,
 )
+from frontend.widgets.allocation import render_portfolio_allocation
+from frontend.widgets.correlation import render_correlation_matrix
+from frontend.widgets.kpis import (
+    render_account_summary,
+    render_market_snapshot,
+    render_status_strip,
+)
+from frontend.widgets.performance import render_performance_view
+from frontend.widgets.positions import render_portfolio_positions
+from frontend.widgets.reports import (
+    render_cash_flows_table,
+    render_closed_lots_table,
+    render_records_header,
+    render_transactions_table,
+)
+from frontend.widgets.statistics import render_statistics_table
 
 logger = logging.getLogger(__name__)
 

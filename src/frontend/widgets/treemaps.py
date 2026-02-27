@@ -3,8 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from frontend.presentation.settings import HEIGHT_TREEMAP
-from frontend.utils.time import humanize_timestamp
+from frontend.shared.settings import HEIGHT_TREEMAP
+from frontend.shared.time import humanize_timestamp
 
 
 def _size_treemap(
