@@ -1,7 +1,8 @@
-from typing import List
+from typing import Any, List
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
@@ -11,7 +12,18 @@ from backend.domain.analytics.security import (
 from backend.domain.entities.security import GlobalRates
 
 
-class PortfolioSimulator:
+class SimulatePortfolioRequest(BaseModel):
+    symbols: List[str]
+    n_p: int = 5000
+
+
+class OptimalPortfolioDTO(BaseModel):
+    id: str
+    metrics: dict[str, Any]
+    weights: dict[str, float]
+
+
+class SimPortfolios:
     """Efficiently simulate many portfolio configurations."""
 
     def __init__(self, securities: list[Security], rates: GlobalRates, n_p: int):
@@ -24,7 +36,7 @@ class PortfolioSimulator:
         self.performance: pd.DataFrame = pd.DataFrame()
         self.weight_matrix: np.ndarray = np.array([])
 
-    def run_simulator(self):
+    def run(self):
         """Generate random portfolios and compute indicators & metrics."""
         weight_matrix = np.random.dirichlet(
             np.ones(len(self.securities)), size=self.n_p
