@@ -52,8 +52,9 @@ async def get_optimal_portfolio(
         result = await portfolio_man.get_optimal_portfolio(
             symbols=payload.symbols,
             n_p=payload.n_p,
+            seed=payload.seed,
         )
-        return OptimalPortfolioDTO(**result)
+        return OptimalPortfolioDTO(**result, n_p=payload.n_p, seed=payload.seed)
     except Exception as e:
         logger.exception("Error in get_optimal_portfolio: %s", e)
         raise HTTPException(

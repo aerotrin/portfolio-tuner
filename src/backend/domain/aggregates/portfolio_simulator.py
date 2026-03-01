@@ -15,22 +15,32 @@ from backend.domain.entities.security import GlobalRates
 class SimulatePortfolioRequest(BaseModel):
     symbols: List[str]
     n_p: int = 5000
+    seed: int | None = None
 
 
 class OptimalPortfolioDTO(BaseModel):
     id: str
     metrics: dict[str, Any]
     weights: dict[str, float]
+    n_p: int
+    seed: int | None = None
 
 
 class SimPortfolios:
     """Efficiently simulate many portfolio configurations."""
 
-    def __init__(self, securities: list[Security], rates: GlobalRates, n_p: int):
+    def __init__(
+        self,
+        securities: list[Security],
+        rates: GlobalRates,
+        n_p: int,
+        seed: int | None = None,
+    ):
         self.securities = securities
         self.rf_rate = float(rates.rf_rate) / 100
         self.fx_rate = float(rates.fx_rate)
         self.n_p = n_p
+        self.seed = seed
 
         self.timeseries: List[pd.DataFrame] = []
         self.performance: pd.DataFrame = pd.DataFrame()
@@ -38,9 +48,8 @@ class SimPortfolios:
 
     def run(self):
         """Generate random portfolios and compute indicators & metrics."""
-        weight_matrix = np.random.dirichlet(
-            np.ones(len(self.securities)), size=self.n_p
-        )
+        rng = np.random.default_rng(self.seed)
+        weight_matrix = rng.dirichlet(np.ones(len(self.securities)), size=self.n_p)
         self.weight_matrix = weight_matrix
         self.timeseries = compute_portfolio_timeseries_indicators(
             self.securities, weight_matrix
