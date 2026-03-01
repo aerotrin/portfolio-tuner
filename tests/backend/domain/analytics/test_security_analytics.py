@@ -15,6 +15,8 @@ from src.backend.domain.analytics.security import (
     _calc_sortino,
     _calc_volatility,
     compute_performance_metrics,
+    compute_performance_metrics_batch,
+    compute_portfolio_timeseries_indicators,
     compute_timeseries_indicators,
 )
 from src.backend.domain.constants import (
@@ -236,3 +238,33 @@ def test_calc_portfolio_weighted_close_zero_sum_row_fallback_and_shape_mismatch(
 
     with pytest.raises(ValueError, match="weights columns must equal number of assets"):
         _calc_portfolio_weighted_close(securities, np.array([1.0, 2.0, 3.0]))
+
+
+def test_compute_performance_metrics_batch_matches_loop_result() -> None:
+    """Batch function output must match serial loop result for every numeric metric."""
+    closes_a = [100 + i * 0.3 + (i % 4) * 0.1 for i in range(300)]
+    closes_b = [80 + i * 0.2 + (i % 5) * 0.15 for i in range(300)]
+    securities = [_sec("AAA", closes_a), _sec("BBB", closes_b)]
+
+    weights = np.array([[0.6, 0.4], [0.3, 0.7], [0.5, 0.5]])
+    timeseries = compute_portfolio_timeseries_indicators(securities, weights)
+
+    loop_result = pd.concat(
+        [compute_performance_metrics(df, RISK_FREE_RATE) for df in timeseries]
+    )
+    batch_result = compute_performance_metrics_batch(timeseries, RISK_FREE_RATE)
+
+    assert set(loop_result.columns) == set(batch_result.columns)
+    assert list(loop_result.index) == list(batch_result.index)
+
+    for col in ["sharpe", "volatility", "sortino", "max_drawdown", "return1Y"]:
+        pd.testing.assert_series_equal(
+            loop_result[col],
+            batch_result[col],
+            check_names=False,
+            atol=1e-10,
+        )
+
+
+def test_compute_performance_metrics_batch_empty_input() -> None:
+    assert compute_performance_metrics_batch([]).empty

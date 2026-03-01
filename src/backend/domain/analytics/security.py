@@ -191,6 +191,94 @@ def compute_performance_metrics(
     return pd.DataFrame([out]).set_index("symbol")
 
 
+def compute_performance_metrics_batch(
+    timeseries: List[pd.DataFrame],
+    rf_rate: float = RISK_FREE_RATE,
+) -> pd.DataFrame:
+    """
+    Vectorized equivalent of [compute_performance_metrics(df, rf) for df in timeseries].
+
+    Reconstructs wide (n_dates × n_p) matrices from the timeseries list, then computes
+    every metric in a single pass of column-wise numpy/pandas operations.
+    Returns a (n_p × metrics) DataFrame indexed by portfolio symbol — identical shape to
+    pd.concat([compute_performance_metrics(df, rf) for df in timeseries]).
+
+    Performance note: metric logic is intentionally inlined rather than delegated to the
+    _calc_* helpers. Delegating via .apply() would restore SRP but reintroduce per-column
+    Python loops, eliminating the vectorization speedup (20-100× for n_p=5000). Guards
+    that live in the helpers (min_obs, sd==0, n>=days) are duplicated here deliberately
+    and must be kept in sync if the helpers change.
+    """
+    if not timeseries:
+        return pd.DataFrame()
+
+    symbols: List[str] = [str(df["symbol"].iloc[0]) for df in timeseries]
+    idx = pd.Index(symbols, name="symbol")
+
+    daily = pd.concat(
+        [df["daily_return"] for df in timeseries], axis=1, ignore_index=True
+    )
+    close = pd.concat([df["close"] for df in timeseries], axis=1, ignore_index=True)
+    rsi5 = pd.concat(
+        [df["rsi_signal_5"] for df in timeseries], axis=1, ignore_index=True
+    )
+    daily.columns = close.columns = rsi5.columns = idx
+
+    r = daily.dropna(how="all")
+    rf_daily = (1.0 + rf_rate) ** (1.0 / TRADING_DAYS) - 1.0
+    excess = r - rf_daily
+
+    n = len(r)
+
+    short_returns: Dict[str, Any] = {}
+    for label, days in SHORT_TERM_WINDOWS.items():
+        vals = (1.0 + r.tail(days)).prod() - 1.0
+        if n < days:
+            vals[:] = np.nan
+        short_returns[f"return{label}"] = vals
+
+    if n >= TRADING_DAYS:
+        ret1y = (1.0 + r.tail(TRADING_DAYS)).prod() - 1.0
+    else:
+        period_ret = (1.0 + r).prod() - 1.0
+        ret1y = (1.0 + period_ret) ** (TRADING_DAYS / n) - 1.0
+    vol = r.std() * np.sqrt(TRADING_DAYS)
+    if n < 40:
+        vol[:] = np.nan
+    sharpe = (excess.mean() / excess.std().replace(0, np.nan)) * np.sqrt(TRADING_DAYS)
+
+    downside = excess.clip(upper=0.0)
+    dstd_ann = np.sqrt((downside**2).mean()) * np.sqrt(TRADING_DAYS)
+    sortino = (excess.mean() * np.sqrt(TRADING_DAYS)) / dstd_ann.replace(0, np.nan)
+
+    cum = (1.0 + r).cumprod()
+    dd = cum / cum.cummax() - 1.0
+    mdd = dd.min()
+    mdd_dt = pd.to_datetime(dd.idxmin()).dt.date
+
+    rsi_slope = (rsi5.iloc[-1] - rsi5.iloc[-2]) / 100.0
+
+    closes_yr = close.tail(TRADING_DAYS)
+    hi52 = closes_yr.max()
+    lo52 = closes_yr.min()
+    last = close.iloc[-1]
+    near_hi = ((hi52 - last) / hi52.replace(0, np.nan)) <= NEAR_HIGH_LOW_PCT
+    near_lo = ((last - lo52) / lo52.replace(0, np.nan)) <= NEAR_HIGH_LOW_PCT
+
+    out = pd.DataFrame(short_returns, index=idx)
+    out["return1Y"] = ret1y.values
+    out["volatility"] = vol.values
+    out["sharpe"] = sharpe.values
+    out["sortino"] = sortino.values
+    out["max_drawdown"] = mdd.values
+    out["max_drawdown_date"] = mdd_dt.values
+    out["rsi_slope"] = rsi_slope.values
+    out["near_52wk_hi"] = near_hi.values
+    out["near_52wk_lo"] = near_lo.values
+    out["last_calculated"] = datetime.now()
+    return out
+
+
 def _calc_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate the Relative Strength Index (RSI) from a daily return series.

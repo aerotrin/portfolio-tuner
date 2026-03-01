@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
-    compute_performance_metrics,
+    compute_performance_metrics_batch,
     compute_portfolio_timeseries_indicators,
 )
 from backend.domain.entities.security import GlobalRates
@@ -54,9 +54,7 @@ class SimPortfolios:
         self.timeseries = compute_portfolio_timeseries_indicators(
             self.securities, weight_matrix
         )
-        self.performance = pd.concat(
-            [compute_performance_metrics(df, self.rf_rate) for df in self.timeseries]
-        )  # TODO: improve performance by using vectorized operations
+        self.performance = compute_performance_metrics_batch(self.timeseries, self.rf_rate)
 
     def find_optimal_portfolio(self) -> dict:
         """Find the portfolio with the highest Sharpe ratio and return its metrics and weights."""
