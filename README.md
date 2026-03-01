@@ -1,49 +1,122 @@
-# portfolio-tuner
+# Portfolio Tuner
 
-Portfolio tuner: FastAPI backend plus Streamlit dashboard for portfolio analytics, market data, and holdings management.
+A full-stack portfolio tracking and analytics platform that combines **broker transaction history** with **live market data** to produce an accurate, computation-driven view of portfolio performance.
 
-Portfolio Tuner is a Python dashboard built with FastAPI and Streamlit, backed by SQLite and SQLAlchemy, with interactive Plotly charts, Docker deployment, and market data from FMP and EODHD.
-Tech Stack:
-- FastAPI + Uvicorn backend, Streamlit frontend
-- SQLite + SQLAlchemy for persistence
-- Plotly for interactive visualizations
-- Pandas/NumPy for analytics with openpyxl for importing from Excel
-- FMP & EODHD for market data
-- Docker & Docker Compose for deployment
-- uv for dependency management
+Unlike typical portfolio apps that rely only on current holdings, Portfolio Tuner reconstructs portfolio state from raw transaction records — enabling precise performance analysis and cost-basis accounting.
 
-## Structure
+The system unifies two authoritative data sources:
 
-- **backend/** – FastAPI app (`src/`), empty `tests/`, `pyproject.toml`, `Dockerfile`
-- **frontend/** – Streamlit app (`src/`), empty `tests/`, `pyproject.toml`, `Dockerfile`
-- **config/** – Symbols YAML (copy `symbols.example.yml` to `symbols.yml`)
-- **docs/** – High-level architecture (`architecture.mmd`)
-- **examples/** – Sample data (e.g. `records.xlsx`)
+1. **Broker ledger (Excel import)** — buys/sells, deposits/withdrawals, dividends, fees, taxes, interest, option exercises, splits, closed positions, and realized P&L
+2. **Live market data** — quotes, historical OHLCV bars, and security profiles from configurable providers
 
-One root `.env` for both services (copy from `.env.example` and fill in). Each app loads it and ignores vars it doesn’t use; see `.env.example` for variables and defaults.
+Together they produce a real-time, historically-grounded portfolio view.
 
-## Run with Docker Compose (recommended)
+---
 
-1. From repo root: copy `.env.example` to `.env` and set `FMP_API_KEY`, `EODHD_API_KEY`, and any other values.
-2. Copy `config/symbols.example.yml` → `config/symbols.yml`; edit as needed.
-3. From repo root:
-   ```bash
-   docker compose up --build
-   ```
-4. Open streamlit at http://localhost:8501.
+## Architecture at a Glance
 
-## Run with uv (local dev)
+![High level architecture](docs/images/arch_high.png)
 
-1. From repo root: copy `.env.example` to `.env` and populate. Ensure `config/symbols.yml` exists (copy from `config/symbols.example.yml`).
-2. **FastAPI Backend**: from repo root
-   ```bash
-   cd backend
-   uv run uvicorn api.app:app --reload
-   ```
-3. **Streamlit Frontend**: from repo root
-   ```bash
-   cd frontend
-   uv run python -m streamlit run src/app.py
-   ```
-4. Open streamlit at http://localhost:8501.
+Both services run in Docker containers orchestrated by `docker-compose`. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical design.
 
+---
+
+## Key Features
+
+| Feature | Description |
+|---|---|
+| **Portfolio reconstruction** | Builds account state directly from raw transaction history — ACB tracking, open lots, cash flows |
+| **Real-time valuation** | Combines ledger cost basis with live market quotes |
+| **Performance metrics** | MWRR (IRR-based), Sharpe ratio, volatility, returns across any date range |
+| **Technical indicators** | Timeseries indicators computed over historical OHLCV bars |
+| **Correlation matrix** | Inter-security return correlation for holdings |
+| **Portfolio simulation** | Monte Carlo simulation across random weight distributions to find the max-Sharpe frontier |
+| **Market research pages** | ETF and stock screener views with movers, performance tables, and intraday chart |
+| **Transaction entry** | Manual transaction recording and broker Excel import |
+| **Background refresh jobs** | Async market data updates with real-time progress tracking |
+| **Multi-account support** | Switch between accounts; each user's data is isolated at the database level via RLS |
+| **Options tracking** | Call and put positions tracked with intrinsic value, DTE, and breakeven |
+
+---
+
+## Running Locally
+
+### Prerequisites
+
+- Docker and Docker Compose
+- A [Supabase](https://supabase.com) project (PostgreSQL + Auth)
+- A Financial Modeling Prep API key (optional — yfinance can be used as primary)
+
+### Setup
+
+```bash
+git clone https://github.com/aerotrin/portfolio-tuner.git
+cd portfolio-tuner
+cp .env.example .env
+# Fill in the required environment variables (see below)
+docker-compose up --build
+```
+
+| Service | URL |
+|---|---|
+| Frontend dashboard | http://localhost:8501 |
+| Backend API (OpenAPI docs) | http://localhost:8000/docs |
+
+### Required Environment Variables
+
+```env
+# Database
+POSTGRES_URL=postgresql://...
+
+# Supabase Auth
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_KEY=<anon-key>
+SUPABASE_JWT_PUBLIC_KEY=<jwt-public-key>
+
+# Market data (optional — yfinance used if FMP not enabled)
+ENABLE_FMP_AS_PRIMARY=false
+FMP_API_KEY=
+FMP_RATE_LIMIT=100
+
+# Concurrency
+MAX_CONCURRENCY=5
+```
+
+### Symbols Configuration
+
+The market research pages and benchmark lists are driven by `src/frontend/shared/symbols.yml`. Edit this file to add or remove symbols, grouped by category. See the file for detailed instructions.
+
+---
+
+## Project Structure
+
+```
+portfolio-tuner/
+├── src/
+│   ├── backend/                   # FastAPI application (uv package)
+│   │   ├── domain/                # Entities, aggregates, analytics
+│   │   ├── application/           # Use cases and port interfaces
+│   │   ├── infra/                 # Adapters, API routers, DB models
+│   │   └── shared/                # Config, logging
+│   └── frontend/                  # Streamlit application (uv package)
+│       ├── pages/                 # Multi-page app pages
+│       ├── services/              # API client, cached data loaders
+│       ├── shared/                # Config, dataframe helpers, job management
+│       └── widgets/               # All UI rendering components
+├── docs/                          # Additional documentation
+├── docker-compose.yml
+└── pyproject.toml                 # uv workspace root
+```
+
+---
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Full technical design and engineering rationale
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — Dashboard user guide with user flow
+
+---
+
+## License
+
+MIT License
