@@ -67,7 +67,7 @@ def render_portfolio_positions(
                     hide_index=True,
                     column_order=QUOTE_TABLE_CONFIG.keys(),
                     column_config=QUOTE_TABLE_CONFIG,
-                    key="table-holdings-quote",
+                    key="table-holdings-quote-stocks",
                 )
             if not option_df.empty:
                 st.markdown("###### Options")
@@ -76,7 +76,7 @@ def render_portfolio_positions(
                     hide_index=True,
                     column_order=QUOTE_TABLE_CONFIG.keys(),
                     column_config=QUOTE_TABLE_CONFIG,
-                    key="table-holdings-quote",
+                    key="table-holdings-quote-options",
                 )
 
         else:
@@ -94,7 +94,7 @@ def render_portfolio_positions(
                     hide_index=True,
                     column_order=POSITIONS_EQUITY_TABLE_CONFIG.keys(),
                     column_config=POSITIONS_EQUITY_TABLE_CONFIG,
-                    key="table-holdings-open",
+                    key="table-holdings-open-stocks",
                 )
             if not option_df.empty:
                 st.markdown("###### Options")
@@ -103,7 +103,7 @@ def render_portfolio_positions(
                     hide_index=True,
                     column_order=POSITIONS_OPTION_TABLE_CONFIG.keys(),
                     column_config=POSITIONS_OPTION_TABLE_CONFIG,
-                    key="table-holdings-open-option-osi",
+                    key="table-holdings-open-options",
                 )
                 st.caption(
                     "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
