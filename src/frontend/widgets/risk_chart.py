@@ -3,10 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from frontend.presentation.settings import (
-    HEIGHT_RISK_RETURN_CHART,
-    TRADING_DAYS_PER_YEAR,
-)
+from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART, TRADING_DAYS_PER_YEAR
 
 
 def render_risk_chart(
@@ -18,6 +15,7 @@ def render_risk_chart(
     horizon_trading_days: int,  # trading days, used for scaling (n)
     benchmark: pd.DataFrame | None = None,
     portfolio: pd.DataFrame | None = None,
+    show_signal: bool = False,
 ) -> alt.LayerChart:
     # ----------------------------
     # Theme colors
@@ -117,10 +115,17 @@ def render_risk_chart(
         .add_params(point_selector)
     )
 
-    securities_labels = base.mark_text(dx=10, dy=0, align="left", fontSize=10).encode(
+    label_base = (
+        base.transform_calculate(label="datum.symbol + ' ' + datum.signal")
+        if show_signal
+        else base
+    )
+    securities_labels = label_base.mark_text(
+        dx=10, dy=0, align="left", fontSize=10
+    ).encode(
         x="volatility_period:Q",
         y=f"{horizon_metric}:Q",
-        text="symbol:N",
+        text="label:N" if show_signal else "symbol:N",
         color="symbol:N",
     )
 

@@ -17,9 +17,13 @@ def _top_corr_pairs(
     return highest, lowest
 
 
-def render_correlation_matrix(matrix: pd.DataFrame) -> None:
+def render_correlation_matrix(matrix: pd.DataFrame | None = None) -> None:
     """Render correlation matrix for current holdings."""
-    st.markdown("#### :material/stacked_line_chart: Correlation")
+    if matrix is None or matrix.empty:
+        st.info("No correlation matrix found")
+        return
+
+    st.markdown("#### :material/ssid_chart: Correlation")
 
     c = st.columns(2)
     with c[0]:

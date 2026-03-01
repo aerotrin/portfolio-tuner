@@ -1,9 +1,8 @@
-import numpy as np
 import pandas as pd
 from pandas.io.formats.style import Styler
 import streamlit as st
 
-from frontend.presentation.settings import (
+from frontend.shared.settings import (
     GREEN,
     GREEN_BG,
     LOSS_LIMIT,
@@ -21,12 +20,14 @@ QUOTE_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "close": st.column_config.NumberColumn("Last", format="accounting"),
+    "signal": st.column_config.TextColumn("Signal"),
+    "close": st.column_config.NumberColumn("Price", format="accounting"),
+    "currency": st.column_config.TextColumn("Currency"),
     "change": st.column_config.NumberColumn("Change", format="%+.2f"),
     "change_percent": st.column_config.NumberColumn("Change %", format="percent"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
     "previous_close": st.column_config.NumberColumn("Prev. Close", format="accounting"),
-    "open": st.column_config.NumberColumn("Open", format="accounting"),
+    # "open": st.column_config.NumberColumn("Open", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
     "exchange": st.column_config.TextColumn("Exchange"),
@@ -63,20 +64,21 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
 POSITIONS_EQUITY_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "close": st.column_config.NumberColumn("Last", format="accounting"),
-    "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
+    "change": st.column_config.NumberColumn("Change", format="%+.2f"),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
+    "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
-    "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
+    "days_held": st.column_config.NumberColumn("Days", format="compact"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
+    # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
     "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
     "security_type": st.column_config.TextColumn("Type"),
@@ -89,18 +91,18 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
 POSITIONS_OPTION_TABLE_CONFIG = {
     "option_osi": st.column_config.TextColumn("OSI"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
-    "holding_category": st.column_config.TextColumn("Right"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "holding_category": st.column_config.TextColumn("Right"),
+    "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
     "option_value": st.column_config.NumberColumn(
         "Intrinsic Value ⚠️", format="accounting"
     ),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
-    "currency": st.column_config.TextColumn("Currency"),
+    # "currency": st.column_config.TextColumn("Currency"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
@@ -119,12 +121,12 @@ POSITIONS_OPTION_TABLE_CONFIG = {
 
 def positions_table_styler(df: pd.DataFrame) -> Styler:
     VALUE_COLS = [
+        "change",
         "change_percent",
         "intraday_change",
     ]
 
     POSITION_COLS = [
-        "market_value",
         "gain",
         "gain_pct",
     ]
@@ -205,25 +207,8 @@ PERFORMANCE_TABLE_CONFIG = {
 }
 
 
-def _add_custom_signals(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    macd_pos = df["macd_histogram"] > 0
-    rsi_pos = df["rsi"] > 50
-    rsi_up = df["rsi_slope"] > 0
-
-    df["signal"] = np.select(
-        [macd_pos & rsi_pos & rsi_up, macd_pos, rsi_pos & rsi_up],
-        ["●●●", "●●○", "●○○"],
-        default="",
-    )
-
-    return df
-
-
 def performance_table_styler(df: pd.DataFrame) -> Styler:
     RETURN_COLS = ["return5D", "return1M", "return3M", "return6M", "return1Y"]
-
-    df = _add_custom_signals(df)
 
     def style_row(row):
         # --- Row background rules ---

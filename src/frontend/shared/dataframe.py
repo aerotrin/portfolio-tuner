@@ -1,6 +1,10 @@
+from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import pandas as pd
+
+from frontend.services.streamlit_data import SecurityData
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
@@ -101,9 +105,24 @@ def add_last_indicators(df: pd.DataFrame, indicators: pd.DataFrame) -> pd.DataFr
     return df
 
 
+def add_trade_signal(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    macd_pos = df["macd_histogram"] > 0
+    rsi_pos = df["rsi"] > 50
+    rsi_up = df["rsi_slope"] > 0
+
+    df["signal"] = np.select(
+        [macd_pos & rsi_pos & rsi_up, macd_pos, rsi_pos & rsi_up],
+        ["●●●", "●●○", "●○○"],
+        default="",
+    )
+
+    return df
+
+
 def combine_header_data(
     header_symbols: list[str],
-    securities: "SecurityData",
+    securities: SecurityData,
 ) -> pd.DataFrame:
     """
     Make a header dataframe from the combined security data.
@@ -117,3 +136,31 @@ def combine_header_data(
     header = add_sparkline(header, header_closes, add_intraday_close=True)
 
     return header
+
+
+@dataclass
+class SecurityAnalytics:
+    metrics: pd.DataFrame  # scalar wide: metrics + sparkline + last indicators
+    indicators: pd.DataFrame  # long timeseries
+    closes: pd.DataFrame  # wide timeseries "close"
+    close_norm: pd.DataFrame  # wide timeseries "close_norm"
+
+
+def build_security_analytics(
+    symbols: list[str],
+    securities: SecurityData,
+) -> SecurityAnalytics:
+    """Build enriched analytics DataFrames for a set of symbols from a SecurityData object."""
+    metrics = make_scalar_wide_df({s: securities.metrics[s] for s in symbols})
+    indicators = make_timeseries_long_df({s: securities.indicators[s] for s in symbols})
+    closes = make_timeseries_wide_df(indicators, "close")
+    close_norm = make_timeseries_wide_df(indicators, "close_norm")
+    metrics = add_sparkline(metrics, closes)
+    metrics = add_last_indicators(metrics, indicators)
+    metrics = add_trade_signal(metrics)
+    return SecurityAnalytics(
+        metrics=metrics,
+        indicators=indicators,
+        closes=closes,
+        close_norm=close_norm,
+    )

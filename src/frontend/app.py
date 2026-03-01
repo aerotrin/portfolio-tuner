@@ -5,10 +5,6 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from supabase import create_client
 
-from frontend.presentation.widgets.account_dialogs import (
-    create_account_dialog,
-    edit_account_dialog,
-)
 from frontend.services.streamlit_data import (
     delete_account,
     get_api_client,
@@ -18,8 +14,10 @@ from frontend.services.streamlit_data import (
 )
 from frontend.shared.config_loader import load_symbols_config
 from frontend.shared.env_loader import config
+from frontend.shared.jobs import start_refresh_job
 from frontend.shared.logging import setup_logging
-from frontend.utils.jobs import start_refresh_job
+from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
+from frontend.widgets.transaction_form import transaction_form
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -154,8 +152,9 @@ if not st.session_state["disclaimer_accepted"]:
 # Navigation
 # -----------------------------------------------------------------------------
 pages = [
-    st.Page(page="pages/1_Market.py", title="🏦 Market Watch", default=False),
-    st.Page(page="pages/2_Portfolio.py", title="📊 Portfolio", default=True),
+    st.Page(page="pages/1_Market_ETFs.py", title="🏦 ETF Research", default=False),
+    st.Page(page="pages/2_Market_Stocks.py", title="🏦 Stocks Research", default=False),
+    st.Page(page="pages/3_Portfolios.py", title="📊 Portfolios", default=True),
     st.Page(page="pages/9_About.py", title="ℹ️ About", default=False),
 ]
 pg = st.navigation(pages)
@@ -226,7 +225,9 @@ def bootstrap_once() -> None:
     # Dialog flags
     st.session_state.setdefault("show_create_account_dialog", False)
     st.session_state.setdefault("show_edit_account_dialog", False)
+    st.session_state.setdefault("show_import_records_dialog", False)
     st.session_state.setdefault("show_delete_account_confirm", False)
+    st.session_state.setdefault("show_transaction_form_dialog", False)
 
     # Mark boot complete
     st.session_state["_boot_version"] = BOOT_VERSION
@@ -280,6 +281,24 @@ st.session_state.setdefault("account_display_label", account_display_labels[0])
 # -----------------------------------------------------------------------------
 # Dialogs
 # -----------------------------------------------------------------------------
+@st.dialog("Import records")
+def _show_import_records_dialog(account_id: str) -> None:
+    with st.form("import_records_form", clear_on_submit=False):
+        xlsx_file = st.file_uploader(
+            "Import account records from file",
+            type=["xlsx"],
+            key="import_xlsx_uploader",
+        )
+        submitted = st.form_submit_button("Import", type="primary")
+    if submitted:
+        if xlsx_file is None:
+            st.toast("Please upload an .xlsx file first", icon="⚠️")
+        else:
+            import_account_records(account_id, xlsx_file)
+            st.cache_data.clear()
+            st.rerun()
+
+
 @st.dialog("Delete account?")
 def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> None:
     st.warning(
@@ -344,13 +363,47 @@ with st.sidebar:
     )
     st.session_state["benchmark"] = benchmark
 
-    # --- Create account ---
-    if st.button(
-        "Create new account",
-        icon=":material/add:",
-        type="secondary",
-        key="create_new_account_button",
-    ):
+    # --- Account operations row ---
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        create_clicked = st.button(
+            "",
+            icon=":material/add:",
+            type="secondary",
+            help="Create a new account",
+            key="create_new_account_button",
+        )
+
+    with col2:
+        import_clicked = st.button(
+            "",
+            icon=":material/upload_file:",
+            type="secondary",
+            help="Import records",
+            key="import_records_button",
+        )
+
+    with col3:
+        edit_clicked = st.button(
+            "",
+            icon=":material/edit:",
+            type="secondary",
+            help="Edit account",
+            key="edit_account_button",
+        )
+
+    with col4:
+        delete_clicked = st.button(
+            "",
+            icon=":material/delete:",
+            type="secondary",
+            help="Delete account",
+            key="delete_account_button",
+        )
+
+    # --- Account operation logic ---
+    if create_clicked:
         st.session_state["show_create_account_dialog"] = True
         st.rerun()
 
@@ -358,30 +411,15 @@ with st.sidebar:
         create_account_dialog(benchmark_symbols)
         st.session_state["show_create_account_dialog"] = False
 
-    # --- Import records (use a form so submit is clean) ---
-    with st.popover("Import records", icon=":material/upload_file:"):
-        with st.form("import_records_form", clear_on_submit=False):
-            xlsx_file = st.file_uploader(
-                "Import account records from file",
-                type=["xlsx"],
-                key="import_xlsx_uploader",
-            )
-            submitted = st.form_submit_button("Import", type="primary")
-        if submitted:
-            if xlsx_file is None:
-                st.toast("Please upload an .xlsx file first", icon="⚠️")
-            else:
-                import_account_records(st.session_state["account_id"], xlsx_file)
-                # optional: clear cache if import changes server-side state
-                st.cache_data.clear()
-                st.rerun()
+    if import_clicked:
+        st.session_state["show_import_records_dialog"] = True
+        st.rerun()
 
-    if st.button(
-        "Edit account",
-        icon=":material/edit:",
-        type="secondary",
-        key="edit_account_button",
-    ):
+    if st.session_state.get("show_import_records_dialog", False):
+        _show_import_records_dialog(st.session_state["account_id"])
+        st.session_state["show_import_records_dialog"] = False
+
+    if edit_clicked:
         st.session_state["show_edit_account_dialog"] = True
         st.rerun()
 
@@ -393,13 +431,7 @@ with st.sidebar:
         )
         st.session_state["show_edit_account_dialog"] = False
 
-    # --- Delete account ---
-    if st.button(
-        "Delete account",
-        icon=":material/delete:",
-        type="secondary",
-        key="delete_account_button",
-    ):
+    if delete_clicked:
         st.session_state["show_delete_account_confirm"] = True
         st.rerun()
 
@@ -408,6 +440,28 @@ with st.sidebar:
             account_id=st.session_state["account_id"],
             account_display_label=st.session_state["account_display_label"],
         )
+
+    if st.button(
+        "Record Transaction",
+        icon=":material/edit:",
+        type="primary",
+        key="record_transaction_button",
+        use_container_width=True,
+    ):
+        st.session_state["show_transaction_form_dialog"] = True
+        st.rerun()
+
+    if st.session_state.get("show_transaction_form_dialog", False):
+        transaction_form(
+            account_id=st.session_state["account_id"],
+            account_name=account_display_label,
+            portfolio_symbols=st.session_state.get("portfolio_symbols"),
+            holdings_qty=st.session_state.get("portfolio_holdings_qty"),
+            fx_rate=st.session_state["rates"]["fx_rate"],
+            portfolio_value=st.session_state.get("portfolio_value", 0.0),
+            cash_balance=st.session_state.get("cash_balance", 0.0),
+        )
+        st.session_state["show_transaction_form_dialog"] = False
 
     st.divider()
 
