@@ -370,14 +370,6 @@ def render_optimizer(
     )
 
     with st.container(border=True):
-        selected_metric: str = st.selectbox(
-            "Select optimization metric",
-            options=list(METRIC_CONFIG.keys()),
-            format_func=lambda k: METRIC_CONFIG[k]["label"],
-            index=0,
-            key="optimizer_metric_select",
-        )
-
         n_p: int = st.slider(
             "Select number of iterations",
             min_value=1000,
@@ -398,12 +390,6 @@ def render_optimizer(
         )
         seed: int | None = int(seed_raw) if seed_raw is not None else None
 
-        metric_cfg = METRIC_CONFIG[selected_metric]
-        st.markdown(
-            f"📌 Objective: {metric_cfg['objective']} "
-            f"**{selected_metric}** for n= **{n_p}**"
-        )
-
         run_clicked = st.button(
             "Run Optimizer",
             type="primary",
@@ -421,17 +407,9 @@ def render_optimizer(
                     n_p=n_p,
                     seed=seed,
                 )
-                optimal = _find_optimal_portfolio(
-                    result.get("portfolios", []), selected_metric
-                )
                 st.session_state["optimizer_result"] = result
                 st.session_state["optimizer_config"] = result.get("config", {})
-                st.session_state["optimizer_metric"] = selected_metric
                 st.session_state["optimizer_account_id"] = account_id
-                st.session_state["optimizer_optimal_weights"] = (
-                    optimal.get("weights", {}) if optimal else {}
-                )
-                st.session_state["_optimizer_optimal_portfolio"] = optimal
             except requests.HTTPError as e:
                 st.session_state["optimizer_result"] = None
                 detail = ""
@@ -457,11 +435,9 @@ def render_optimizer(
 
     # --- Results ------------------------------------------------------------
     result: dict | None = st.session_state.get("optimizer_result")
-    run_metric: str | None = st.session_state.get("optimizer_metric")
-    optimal: dict | None = st.session_state.get("_optimizer_optimal_portfolio")
     result_account_id = st.session_state.get("optimizer_account_id")
 
-    if result is None or run_metric is None or optimal is None:
+    if result is None:
         return
 
     if result_account_id != account_id:
@@ -470,11 +446,27 @@ def render_optimizer(
         )
         return
 
+    # Metric selector — drives optimal portfolio selection and all downstream sections
+    selected_metric: str = st.selectbox(
+        "Optimization metric",
+        options=list(METRIC_CONFIG.keys()),
+        format_func=lambda k: METRIC_CONFIG[k]["label"],
+        index=0,
+        key="optimizer_metric_select",
+    )
+
+    optimal: dict | None = _find_optimal_portfolio(
+        result.get("portfolios", []), selected_metric
+    )
+    if optimal is None:
+        st.warning("No valid portfolios found for the selected metric.")
+        return
+
     st.markdown("---")
     st.markdown("#### :material/analytics: Optimization Results")
 
     # D1 — KPI summary cards
-    kpi_keys = _resolve_kpi_keys(run_metric)
+    kpi_keys = _resolve_kpi_keys(selected_metric)
 
     st.markdown("##### Optimized Portfolio Summary")
     with st.container(border=True, horizontal=True):
@@ -502,105 +494,110 @@ def render_optimizer(
                 delta_color=cfg["delta_color"],
             )
 
-    # D2 — Asset Allocation Comparison
-    st.markdown("##### Asset Allocation Comparison")
+    col_left, col_right = st.columns([1, 2])
 
-    actual_weights: dict[str, float] = {}
-    if holdings_data is not None and "weight" in holdings_data.columns:
-        for sym in portfolio_symbols:
-            if sym in holdings_data.index:
-                actual_weights[sym] = float(holdings_data.loc[sym, "weight"])
+    with col_left:
+        # D2 — Asset Allocation Comparison
+        st.markdown("##### Asset Allocation Comparison")
 
-    optimal_weights: dict[str, float] = optimal.get("weights", {})
+        actual_weights: dict[str, float] = {}
+        if holdings_data is not None and "weight" in holdings_data.columns:
+            for sym in portfolio_symbols:
+                if sym in holdings_data.index:
+                    actual_weights[sym] = float(holdings_data.loc[sym, "weight"])
 
-    alloc_rows = [
-        {
-            "Symbol": sym,
-            "Actual": actual_weights.get(sym, 0.0),
-            "Optimal": optimal_weights.get(sym, 0.0),
-            "Delta": optimal_weights.get(sym, 0.0) - actual_weights.get(sym, 0.0),
-        }
-        for sym in sorted(portfolio_symbols)
-    ]
-    alloc_df = pd.DataFrame(alloc_rows)
+        optimal_weights: dict[str, float] = optimal.get("weights", {})
 
-    st.dataframe(
-        alloc_df,
-        hide_index=True,
-        column_order=["Symbol", "Actual", "Optimal", "Delta"],
-        column_config={
-            "Symbol": st.column_config.TextColumn("Symbol"),
-            "Actual": st.column_config.NumberColumn("Actual", format="percent"),
-            "Optimal": st.column_config.NumberColumn("Optimal", format="percent"),
-            "Delta": st.column_config.NumberColumn("Delta", format="percent"),
-        },
-        key="table-optimizer-allocation",
-    )
-    st.caption("*Actual weights based on current holdings market value.")
+        alloc_rows = [
+            {
+                "Symbol": sym,
+                "Actual": actual_weights.get(sym, 0.0),
+                "Optimal": optimal_weights.get(sym, 0.0),
+                "Delta": optimal_weights.get(sym, 0.0) - actual_weights.get(sym, 0.0),
+            }
+            for sym in sorted(portfolio_symbols)
+        ]
+        alloc_df = pd.DataFrame(alloc_rows)
 
-    # D3 — KPI Comparison
-    st.markdown("##### KPI Comparison")
-
-    actual_portf = (
-        portfolio_metrics.loc["PORTF"]
-        if portfolio_metrics is not None and "PORTF" in portfolio_metrics.index
-        else None
-    )
-
-    actual_row: dict[str, Any] = {"Scenario": "Actual"}
-    optimal_row: dict[str, Any] = {"Scenario": "Optimal"}
-    delta_row: dict[str, Any] = {"Scenario": "Delta"}
-
-    for key in kpi_keys:
-        cfg = METRIC_CONFIG[key]
-        col_label = cfg["label"]
-
-        opt_val = optimal.get(key)
-        act_val: float | None = None
-        if (
-            actual_portf is not None
-            and key in actual_portf.index
-            and not pd.isna(actual_portf[key])
-        ):
-            act_val = float(actual_portf[key])
-
-        actual_row[col_label] = (
-            cfg["format_value"](act_val) if act_val is not None else "N/A"
+        st.dataframe(
+            alloc_df,
+            hide_index=True,
+            column_order=["Symbol", "Actual", "Optimal", "Delta"],
+            column_config={
+                "Symbol": st.column_config.TextColumn("Symbol"),
+                "Actual": st.column_config.NumberColumn("Actual", format="percent"),
+                "Optimal": st.column_config.NumberColumn("Optimal", format="percent"),
+                "Delta": st.column_config.NumberColumn("Delta", format="percent"),
+            },
+            key="table-optimizer-allocation",
         )
-        optimal_row[col_label] = (
-            cfg["format_value"](opt_val) if opt_val is not None else "N/A"
+        st.caption("*Actual weights based on current holdings market value.")
+
+        # D3 — KPI Comparison
+        st.markdown("##### KPI Comparison")
+
+        actual_portf = (
+            portfolio_metrics.loc["PORTF"]
+            if portfolio_metrics is not None and "PORTF" in portfolio_metrics.index
+            else None
         )
-        if act_val is not None and opt_val is not None:
-            delta_row[col_label] = cfg["format_delta"](opt_val - act_val)
-        else:
-            delta_row[col_label] = "N/A"
 
-    kpi_df = pd.DataFrame([actual_row, optimal_row, delta_row])
+        actual_row: dict[str, Any] = {"Scenario": "Actual"}
+        optimal_row: dict[str, Any] = {"Scenario": "Optimal"}
+        delta_row: dict[str, Any] = {"Scenario": "Delta"}
 
-    st.dataframe(
-        kpi_df,
-        hide_index=True,
-        key="table-optimizer-kpi-comparison",
-    )
+        for key in kpi_keys:
+            cfg = METRIC_CONFIG[key]
+            col_label = cfg["label"]
 
-    # D4 — Config footer
-    optimizer_config = st.session_state.get("optimizer_config", {})
-    run_at = optimizer_config.get("run_at", "")
-    stored_seed = optimizer_config.get("seed")
-    seed_display = str(stored_seed) if stored_seed is not None else "random"
+            opt_val = optimal.get(key)
+            act_val: float | None = None
+            if (
+                actual_portf is not None
+                and key in actual_portf.index
+                and not pd.isna(actual_portf[key])
+            ):
+                act_val = float(actual_portf[key])
+
+            actual_row[col_label] = (
+                cfg["format_value"](act_val) if act_val is not None else "N/A"
+            )
+            optimal_row[col_label] = (
+                cfg["format_value"](opt_val) if opt_val is not None else "N/A"
+            )
+            if act_val is not None and opt_val is not None:
+                delta_row[col_label] = cfg["format_delta"](opt_val - act_val)
+            else:
+                delta_row[col_label] = "N/A"
+
+        kpi_df = pd.DataFrame([actual_row, optimal_row, delta_row])
+
+        st.dataframe(
+            kpi_df,
+            hide_index=True,
+            key="table-optimizer-kpi-comparison",
+        )
+
+        # D4 — Config footer
+        optimizer_config = st.session_state.get("optimizer_config", {})
+        run_at = optimizer_config.get("run_at", "")
+        stored_seed = optimizer_config.get("seed")
+        seed_display = str(stored_seed) if stored_seed is not None else "random"
     st.caption(
         f"Run at: {run_at} · seed: {seed_display} · "
         f"n={optimizer_config.get('n_p', '?')} · "
         f"symbols: {', '.join(optimizer_config.get('symbols', []))}"
     )
 
-    # D5 — Efficient Frontier chart
-    st.markdown("##### Efficient Frontier")
-    frontier_chart = _build_frontier_chart(
-        portfolios=result.get("portfolios", []),
-        optimal=optimal,
-        portfolio_metrics=portfolio_metrics,
-        benchmark_data=benchmark_data,
-        risk_free_rate=risk_free_rate,
-    )
-    st.altair_chart(frontier_chart, use_container_width=True)
+    with col_right:
+        # D5 — Efficient Frontier chart
+        st.markdown("##### Efficient Frontier")
+        with st.container(border=True):
+            frontier_chart = _build_frontier_chart(
+                portfolios=result.get("portfolios", []),
+                optimal=optimal,
+                portfolio_metrics=portfolio_metrics,
+                benchmark_data=benchmark_data,
+                risk_free_rate=risk_free_rate,
+            )
+            st.altair_chart(frontier_chart, use_container_width=True)
