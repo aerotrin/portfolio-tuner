@@ -3,7 +3,7 @@ from typing import Any, List
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
@@ -15,7 +15,7 @@ from backend.domain.entities.security import GlobalRates
 
 class SimulatePortfolioRequest(BaseModel):
     symbols: List[str]
-    n_p: int = 5000
+    n_p: int = Field(default=5000, ge=1, le=5000)
     seed: int | None = None
 
 

@@ -237,7 +237,9 @@ def compute_performance_metrics_batch(
             vals[:] = np.nan
         short_returns[f"return{label}"] = vals
 
-    if n >= TRADING_DAYS:
+    if n == 0:
+        ret1y = pd.Series(np.nan, index=idx)
+    elif n >= TRADING_DAYS:
         ret1y = (1.0 + r.tail(TRADING_DAYS)).prod() - 1.0
     else:
         period_ret = (1.0 + r).prod() - 1.0
