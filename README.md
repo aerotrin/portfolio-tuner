@@ -30,7 +30,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Performance metrics** | MWRR (IRR-based), Sharpe ratio, volatility, returns across any date range |
 | **Technical indicators** | Timeseries indicators computed over historical OHLCV bars |
 | **Correlation matrix** | Inter-security return correlation for holdings |
-| **Portfolio simulation** | Monte Carlo simulation across random weight distributions to find the max-Sharpe frontier |
+| **Portfolio simulation** | Monte Carlo simulation across random weight distributions; optimise for Sharpe, volatility, max drawdown, or 1Y return with an interactive efficient frontier chart |
 | **Market research pages** | ETF and stock screener views with movers, performance tables, and intraday chart |
 | **Transaction entry** | Manual transaction recording and broker Excel import |
 | **Background refresh jobs** | Async market data updates with real-time progress tracking |
