@@ -1,13 +1,14 @@
 from __future__ import annotations
-
 import logging
 from typing import Any
 
+import altair as alt
 import pandas as pd
 import requests
 import streamlit as st
 
 from frontend.services.streamlit_data import get_api_client
+from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,229 @@ def _find_optimal_portfolio(
 
 
 # ---------------------------------------------------------------------------
+# Efficient frontier chart
+# ---------------------------------------------------------------------------
+
+
+def _build_frontier_chart(
+    portfolios: list[dict],
+    optimal: dict,
+    portfolio_metrics: pd.DataFrame | None,
+    benchmark_data: pd.DataFrame | None,
+    risk_free_rate: float,  # annual %, e.g. 5.0
+) -> alt.LayerChart:
+    """Build an Altair layered scatter chart of the simulated efficient frontier."""
+    theme = st.context.theme.type
+    base_color = "white" if theme == "dark" else "black"
+    benchmark_color = "magenta"
+    rf_annual = risk_free_rate / 100.0
+
+    # --- Layer 1: scatter cloud of all simulated portfolios -----------------
+    df = pd.DataFrame(
+        [
+            {
+                "volatility": p["volatility"],
+                "return1Y": p["return1Y"],
+                "sharpe": p["sharpe"],
+            }
+            for p in portfolios
+            if "volatility" in p and "return1Y" in p and "sharpe" in p
+        ]
+    )
+
+    scatter = (
+        alt.Chart(df)
+        .mark_circle(size=30, opacity=0.5)
+        .encode(
+            x=alt.X(
+                "volatility:Q",
+                title="Volatility (annualized)",
+                axis=alt.Axis(format=".0%"),
+            ),
+            y=alt.Y(
+                "return1Y:Q",
+                title="1Y Return",
+                axis=alt.Axis(format=".0%"),
+            ),
+            color=alt.Color(
+                "sharpe:Q",
+                title="Sharpe",
+                scale=alt.Scale(scheme="viridis"),
+                legend=alt.Legend(),
+            ),
+            tooltip=[
+                alt.Tooltip("volatility:Q", format=".1%", title="Volatility"),
+                alt.Tooltip("return1Y:Q", format=".1%", title="1Y Return"),
+                alt.Tooltip("sharpe:Q", format=".2f", title="Sharpe"),
+            ],
+        )
+    )
+
+    # --- Layer 2: risk-free horizontal rule ---------------------------------
+    rf_line = (
+        alt.Chart(pd.DataFrame({"rf": [rf_annual]}))
+        .mark_rule(strokeDash=[2, 2], strokeWidth=1.5, opacity=0.4, color=base_color)
+        .encode(
+            y="rf:Q",
+            tooltip=alt.value(f"Risk-free: {rf_annual:.2%} annual"),
+        )
+    )
+
+    layers: list[Any] = [scatter, rf_line]
+
+    # --- Layer 3: Capital Allocation Line (CAL) ------------------------------
+    # CAL always runs from (0, rf) through the max-Sharpe tangency portfolio.
+    valid_portfolios = [
+        p for p in portfolios if "sharpe" in p and p["sharpe"] is not None
+    ]
+    if valid_portfolios and not df.empty:
+        tangency = max(valid_portfolios, key=lambda p: p["sharpe"])
+        t_vol = float(tangency["volatility"])
+        t_ret = float(tangency["return1Y"])
+        if t_vol > 0:
+            slope = (t_ret - rf_annual) / t_vol
+            x_max = float(df["volatility"].max()) * 1.3
+            cal_df = pd.DataFrame(
+                {"x": [0.0, x_max], "y": [rf_annual, rf_annual + slope * x_max]}
+            )
+            cal_line = (
+                alt.Chart(cal_df)
+                .mark_line(strokeDash=[5, 3], strokeWidth=1.5, color="orange")
+                .encode(
+                    x="x:Q",
+                    y="y:Q",
+                    tooltip=alt.value("Capital Allocation Line"),
+                )
+            )
+            layers.append(cal_line)
+
+    # --- Layer 4: Holdings point (current portfolio) ------------------------
+    if (
+        portfolio_metrics is not None
+        and "PORTF" in portfolio_metrics.index
+        and "volatility" in portfolio_metrics.columns
+        and "return1Y" in portfolio_metrics.columns
+    ):
+        portf_row = portfolio_metrics.loc["PORTF"]
+        holdings_df = pd.DataFrame(
+            [
+                {
+                    "volatility": float(portf_row["volatility"]),
+                    "return1Y": float(portf_row["return1Y"]),
+                    "label": "Holdings",
+                }
+            ]
+        )
+        holdings_pt = (
+            alt.Chart(holdings_df)
+            .mark_point(shape="square", size=150, color=base_color, filled=True)
+            .encode(
+                x="volatility:Q",
+                y="return1Y:Q",
+                tooltip=[
+                    alt.Tooltip("label:N"),
+                    alt.Tooltip("volatility:Q", format=".1%", title="Volatility"),
+                    alt.Tooltip("return1Y:Q", format=".1%", title="1Y Return"),
+                ],
+            )
+        )
+        holdings_lbl = (
+            alt.Chart(holdings_df)
+            .mark_text(
+                dx=10,
+                dy=0,
+                align="left",
+                fontSize=10,
+                fontWeight="bold",
+                color=base_color,
+            )
+            .encode(x="volatility:Q", y="return1Y:Q", text="label:N")
+        )
+        layers += [holdings_pt, holdings_lbl]
+
+    # --- Layer 5: Optimal portfolio point -----------------------------------
+    opt_df = pd.DataFrame(
+        [
+            {
+                "volatility": float(optimal["volatility"]),
+                "return1Y": float(optimal["return1Y"]),
+                "sharpe": float(optimal.get("sharpe", 0)),
+                "label": "Optimal",
+            }
+        ]
+    )
+    optimal_pt = (
+        alt.Chart(opt_df)
+        .mark_point(shape="diamond", size=150, color="cyan", filled=True)
+        .encode(
+            x="volatility:Q",
+            y="return1Y:Q",
+            tooltip=[
+                alt.Tooltip("label:N"),
+                alt.Tooltip("volatility:Q", format=".1%", title="Volatility"),
+                alt.Tooltip("return1Y:Q", format=".1%", title="1Y Return"),
+                alt.Tooltip("sharpe:Q", format=".2f", title="Sharpe"),
+            ],
+        )
+    )
+    optimal_lbl = (
+        alt.Chart(opt_df)
+        .mark_text(
+            dx=10, dy=0, align="left", fontSize=10, fontWeight="bold", color="cyan"
+        )
+        .encode(x="volatility:Q", y="return1Y:Q", text="label:N")
+    )
+    layers += [optimal_pt, optimal_lbl]
+
+    # --- Layer 6: Benchmark point + crosshairs ------------------------------
+    if (
+        benchmark_data is not None
+        and not benchmark_data.empty
+        and "volatility" in benchmark_data.columns
+        and "return1Y" in benchmark_data.columns
+    ):
+        row = benchmark_data.iloc[0]
+        bench_vol = float(row["volatility"])
+        bench_ret = float(row["return1Y"])
+        bench_sym = str(row.get("symbol", "Benchmark"))
+
+        bench_df = pd.DataFrame(
+            [{"volatility": bench_vol, "return1Y": bench_ret, "symbol": bench_sym}]
+        )
+        bench_pt = (
+            alt.Chart(bench_df)
+            .mark_circle(color=benchmark_color, size=150, filled=False)
+            .encode(
+                x="volatility:Q",
+                y="return1Y:Q",
+                tooltip=[
+                    alt.Tooltip("symbol:N"),
+                    alt.Tooltip("volatility:Q", format=".1%", title="Volatility"),
+                    alt.Tooltip("return1Y:Q", format=".1%", title="1Y Return"),
+                ],
+            )
+        )
+        bench_lbl = (
+            alt.Chart(bench_df)
+            .mark_text(dx=10, dy=0, align="left", fontSize=10, color=benchmark_color)
+            .encode(x="volatility:Q", y="return1Y:Q", text="symbol:N")
+        )
+        vline = (
+            alt.Chart(pd.DataFrame({"x": [bench_vol]}))
+            .mark_rule(color=benchmark_color, strokeDash=[2, 2], opacity=0.5)
+            .encode(x="x:Q")
+        )
+        hline = (
+            alt.Chart(pd.DataFrame({"y": [bench_ret]}))
+            .mark_rule(color=benchmark_color, strokeDash=[2, 2], opacity=0.5)
+            .encode(y="y:Q")
+        )
+        layers += [bench_pt, bench_lbl, vline, hline]
+
+    return alt.layer(*layers).properties(height=HEIGHT_RISK_RETURN_CHART).interactive()
+
+
+# ---------------------------------------------------------------------------
 # Main render function
 # ---------------------------------------------------------------------------
 
@@ -110,6 +334,8 @@ def render_optimizer(
     holdings_data: pd.DataFrame | None,
     portfolio_metrics: pd.DataFrame | None,
     account_id: str | None = None,
+    benchmark_data: pd.DataFrame | None = None,
+    risk_free_rate: float = 0.0,
 ) -> None:
     """Render the Portfolio Weight Optimizer tab.
 
@@ -121,6 +347,9 @@ def render_optimizer(
                            'PORTF' row with actual portfolio metrics.
         account_id: The account the optimizer is running for. Results are only
                     shown when the stored account matches the current one.
+        benchmark_data: Optional benchmark metrics DataFrame (has 'volatility',
+                        'return1Y', 'symbol' columns) for frontier chart overlay.
+        risk_free_rate: Annual risk-free rate as a percentage (e.g. 5.0 = 5%).
     """
     st.markdown("#### :material/tune: Portfolio Weight Optimizer")
 
@@ -364,3 +593,14 @@ def render_optimizer(
         f"n={optimizer_config.get('n_p', '?')} · "
         f"symbols: {', '.join(optimizer_config.get('symbols', []))}"
     )
+
+    # D5 — Efficient Frontier chart
+    st.markdown("##### Efficient Frontier")
+    frontier_chart = _build_frontier_chart(
+        portfolios=result.get("portfolios", []),
+        optimal=optimal,
+        portfolio_metrics=portfolio_metrics,
+        benchmark_data=benchmark_data,
+        risk_free_rate=risk_free_rate,
+    )
+    st.altair_chart(frontier_chart, use_container_width=True)

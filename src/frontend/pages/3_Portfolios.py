@@ -259,6 +259,9 @@ with tabs[3]:
         portfolio_symbols=portfolio_symbols,
         holdings_data=holdings_data,
         portfolio_metrics=portfolio_metrics,
+        account_id=account_id,
+        benchmark_data=benchmark_data,
+        risk_free_rate=rates["rf_rate"],
     )
 
 with tabs[4]:
