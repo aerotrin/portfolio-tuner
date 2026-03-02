@@ -43,9 +43,28 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 
 ### Prerequisites
 
-- Docker and Docker Compose
+- [Docker Desktop](https://docs.docker.com/desktop/) (Windows/Mac/Linux)
 - A [Supabase](https://supabase.com) project (PostgreSQL + Auth)
-- A Financial Modeling Prep API key (optional — yfinance can be used as primary)
+- *Optional* - [Financial Modeling Prep](https://site.financialmodelingprep.com/developer/docs/pricing) API key ([yfinance](https://github.com/ranaroussi/yfinance) will be used as primary if not provided)
+
+### Database Setup (first run only)
+
+Before starting the app for the first time, initialise the database schema in your Supabase project:
+
+1. Open your [Supabase](https://supabase.com) project dashboard
+2. Navigate to **SQL Editor** in the left sidebar
+3. Copy the full contents of [`supabase/schema.sql`](supabase/schema.sql)
+4. Paste into the editor and click **Run**
+
+This creates all tables, indexes, foreign keys, RLS policies, and role grants required by the application. It is safe to re-run — all statements use `CREATE TABLE IF NOT EXISTS`.
+
+### User Management
+
+Portfolio Tuner does not include a user registration or admin UI. Users are managed entirely through Supabase:
+
+- **First user:** Go to your Supabase project → **Authentication** → **Users** → **Add user** → **Create new user**
+- **Additional users:** Same process — invite or manually create each user from the Supabase dashboard
+- Users sign in to the Portfolio Tuner dashboard with the email/password set in Supabase
 
 ### Setup
 
@@ -54,7 +73,7 @@ git clone https://github.com/aerotrin/portfolio-tuner.git
 cd portfolio-tuner
 cp .env.example .env
 # Fill in the required environment variables (see below)
-docker-compose up --build
+docker compose up --build
 ```
 
 | Service | URL |
