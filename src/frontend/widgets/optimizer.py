@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 
 from frontend.services.streamlit_data import get_api_client
-from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART
+from frontend.shared.settings import HEIGHT_EFFICIENT_FRONTIER_CHART
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ METRIC_CONFIG: dict[str, dict[str, Any]] = {
         "objective": "Minimize",
         "format_value": lambda v: f"{v:.1%}",
         "format_delta": lambda v: f"{v:+.1%}",
-        "delta_color": "inverse",
+        "delta_color": "normal",
         # max_drawdown is stored as a negative float (e.g. -0.12 for -12%).
         # "Minimize drawdown" = least severe = value closest to 0 = the maximum negative float.
         "best_fn": max,
@@ -112,6 +112,7 @@ def _build_frontier_chart(
     portfolio_metrics: pd.DataFrame | None,
     benchmark_data: pd.DataFrame | None,
     risk_free_rate: float,  # annual %, e.g. 5.0
+    footer_text: str = "",
 ) -> alt.LayerChart:
     """Build an Altair layered scatter chart of the simulated efficient frontier."""
     theme = st.context.theme.type
@@ -321,7 +322,16 @@ def _build_frontier_chart(
         )
         layers += [bench_pt, bench_lbl, vline, hline]
 
-    return alt.layer(*layers).properties(height=HEIGHT_RISK_RETURN_CHART).interactive()
+    props: dict[str, Any] = {"height": HEIGHT_EFFICIENT_FRONTIER_CHART}
+    if footer_text:
+        props["title"] = alt.TitleParams(
+            text=footer_text,
+            orient="bottom",
+            anchor="start",
+            fontSize=12,
+            color="gray",
+        )
+    return alt.layer(*layers).properties(**props).interactive()
 
 
 # ---------------------------------------------------------------------------
@@ -373,9 +383,9 @@ def render_optimizer(
         n_p: int = st.slider(
             "Select number of iterations",
             min_value=1000,
-            max_value=7500,
+            max_value=5000,
             step=500,
-            value=5000,
+            value=2500,
             key="optimizer_n_p_slider",
         )
 
@@ -531,7 +541,10 @@ def render_optimizer(
             },
             key="table-optimizer-allocation",
         )
-        st.caption("*Actual weights based on current holdings market value.")
+        st.caption(
+            "Actual weights reflect current holdings at market value. "
+            "Optimal weights assume no cash allocation."
+        )
 
         # D3 — KPI Comparison
         st.markdown("##### KPI Comparison")
@@ -583,11 +596,11 @@ def render_optimizer(
         run_at = optimizer_config.get("run_at", "")
         stored_seed = optimizer_config.get("seed")
         seed_display = str(stored_seed) if stored_seed is not None else "random"
-    st.caption(
+    chart_footer = (
         f"Run at: {run_at} · seed: {seed_display} · "
         f"n={optimizer_config.get('n_p', '?')} · "
-        f"symbols: {', '.join(optimizer_config.get('symbols', []))}"
     )
+    st.caption(chart_footer)
 
     with col_right:
         # D5 — Efficient Frontier chart
@@ -599,5 +612,6 @@ def render_optimizer(
                 portfolio_metrics=portfolio_metrics,
                 benchmark_data=benchmark_data,
                 risk_free_rate=risk_free_rate,
+                footer_text=chart_footer,
             )
             st.altair_chart(frontier_chart, use_container_width=True)

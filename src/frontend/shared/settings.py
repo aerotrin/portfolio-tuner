@@ -47,9 +47,10 @@ TRADE_SIZING_GUIDE = {
     "10%": 0.10,
 }
 
-# [Market/Portfolio] Treemap and Risk/Return Chart height defaults
+# [Market/Portfolio] Treemap and Chart height defaults
 HEIGHT_TREEMAP = 120
 HEIGHT_RISK_RETURN_CHART = 450
+HEIGHT_EFFICIENT_FRONTIER_CHART = 400
 HEIGHT_MARKET_SNAPSHOT = 150
 
 # General color palette for styling tables and icons
