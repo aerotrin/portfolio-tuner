@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.backend.domain.aggregates.portfolio_simulator import PortfolioSimulator
+from src.backend.domain.aggregates.portfolio_simulator import SimPortfolios
 from src.backend.domain.aggregates.security import Security
 from src.backend.domain.entities.security import Bar, GlobalRates, Profile, Quote
 
@@ -61,14 +61,14 @@ def _build_securities() -> list[Security]:
 def test_run_simulator_produces_expected_artifacts() -> None:
     securities = _build_securities()
     n_p = 4
-    simulator = PortfolioSimulator(
+    simulator = SimPortfolios(
         securities=securities,
         rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
         n_p=n_p,
+        seed=42,
     )
 
-    np.random.seed(42)
-    simulator.run_simulator()
+    simulator.run()
 
     assert simulator.weight_matrix.shape == (n_p, len(securities))
     assert len(simulator.timeseries) == n_p
@@ -83,7 +83,7 @@ def test_run_simulator_produces_expected_artifacts() -> None:
 
 def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None:
     securities = _build_securities()
-    simulator = PortfolioSimulator(
+    simulator = SimPortfolios(
         securities=securities,
         rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
         n_p=3,
@@ -104,7 +104,7 @@ def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None
     result = simulator.find_optimal_portfolio()
 
     assert result["id"] == "PORTF_1"
-    assert result["metrics"]["sharpe"] == pytest.approx(1.6)
+    assert result["sharpe"] == pytest.approx(1.6)
     assert result["weights"] == {
         "AAA": pytest.approx(0.1),
         "BBB": pytest.approx(0.6),
@@ -113,7 +113,7 @@ def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None
 
 
 def test_find_optimal_portfolio_raises_before_run_simulator() -> None:
-    simulator = PortfolioSimulator(
+    simulator = SimPortfolios(
         securities=_build_securities(),
         rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
         n_p=2,

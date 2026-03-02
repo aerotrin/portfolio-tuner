@@ -11,6 +11,7 @@ from backend.infra.adapters.rate_limiter import RateLimiterConfig
 from backend.infra.adapters.yfinance_client import YFinanceClient
 from backend.infra.api.v1.routers import accounts as accounts_routers
 from backend.infra.api.v1.routers import admin as admin_routers
+from backend.infra.api.v1.routers import optimizer as optimizer_routers
 from backend.infra.api.v1.routers import securities as securities_routers
 from backend.shared.config import config
 from backend.shared.logging import setup_logging
@@ -62,6 +63,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(admin_routers.router, prefix=config.api_prefix)
 app.include_router(accounts_routers.router, prefix=config.api_prefix)
 app.include_router(securities_routers.router, prefix=config.api_prefix)
+app.include_router(optimizer_routers.router, prefix=config.api_prefix)
 
 
 @app.get("/health")

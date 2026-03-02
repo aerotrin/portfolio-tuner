@@ -1,0 +1,101 @@
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from backend.application.use_cases.market_data import MarketDataManager
+from backend.application.use_cases.simulator import PortfolioSimulatorManager
+from backend.domain.aggregates.portfolio_simulator import (
+    SimulatedPortfoliosDTO,
+    SimulatePortfolioRequest,
+    SimulationConfig,
+)
+from backend.infra.api.v1.dependencies.auth import verify_token
+from backend.infra.api.v1.dependencies.db import get_user_db
+from backend.infra.db.repo import PgMarketDataRepository
+
+router = APIRouter(dependencies=[Depends(verify_token)])
+logger = logging.getLogger(__name__)
+
+
+# -----------------------------
+# Dependencies
+# -----------------------------
+def get_market_data_manager(
+    request: Request,
+    db: Session = Depends(get_user_db),
+) -> MarketDataManager:
+    repo = PgMarketDataRepository(db)
+    return MarketDataManager(
+        ds_primary=request.app.state.primary_market_datasource,
+        ds_backup=request.app.state.backup_market_datasource,
+        db=repo,
+    )
+
+
+def get_portfolio_manager(
+    market_man: MarketDataManager = Depends(get_market_data_manager),
+) -> PortfolioSimulatorManager:
+    # run_simulated_portfolio only uses market_man
+    return PortfolioSimulatorManager(market_man=market_man)
+
+
+# -----------------------------
+# Endpoints
+# -----------------------------
+@router.post("/simulator/optimal-sharpe", response_model=SimulatedPortfoliosDTO)
+async def get_optimal_portfolio(
+    payload: SimulatePortfolioRequest,
+    portfolio_man: PortfolioSimulatorManager = Depends(get_portfolio_manager),
+):
+    """Run Monte Carlo portfolio simulation and return the optimal allocation with highest Sharpe ratio."""
+    try:
+        portfolios, run_at = await portfolio_man.get_optimal_portfolio(
+            symbols=payload.symbols,
+            n_p=payload.n_p,
+            seed=payload.seed,
+        )
+        return SimulatedPortfoliosDTO(
+            config=SimulationConfig(
+                symbols=payload.symbols,
+                n_p=payload.n_p,
+                seed=payload.seed,
+                run_at=run_at,
+            ),
+            portfolios=portfolios,
+        )
+    except Exception as e:
+        logger.exception("Error in get_optimal_portfolio: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Optimal portfolio simulation failed.",
+        )
+
+
+@router.post("/simulator/portfolios", response_model=SimulatedPortfoliosDTO)
+async def get_simulated_portfolios(
+    payload: SimulatePortfolioRequest,
+    portfolio_man: PortfolioSimulatorManager = Depends(get_portfolio_manager),
+):
+    """Run Monte Carlo simulation and return all portfolios for frontend-driven optimization."""
+    try:
+        portfolios, run_at = await portfolio_man.get_all_portfolios(
+            symbols=payload.symbols,
+            n_p=payload.n_p,
+            seed=payload.seed,
+        )
+        return SimulatedPortfoliosDTO(
+            config=SimulationConfig(
+                symbols=payload.symbols,
+                n_p=payload.n_p,
+                seed=payload.seed,
+                run_at=run_at,
+            ),
+            portfolios=portfolios,
+        )
+    except Exception as e:
+        logger.exception("Error in get_simulated_portfolios: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Portfolio simulation failed.",
+        )

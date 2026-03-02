@@ -281,7 +281,7 @@ st.session_state.setdefault("account_display_label", account_display_labels[0])
 # -----------------------------------------------------------------------------
 # Dialogs
 # -----------------------------------------------------------------------------
-@st.dialog("Import records")
+@st.dialog("Import Records")
 def _show_import_records_dialog(account_id: str) -> None:
     with st.form("import_records_form", clear_on_submit=False):
         xlsx_file = st.file_uploader(
@@ -299,7 +299,7 @@ def _show_import_records_dialog(account_id: str) -> None:
             st.rerun()
 
 
-@st.dialog("Delete account?")
+@st.dialog("Delete Account?")
 def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> None:
     st.warning(
         f"Delete Account {account_display_label}? \n\n"
@@ -340,28 +340,6 @@ with st.sidebar:
     idx = account_display_labels.index(account_display_label)
     selected = accounts[idx]
     st.session_state["account_id"] = selected.id
-
-    # Benchmark select: default to account benchmark if present
-    account_benchmark = selected.benchmark
-    if account_benchmark in benchmark_symbols:
-        benchmark_idx = benchmark_symbols.index(account_benchmark)
-    else:
-        st.toast(
-            f"Account benchmark {account_benchmark} not found. Using default benchmark.",
-            icon="⚠️",
-        )
-        logger.warning(
-            "Account benchmark %s not found in benchmarks list. Using default.",
-            account_benchmark,
-        )
-        benchmark_idx = 0
-
-    benchmark = st.selectbox(
-        "Select a benchmark",
-        benchmark_symbols,
-        index=benchmark_idx if benchmark_symbols else 0,
-    )
-    st.session_state["benchmark"] = benchmark
 
     # --- Account operations row ---
     col1, col2, col3, col4 = st.columns(4)
@@ -441,6 +419,29 @@ with st.sidebar:
             account_display_label=st.session_state["account_display_label"],
         )
 
+    # Benchmark select: default to account benchmark if present
+    account_benchmark = selected.benchmark
+    if account_benchmark in benchmark_symbols:
+        benchmark_idx = benchmark_symbols.index(account_benchmark)
+    else:
+        st.toast(
+            f"Account benchmark {account_benchmark} not found. Using default benchmark.",
+            icon="⚠️",
+        )
+        logger.warning(
+            "Account benchmark %s not found in benchmarks list. Using default.",
+            account_benchmark,
+        )
+        benchmark_idx = 0
+
+    benchmark = st.selectbox(
+        "Select a benchmark",
+        benchmark_symbols,
+        index=benchmark_idx if benchmark_symbols else 0,
+    )
+    st.session_state["benchmark"] = benchmark
+
+    # Add transaction button
     if st.button(
         "Record Transaction",
         icon=":material/edit:",
@@ -469,7 +470,7 @@ with st.sidebar:
     st.subheader("Data Refresh Options")
 
     if st.button(
-        "Force Refresh Data",
+        "Force Data Refresh",
         icon=":material/refresh:",
         type="primary",
         key="full_data_refresh_button",

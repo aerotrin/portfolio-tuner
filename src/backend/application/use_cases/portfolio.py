@@ -1,6 +1,5 @@
 import asyncio
 from datetime import date
-from typing import Any, List
 
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
@@ -9,7 +8,6 @@ from backend.domain.aggregates.portfolio import (
     PortfolioSnapshotDTO,
     PortfolioSummaryDTO,
 )
-from backend.domain.aggregates.portfolio_simulator import PortfolioSimulator
 from backend.domain.entities.security import SecurityAnalyticsResponse
 
 
@@ -24,7 +22,7 @@ class PortfolioManager:
         self.market_man = market_man
         self.account_man = account_man
 
-    async def build_portfolio_from_account(
+    async def _build_portfolio_from_account(
         self,
         account_number: str,
         account_name: str | None = None,
@@ -51,20 +49,6 @@ class PortfolioManager:
             rates=rates,
         )
 
-    async def run_simulated_portfolio(
-        self,
-        symbols: List[str],
-        n_p: int = 5000,
-    ) -> dict[str, Any]:
-        rates = await asyncio.to_thread(self.market_man.read_global_rates)
-        securities_map = await self.market_man.build_securities_batch_async(
-            symbols, rates=rates
-        )
-        securities = [securities_map[s] for s in symbols if s in securities_map]
-        simulator = PortfolioSimulator(securities, rates, n_p)
-        simulator.run_simulator()
-        return simulator.find_optimal_portfolio()
-
     async def get_portfolio(
         self,
         account_number: str,
@@ -72,7 +56,7 @@ class PortfolioManager:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> PortfolioSnapshotDTO:
-        portfolio = await self.build_portfolio_from_account(
+        portfolio = await self._build_portfolio_from_account(
             account_number, account_name, start_date, end_date
         )
         per_sec = {

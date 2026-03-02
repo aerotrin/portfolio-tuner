@@ -23,9 +23,10 @@ QUOTE_TABLE_CONFIG = {
     "signal": st.column_config.TextColumn("Signal"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "change": st.column_config.NumberColumn("Change", format="%+.2f"),
-    "change_percent": st.column_config.NumberColumn("Change %", format="percent"),
+    "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
+    "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
+    "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "previous_close": st.column_config.NumberColumn("Prev. Close", format="accounting"),
     # "open": st.column_config.NumberColumn("Open", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
@@ -56,6 +57,17 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
         for col in VALUE_COLS:
             if col in style.index:
                 style[col] = color
+
+        # RSI coloring
+        rsi = row["rsi"]
+        if not pd.isna(rsi):
+            if rsi > 70:
+                color = f"color: {RED};"
+            elif rsi < 30:
+                color = f"color: {GREEN};"
+            else:
+                color = NO_STYLE
+
         return style
 
     return df.style.apply(style_row, axis=1)
@@ -70,7 +82,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "change": st.column_config.NumberColumn("Change", format="%+.2f"),
+    "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
@@ -189,8 +201,9 @@ PERFORMANCE_TABLE_CONFIG = {
         "Signal",
         help="●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > 50 + up trend",
     ),
-    "close": st.column_config.NumberColumn("Last Close", format="accounting"),
-    "rsi": st.column_config.NumberColumn("Last RSI", format="%.1f"),
+    "close": st.column_config.NumberColumn("Price", format="accounting"),
+    "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
+    "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Return 1M", format="percent"),
     "return3M": st.column_config.NumberColumn("Return 3M", format="percent"),
@@ -208,7 +221,14 @@ PERFORMANCE_TABLE_CONFIG = {
 
 
 def performance_table_styler(df: pd.DataFrame) -> Styler:
-    RETURN_COLS = ["return5D", "return1M", "return3M", "return6M", "return1Y"]
+    VALUE_COLS = [
+        "change_percent",
+        "return5D",
+        "return1M",
+        "return3M",
+        "return6M",
+        "return1Y",
+    ]
 
     def style_row(row):
         # --- Row background rules ---
@@ -223,7 +243,7 @@ def performance_table_styler(df: pd.DataFrame) -> Styler:
         style = pd.Series(row_bg, index=df.columns)
 
         # --- Cell-level return coloring ---
-        for col in RETURN_COLS:
+        for col in VALUE_COLS:
             if col in style.index:
                 val = row[col]
                 if pd.isna(val):
@@ -234,6 +254,16 @@ def performance_table_styler(df: pd.DataFrame) -> Styler:
                     style[col] = f"{row_bg} color: {RED}".strip()
                 else:
                     style[col] = row_bg
+
+        # RSI coloring
+        rsi = row["rsi"]
+        if not pd.isna(rsi):
+            if rsi > 70:
+                style["rsi"] = f"{row_bg} color: {RED}".strip()
+            elif rsi < 30:
+                style["rsi"] = f"{row_bg} color: {GREEN}".strip()
+            else:
+                style["rsi"] = row_bg
 
         return style
 

@@ -217,3 +217,12 @@ class APIClient:
     ):
         payload = {"symbols": symbols, "start_date": start_date, "end_date": end_date}
         return self._post("/securities/batch-analytics", json=payload)
+
+    def simulate_portfolios(
+        self,
+        symbols: list[str],
+        n_p: int,
+        seed: int | None = None,
+    ) -> dict:
+        payload: dict = {"symbols": symbols, "n_p": n_p, "seed": seed}
+        return self._post("/simulator/portfolios", json=payload)

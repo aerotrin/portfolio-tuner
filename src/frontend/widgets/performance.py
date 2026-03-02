@@ -40,59 +40,27 @@ def render_performance_view(
         return
 
     # ── Filters ───────────────────────────────────────────────────────────────
-    st.markdown("##### :material/filter_list: Filters")
-
+    # Defaults overridden by widgets that render inside the chart columns below.
+    sel_horizon_label = next(iter(RETURN_HORIZONS))
+    show_signal = True
+    groups_labels = [group.label for group in groups]
     if use_group_filter:
-        fc = st.columns([5, 4, 1], vertical_alignment="bottom")
-        with fc[0]:
-            groups_labels = [group.label for group in groups]
-            sel_groups = st.multiselect(
-                "Groups",
-                groups_labels,
-                default=[groups_labels[0]],
-                key=f"{key_prefix}-groups-selector",
-            )
-        with fc[1]:
-            sel_horizon_label = st.radio(
-                "Return range",
-                RETURN_HORIZONS.keys(),
-                horizontal=True,
-                key=f"{key_prefix}-horizon-selector",
-            )
-        with fc[2]:
-            show_signal = st.checkbox(
-                "Signal",
-                value=True,
-                key=f"{key_prefix}-signal-checkbox",
-            )
-        if sel_groups:
-            sel_symbols = sorted(
-                {
-                    symbol
-                    for group in groups
-                    if group.label in sel_groups
-                    for symbol in group.symbols
-                }
-            )
-        else:
-            sel_symbols = sorted(
-                {symbol for group in groups for symbol in group.symbols}
-            )
+        # Read the group multiselect value from session state so that sel_symbols
+        # is available for derived state before the widget renders inside c[0].
+        _raw_sel: list[str] = st.session_state.get(
+            f"{key_prefix}-groups-selector",
+            [groups_labels[0]] if groups_labels else [],
+        )
+        _sel_groups = _raw_sel if _raw_sel else groups_labels
+        sel_symbols = sorted(
+            {
+                symbol
+                for group in groups
+                if group.label in _sel_groups
+                for symbol in group.symbols
+            }
+        )
     else:
-        fc = st.columns([5, 4, 1], vertical_alignment="bottom")
-        with fc[1]:
-            sel_horizon_label = st.radio(
-                "Return range",
-                RETURN_HORIZONS.keys(),
-                horizontal=True,
-                key=f"{key_prefix}-horizon-selector",
-            )
-        with fc[2]:
-            show_signal = st.checkbox(
-                "Signal",
-                value=True,
-                key=f"{key_prefix}-signal-checkbox",
-            )
         sel_symbols = []
 
     # ── Derived state ─────────────────────────────────────────────────────────
@@ -126,13 +94,41 @@ def render_performance_view(
     chart_close_norm = close_norm_eod[chart_symbols]
     chart_metrics = sub_metrics.loc[chart_symbols]
 
+    # ── Charts ────────────────────────────────────────────────────────────────
+    if use_group_filter:
+        st.multiselect(
+            ":material/filter_list: Filter by groups",
+            groups_labels,
+            default=[groups_labels[0]] if groups_labels else [],
+            key=f"{key_prefix}-groups-selector",
+        )
+
+    h = st.columns(2)
+    with h[0]:
+        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
+
+    with h[1]:
+        rh = st.columns([9, 1], vertical_alignment="center")
+        with rh[0]:
+            st.markdown("##### :material/scatter_plot: Risk/Return")
+        with rh[1]:
+            with st.popover(":material/settings:", type="tertiary"):
+                sel_horizon_label = st.radio(
+                    "Return range",
+                    RETURN_HORIZONS.keys(),
+                    horizontal=True,
+                    key=f"{key_prefix}-horizon-selector",
+                )
+                show_signal = st.checkbox(
+                    "Signal",
+                    value=True,
+                    key=f"{key_prefix}-signal-checkbox",
+                )
+
     sel_horizon = RETURN_HORIZONS[sel_horizon_label]
 
-    # ── Charts ────────────────────────────────────────────────────────────────
     c = st.columns(2)
-
     with c[0]:
-        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
         with st.container(border=True):
             growth_chart_args = [chart_close_norm, benchmark_close_norm_eod]
             if portfolio_close_norm_eod is not None:
@@ -141,7 +137,6 @@ def render_performance_view(
             st.plotly_chart(fig, key=f"chart-{key_prefix}-growth")
 
     with c[1]:
-        st.markdown("##### :material/scatter_plot: Risk/Return")
         with st.container(border=True):
             chart = render_risk_chart(
                 chart_metrics,

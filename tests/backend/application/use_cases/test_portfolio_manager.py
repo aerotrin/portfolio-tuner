@@ -88,7 +88,7 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     )
 
     manager = PortfolioManager(market_man=fake_market, account_man=fake_account)
-    asyncio.run(manager.build_portfolio_from_account("ACC-1", account_name="Main"))
+    asyncio.run(manager._build_portfolio_from_account("ACC-1", account_name="Main"))
 
     assert fake_account.calls == [("ACC-1", "Main")]
     assert fake_market.build_securities_batch_calls == [
@@ -117,7 +117,7 @@ def test_build_portfolio_from_account_forwards_date_filter(monkeypatch):
     start = date(2024, 1, 1)
     end = date(2024, 12, 31)
     asyncio.run(
-        manager.build_portfolio_from_account("ACC-1", start_date=start, end_date=end)
+        manager._build_portfolio_from_account("ACC-1", start_date=start, end_date=end)
     )
 
     assert fake_market.build_securities_batch_calls == [
@@ -179,7 +179,7 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
     async def fake_build(*_args, **_kwargs):
         return stub_portfolio
 
-    monkeypatch.setattr(manager, "build_portfolio_from_account", fake_build)
+    monkeypatch.setattr(manager, "_build_portfolio_from_account", fake_build)
 
     snap = asyncio.run(manager.get_portfolio("ACC-1"))
     assert snap.summary.id == "ACC-1"
@@ -233,7 +233,7 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
     manager = PortfolioManager(
         market_man=FakeMarketDataManager(), account_man=FakeAccountManager([])
     )
-    monkeypatch.setattr(manager, "build_portfolio_from_account", fake_build)
+    monkeypatch.setattr(manager, "_build_portfolio_from_account", fake_build)
 
     start = date(2024, 1, 1)
     end = date(2024, 12, 31)
@@ -246,46 +246,3 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
     assert snap.securities["AAPL"].quote.symbol == "AAPL"
 
 
-def test_run_simulated_portfolio_delegates_to_simulator(monkeypatch):
-    fake_market = FakeMarketDataManager()
-    manager = PortfolioManager(
-        market_man=fake_market, account_man=FakeAccountManager([])
-    )
-
-    captured = {}
-
-    class FakePortfolioSimulator:
-        def __init__(self, securities, rates, n_p):
-            captured["securities"] = securities
-            captured["rates"] = rates
-            captured["n_p"] = n_p
-            self.ran = False
-
-        def run_simulator(self):
-            self.ran = True
-            captured["ran"] = True
-
-        def find_optimal_portfolio(self):
-            assert self.ran is True
-            return {
-                "id": "PORTF_42",
-                "metrics": {"sharpe": 1.8},
-                "weights": {"AAPL": 0.6, "MSFT": 0.4},
-            }
-
-    monkeypatch.setattr(
-        "src.backend.application.use_cases.portfolio.PortfolioSimulator",
-        FakePortfolioSimulator,
-    )
-
-    result = asyncio.run(
-        manager.run_simulated_portfolio(symbols=["AAPL", "MSFT"], n_p=123)
-    )
-
-    assert fake_market.build_securities_batch_calls == [
-        {"symbols": ["AAPL", "MSFT"], "start_date": None, "end_date": None}
-    ]
-    assert captured["n_p"] == 123
-    assert captured["ran"] is True
-    assert result["id"] == "PORTF_42"
-    assert set(result.keys()) == {"id", "metrics", "weights"}
