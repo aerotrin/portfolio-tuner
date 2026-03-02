@@ -33,6 +33,7 @@ from frontend.widgets.kpis import (
     render_market_snapshot,
     render_status_strip,
 )
+from frontend.widgets.optimizer import render_optimizer
 from frontend.widgets.performance import render_performance_view
 from frontend.widgets.positions import render_portfolio_positions
 from frontend.widgets.reports import (
@@ -230,7 +231,9 @@ if not cash_flows.empty:
 
 
 # --- Render tabs --------------------------------------------------------------------
-tabs = st.tabs(["Positions", "Allocation", "Performance", "Correlation", "Records"])
+tabs = st.tabs(
+    ["Positions", "Allocation", "Performance", "Optimization", "Correlation", "Records"]
+)
 
 with tabs[0]:
     render_portfolio_positions(holdings_data)
@@ -252,9 +255,17 @@ with tabs[2]:
     )
 
 with tabs[3]:
-    render_correlation_matrix(portfolio_correlation_matrix)
+    render_optimizer(
+        portfolio_symbols=portfolio_symbols,
+        holdings_data=holdings_data,
+        portfolio_metrics=portfolio_metrics,
+    )
 
 with tabs[4]:
+    render_correlation_matrix(portfolio_correlation_matrix)
+
+
+with tabs[5]:
     start_date, end_date = render_records_header(transactions)
     if start_date:
         render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)
