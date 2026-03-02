@@ -104,7 +104,7 @@ def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None
     result = simulator.find_optimal_portfolio()
 
     assert result["id"] == "PORTF_1"
-    assert result["metrics"]["sharpe"] == pytest.approx(1.6)
+    assert result["sharpe"] == pytest.approx(1.6)
     assert result["weights"] == {
         "AAA": pytest.approx(0.1),
         "BBB": pytest.approx(0.6),

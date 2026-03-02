@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any, List
 
 import numpy as np
@@ -18,12 +19,16 @@ class SimulatePortfolioRequest(BaseModel):
     seed: int | None = None
 
 
-class OptimalPortfolioDTO(BaseModel):
-    id: str
-    metrics: dict[str, Any]
-    weights: dict[str, float]
+class SimulationConfig(BaseModel):
+    symbols: List[str]
     n_p: int
     seed: int | None = None
+    run_at: datetime
+
+
+class SimulatedPortfoliosDTO(BaseModel):
+    config: SimulationConfig
+    portfolios: list[dict[str, Any]]
 
 
 class SimPortfolios:
@@ -45,44 +50,48 @@ class SimPortfolios:
         self.timeseries: List[pd.DataFrame] = []
         self.performance: pd.DataFrame = pd.DataFrame()
         self.weight_matrix: np.ndarray = np.array([])
+        self.run_at: datetime | None = None
 
     def run(self):
         """Generate random portfolios and compute indicators & metrics."""
+        self.run_at = datetime.now(timezone.utc)
         rng = np.random.default_rng(self.seed)
         weight_matrix = rng.dirichlet(np.ones(len(self.securities)), size=self.n_p)
         self.weight_matrix = weight_matrix
         self.timeseries = compute_portfolio_timeseries_indicators(
             self.securities, weight_matrix
         )
-        self.performance = compute_performance_metrics_batch(self.timeseries, self.rf_rate)
+        self.performance = compute_performance_metrics_batch(
+            self.timeseries, self.rf_rate
+        )
 
-    def find_optimal_portfolio(self) -> dict:
-        """Find the portfolio with the highest Sharpe ratio and return its metrics and weights."""
+    def _build_record(
+        self, i: int, port_id: str, row: pd.Series, symbols: list[str]
+    ) -> dict[str, Any]:
+        record: dict[str, Any] = {"id": port_id}
+        record.update(row.to_dict())
+        record["weights"] = dict(zip(symbols, self.weight_matrix[i].tolist()))
+        return record
+
+    def find_optimal_portfolio(self) -> dict[str, Any]:
+        """Find the portfolio with the highest Sharpe ratio and return a flat record."""
         if self.performance.empty:
             raise ValueError("No metrics computed. Run run_simulator() first.")
 
-        metrics_df = self.performance.copy()
+        best_id = str(self.performance["sharpe"].idxmax())
+        best_idx = 0 if best_id == "PORTF" else int(best_id.split("_")[1])
+        symbols = [s.quote.symbol for s in self.securities]
+        return self._build_record(
+            best_idx, best_id, self.performance.loc[best_id], symbols
+        )
 
-        # Find the portfolio with the highest Sharpe ratio
-        best_portfolio = metrics_df["sharpe"].idxmax()  # TODO: make this an arg
-        best_metrics = metrics_df.loc[best_portfolio]
+    def get_all_portfolios(self) -> list[dict[str, Any]]:
+        """Return all simulated portfolios, each with flat metrics and a weights sub-dict."""
+        if self.performance.empty:
+            raise ValueError("No metrics computed. Run run() first.")
 
-        # Map symbol to row index in weight matrix
-        if best_portfolio == "PORTF":
-            best_idx = 0
-        else:
-            best_idx = int(best_portfolio.split("_")[1])
-
-        best_weights = self.weight_matrix[best_idx]
-
-        result = {
-            "id": best_portfolio,
-            "metrics": best_metrics.to_dict(),
-            "weights": dict(
-                zip(
-                    [s.quote.symbol for s in self.securities],
-                    [float(w) for w in best_weights],
-                )
-            ),
-        }
-        return result
+        symbols = [s.quote.symbol for s in self.securities]
+        return [
+            self._build_record(i, str(port_id), row, symbols)
+            for i, (port_id, row) in enumerate(self.performance.iterrows())
+        ]
