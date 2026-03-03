@@ -55,11 +55,8 @@ class RefreshJob:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
-    symbols_remaining: int = field(init=False)
-
-    def __post_init__(self):
-        """Initialize symbols_remaining to the total number of symbols."""
-        object.__setattr__(self, "symbols_remaining", len(self.symbols))
+    work_total: int = 0
+    work_remaining: int = 0
 
 
 _JOBS: dict[str, RefreshJob] = {}
@@ -77,9 +74,9 @@ class RefreshJobResponse(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     error: str | None
-    symbols_total: int
-    symbols_remaining: int
-    symbols_completed: int
+    work_total: int
+    work_remaining: int
+    work_completed: int
     progress_percent: int
     progress_ratio: float
 
@@ -215,11 +212,16 @@ def refresh_rates(
         _raise_http_error(e)
 
 
+# ---------------------------------------------------------------------------
+# Async / background securities refresh endpoint with job ID
+# ---------------------------------------------------------------------------
+
+
+# Orchestrator function for background refresh job
 async def _run_refresh_job(
     job_id: str,
     app,
     start_date: date | None = None,
-    end_date: date | None = None,
 ) -> None:
     """Runs in a background task after the HTTP response is sent."""
     job = _JOBS.get(job_id)
@@ -247,21 +249,49 @@ async def _run_refresh_job(
             db=repo,
         )
 
-        def on_progress(symbol: str):
-            if job.symbols_remaining > 0:
-                job.symbols_remaining -= 1
+        # Smart determination of pending work
+        bars_pending, sync_states = market_man.pending_bars(
+            job.symbols, start_date, job.force
+        )
+        profiles_pending = market_man.pending_profiles(job.symbols, job.force)
+        quotes_pending = market_man.pending_quotes(job.symbols)
+        job.work_total = len(bars_pending) + len(profiles_pending) + len(quotes_pending)
+        job.work_remaining = job.work_total
 
-        await market_man.refresh_securities_async(
-            job.symbols,
-            start_date=start_date,
-            end_date=end_date,
-            force=job.force,
+        def on_progress(symbol: str):
+            if job.work_remaining > 0:
+                job.work_remaining -= 1
+
+        # Start refresh sequence
+        market_man.refresh_global_rates()
+        logger.debug(f"Refreshing {len(quotes_pending)} quotes...")
+        await market_man.refresh_quotes_async(
+            quotes_pending,
+            batch_size=100,
             max_concurrency=config.max_concurrency,
             on_progress=on_progress,
         )
 
+        if len(bars_pending) > 0:
+            logger.debug(f"Refreshing {len(bars_pending)} bars...")
+            await market_man.refresh_bars_async(
+                bars_pending,
+                sync_states=sync_states,
+                trim_before_date=start_date,
+                max_concurrency=config.max_concurrency,
+                on_progress=on_progress,
+            )
+
+        if len(profiles_pending) > 0:
+            logger.debug(f"Refreshing {len(profiles_pending)} profiles...")
+            await market_man.refresh_profiles_async(
+                profiles_pending,
+                max_concurrency=config.max_concurrency,
+                on_progress=on_progress,
+            )
+
         job.status = "success"
-        logger.info("Securities refresh job %s completed successfully", job_id)
+        logger.debug("Securities refresh job %s completed successfully", job_id)
 
     except Exception as e:
         logger.exception("Error in securities refresh job %s", job_id)
@@ -273,9 +303,6 @@ async def _run_refresh_job(
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# Async / background securities refresh endpoint with job ID
-# ---------------------------------------------------------------------------
 @router.post(
     "/admin/refresh-securities",
     response_model=RefreshSecuritiesResponse,
@@ -303,7 +330,7 @@ async def refresh_securities(
     # --- Cooldown to prevent hammering ---
     if _LAST_REFRESH and now - _LAST_REFRESH < _COOLDOWN:
         wait = _COOLDOWN - (now - _LAST_REFRESH)
-        logger.info(
+        logger.debug(
             "Skipping securities refresh; in cooldown (%.1fs remaining)",
             wait.total_seconds(),
         )
@@ -331,10 +358,9 @@ async def refresh_securities(
         job_id,
         app,
         start_date=start_date,
-        end_date=end_date,
     )
 
-    logger.info(
+    logger.debug(
         "Scheduled securities refresh job_id=%s for %d symbols from %s to %s (force=%s)",
         job_id,
         len(symbols),
@@ -364,13 +390,11 @@ def get_refresh_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
 
-    symbols_total = len(job.symbols)
-    symbols_completed = symbols_total - job.symbols_remaining
-    progress_percent = (
-        (symbols_completed / symbols_total * 100) if symbols_total > 0 else 0
-    )
+    work_total = job.work_total
+    work_completed = work_total - job.work_remaining
+    progress_percent = (work_completed / work_total * 100) if work_total > 0 else 0
     progress_percent = max(0, min(progress_percent, 100))
-    progress_ratio = symbols_completed / symbols_total if symbols_total else 0.0
+    progress_ratio = work_completed / work_total if work_total > 0 else 0.0
 
     return RefreshJobResponse(
         job_id=job.id,
@@ -381,9 +405,9 @@ def get_refresh_job(job_id: str):
         started_at=job.started_at,
         finished_at=job.finished_at,
         error=job.error,
-        symbols_total=symbols_total,
-        symbols_remaining=job.symbols_remaining,
-        symbols_completed=symbols_completed,
+        work_total=work_total,
+        work_remaining=job.work_remaining,
+        work_completed=work_completed,
         progress_percent=int(progress_percent),
         progress_ratio=progress_ratio,
     )

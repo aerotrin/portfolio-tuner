@@ -19,6 +19,7 @@ class Config(BaseSettings):
 
     backend_url: str = "http://127.0.0.1:8000"
 
+    log_level: str = "WARNING"
     debug: bool = False
     connect_timeout: int = 5  # seconds
     read_timeout: int = 30  # seconds

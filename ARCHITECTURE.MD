@@ -44,6 +44,7 @@ Portfolio Tuner is a two-service system:
 │  Multi-page dashboard — authentication, rendering, jobs      │
 └────────────────────────┬─────────────────────────────────────┘
                          │ REST (JSON, JWT Bearer)
+                         │ (no external cache layer)
 ┌────────────────────────▼─────────────────────────────────────┐
 │  FastAPI Backend  (port 8000)                                │
 │  Domain logic, analytics, market data, account management    │
@@ -386,6 +387,14 @@ User isolation is enforced at two layers:
 
 Transactions inherit user isolation transitively through their FK relationship to accounts.
 
+### Database Session and RLS Enforcement
+
+The backend maintains a single SQLAlchemy connection pool connected as the Postgres superuser. Two session factories are used depending on the calling endpoint (`infra/api/v1/dependencies/db.py`):
+
+- **`get_user_db`** (user-scoped endpoints — accounts, portfolio, securities reads) — immediately executes `SET LOCAL ROLE authenticated` and `SELECT set_config('request.jwt.claim.sub', <user_id>, true)` within the transaction. This switches the effective Postgres role and populates the `auth.uid()` claim so that Supabase RLS policies apply correctly for the duration of the request. Market data tables (`quotes`, `bars`, `profiles`, `global_rates`) are shared across all users and have no RLS policies; only `accounts` and `transactions` are affected.
+
+- **`get_admin_db`** (admin and background job endpoints) — uses the superuser connection directly. RLS is bypassed entirely. Isolation for these endpoints is enforced at the application layer by the `verify_token` dependency — not at the database layer.
+
 ---
 
 ## 10. Market Data Integration
@@ -403,7 +412,92 @@ When `ENABLE_FMP_AS_PRIMARY=true`, yfinance is registered as the backup. If the 
 
 Market data is fetched asynchronously in batches during refresh operations and stored in the database. At query time, data is always read from the database — never fetched live on the critical request path (except for explicit passthrough endpoints). This keeps API response times predictable and decouples valuation from external API availability.
 
-The `BarsSyncState` tracking table gives the system a smart sync capability: the system remembers the date of the last successfully stored bar for each symbol and only requests newer data on subsequent refreshes. This keeps refresh times low even with large symbol sets.
+Refresh operations follow a two-phase pattern:
+
+1. **Pending determination** — `pending_quotes()`, `pending_bars()`, and `pending_profiles()` inspect the current database state and return only the work items that actually need fetching (e.g., symbols with no cached profile, or bar ranges not yet stored). `pending_bars()` leverages `BarsSyncState` to return per-symbol `(symbol, fetch_start, fetch_end)` tuples, requesting only the missing date range. The `force=True` flag bypasses this check and re-fetches the full requested range.
+2. **Async execution** — `refresh_quotes_async()`, `refresh_bars_async()`, and `refresh_profiles_async()` accept the pending work lists produced above and execute the fetches concurrently, upserting results into the database as each symbol completes.
+
+Each fetch uses a two-tier fallback: the primary provider is attempted first; if it returns no data, the backup provider is tried. Both tiers returning nothing results in a silent skip for that symbol rather than an exception, so a single unavailable symbol does not abort the entire refresh job.
+
+### Data Flow Patterns
+
+Market data endpoints fall into one of three patterns depending on whether data is served live from the external provider, written to the database as part of a background refresh, or read directly from the database.
+
+**1. Direct Fetchers** — Three endpoints bypass the database entirely and contact the external provider on every call, returning data synchronously to the frontend. These are the passthrough endpoints used for one-off live lookups.
+
+| Endpoint | Data returned |
+|---|---|
+| `GET /securities/{symbol}` | Live quote |
+| `GET /securities/{symbol}/profile` | Company profile |
+| `GET /securities/{symbol}/bars` | OHLCV bar history |
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant API as FastAPI
+    participant MDM as MarketDataManager
+    participant MDS as MarketDataProvider
+
+    FE->>API: GET /securities/{symbol} | /profile | /bars
+    API->>MDM: fetch_single_{quote|profile|bars}(symbol)
+    MDM->>MDS: fetch_*(symbol) [primary → backup on failure]
+    MDS-->>MDM: live data
+    MDM-->>API: data
+    API-->>FE: 200 data
+```
+
+**2. Refresh Paths** — Two endpoints fetch from the external provider and write results to the database. The response to the frontend is only an acknowledgment (`202 Accepted`, plus a `job_id` for the async securities refresh); no market data flows back to the caller. The securities refresh runs as a background task after the HTTP response is sent, executing pending quote, bar, and profile fetches concurrently.
+
+| Endpoint | Behaviour |
+|---|---|
+| `POST /admin/refresh-rates` | Synchronous — fetches global rates and upserts to DB; returns 202 |
+| `POST /admin/refresh-securities` | Async — returns `job_id` immediately; background job writes to DB |
+| `GET /jobs/{job_id}` | Polls in-memory job registry; no DB or market data contact |
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant API as FastAPI
+    participant MDS as MarketDataProvider
+    participant DB as PostgreSQL
+
+    FE->>API: POST /admin/refresh-securities
+    API-->>FE: 202 {job_id}
+    Note over API,DB: Background task (_run_refresh_job)
+    API->>DB: pending_bars() + pending_profiles() checks
+    DB-->>API: pending symbols per data type
+    par concurrent — quotes / bars / profiles
+        API->>MDS: fetch_*(symbols) [primary → backup]
+        MDS-->>API: data
+        API->>DB: upsert_*_batch()
+    end
+    Note over API: job.status = "success" / "error"
+```
+
+**3. DB-Only Reads** — All remaining market data endpoints read exclusively from the database; no external API is contacted. Simple lookups (`GET /rates`, `GET /securities`, `POST /securities/availability`, `POST /securities/batch-{quotes,profiles,bars}`) issue a single SQL query and return results directly. The compute endpoints (`POST /securities/batch-{metrics,indicators,analytics}`) run four database reads concurrently via `asyncio.gather` and build metrics and indicators in-memory.
+
+> **Note:** `GET /rates` falls back to the external provider if the `global_rates` table is empty, but does not write to the database.
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant API as FastAPI
+    participant MDM as MarketDataManager
+    participant DB as PostgreSQL
+
+    FE->>API: POST /securities/batch-analytics
+    API->>MDM: compute_security_batch_analytics(symbols, start, end)
+    par asyncio.gather
+        MDM->>DB: SELECT quotes WHERE symbol IN (…)
+        MDM->>DB: SELECT bars WHERE symbol IN (…)
+        MDM->>DB: SELECT profiles WHERE symbol IN (…)
+        MDM->>DB: SELECT global_rates
+        DB-->>MDM: data
+    end
+    Note over MDM: build Security aggregates<br/>compute metrics / indicators in-memory
+    MDM-->>API: dict[symbol → analytics]
+    API-->>FE: 200 data
+```
 
 ### Rate Limiting
 
@@ -415,7 +509,7 @@ The `RateLimiter` adapter uses a thread-safe sliding-window algorithm: it tracks
 
 Analytics are computed in the domain layer (`domain/analytics/`) from raw OHLCV bar data. All analytics are pure functions of the input data — no side effects, no database access.
 
-Before computing indicators and metrics, the current live quote is appended to the historical bar series as the latest data point. This ensures all analytics reflect the current trading day's price even before the official end-of-day bar has been persisted by the refresh job.
+Before computing indicators and metrics, the current live quote is appended to the historical bar series as the latest data point. This ensures all analytics reflect the current trading day's price even before the official end-of-day bar has been persisted by the refresh job. If a bar for today's date already exists in the database, the live quote replaces it in the in-memory series rather than appending a duplicate point.
 
 ### Per-Security Analytics
 
@@ -442,7 +536,7 @@ The `Portfolio.build()` method orchestrates the analytics pipeline in the correc
 3. `_build_metrics()` — compute portfolio-level performance metrics from the timeseries
 4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings
 
-### MWRR (Modified Weighted Rate of Return)
+### MWRR (Money Weighted Rate of Return)
 
 The portfolio-level MWRR is computed as an IRR (Internal Rate of Return) on the account's external cash flows. The implementation uses Newton's method with up to 100 iterations and a convergence tolerance of 1e-10. External cash flows are the deposits and withdrawals to/from the account; the terminal cash outflow is the current total portfolio value (as if the portfolio were liquidated today). The IRR of this cash flow series is the annualised rate of return that accounts for the timing and size of all capital movements — a more honest measure of performance than simple return on current cost.
 
@@ -457,13 +551,13 @@ The backend uses FastAPI's `BackgroundTasks` to schedule refresh work after the 
 1. The frontend calls `POST /admin/refresh-securities` with a list of symbols and optional date range.
 2. A `RefreshJob` object is created, stored in an in-memory registry (`_JOBS` dict), and assigned a UUID.
 3. `_run_refresh_job` is scheduled as a background task. The HTTP response returns immediately with the job ID.
-4. The background task fetches and upserts market data for all symbols, updating `job.symbols_remaining` as each symbol completes.
-5. The frontend polls `GET /jobs/{job_id}` (driven by `streamlit_autorefresh`) to track progress and display a progress bar.
+4. The background task first calls `pending_quotes()`, `pending_bars()`, and `pending_profiles()` to determine exactly which fetch operations are needed across all data types. The sum of these becomes `job.work_total`. It then executes the refresh in order: global rates → quotes → bars → profiles, decrementing `job.work_remaining` via an `on_progress()` callback after each symbol is processed.
+5. The frontend polls `GET /jobs/{job_id}` (driven by `streamlit_autorefresh`) to track progress and display a progress bar (`work_completed = work_total - work_remaining`).
 6. When the job finishes (success or error), the frontend clears job state, invalidates its data cache, and reruns.
 
 A cooldown timer (`_LAST_REFRESH`, 3 seconds) prevents the endpoint from being hammered with duplicate requests.
 
-This in-memory job store is simple and sufficient for a single-instance deployment. It does not survive backend restarts and is not visible across multiple backend replicas. A future improvement would replace it with a persistent job queue (Redis + workers).
+This in-memory job store is simple and sufficient for a single-instance deployment. It does not survive backend restarts and is not visible across multiple backend replicas. Additionally, background tasks run in the same process as request handlers — a large refresh competes for CPU and memory with concurrent API requests.
 
 ---
 
@@ -553,10 +647,9 @@ All configuration is environment-variable-driven, loaded via Pydantic `BaseSetti
 ---
 
 ## 17. Future Directions
-- **APScheduler** — replace BackgroundTasks + the _JOBS dict with AsyncIOScheduler for recurring scheduled refreshes and restart-safe job persistence via Postgres
-- **TTLCache** — Wrap the repo read paths for quotes and bars with cachetools.TTLCache so repeated reads within a time window are served from memory rather than hitting Postgres, to minimize Supabase egress
+- **Persistent job system** — replace the in-process BackgroundTasks + in-memory job registry with a durable scheduler that supports recurring refreshes, survives restarts, and is visible across replicas
+- **Repo read cache** — add a short-lived in-memory cache on the read paths for quotes, bars, and profiles so repeated reads within a request cycle or refresh window are served from memory, reducing DB round-trips and egress
 - **OAuth providers** — extend Supabase Auth with Google, GitHub, or other OAuth providers for easier onboarding
 - **Option pricing** — integrate a live options data feed to replace the current intrinsic-value approximation
 - **Additional broker importers** — add adapters for other broker export formats beyond the current Excel importer
-- **Expanded simulation tools** — efficient frontier visualisation, Black-Litterman model
-
+- **Portfolio narrative + insights** — use an LLM to generate plain-language summaries of portfolio performance, explain computed metrics (returns, drawdown, Sharpe) in the context of current holdings, and provide observations on broad market

@@ -614,4 +614,4 @@ def render_optimizer(
                 risk_free_rate=risk_free_rate,
                 footer_text=chart_footer,
             )
-            st.altair_chart(frontier_chart, use_container_width=True)
+            st.altair_chart(frontier_chart, width="stretch")

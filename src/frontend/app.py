@@ -22,7 +22,7 @@ from frontend.widgets.transaction_form import transaction_form
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
-setup_logging()
+setup_logging(config.log_level)
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
@@ -92,7 +92,7 @@ def _show_login() -> None:
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             submitted = st.form_submit_button(
-                "Sign In", type="primary", use_container_width=True
+                "Sign In", type="primary", width="stretch"
             )
         if submitted:
             try:
@@ -447,7 +447,7 @@ with st.sidebar:
         icon=":material/edit:",
         type="primary",
         key="record_transaction_button",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state["show_transaction_form_dialog"] = True
         st.rerun()
@@ -474,6 +474,7 @@ with st.sidebar:
         icon=":material/refresh:",
         type="primary",
         key="full_data_refresh_button",
+        width="stretch",
     ):
         st.session_state["_last_missing_attempted"] = set(
             st.session_state["page_symbols"]
@@ -498,7 +499,7 @@ with st.sidebar:
         icon=":material/logout:",
         type="secondary",
         key="logout_button",
-        use_container_width=True,
+        width="stretch",
     ):
         sb = _get_supabase_client()
         try:

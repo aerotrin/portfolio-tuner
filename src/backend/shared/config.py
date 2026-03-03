@@ -28,6 +28,9 @@ class Config(BaseSettings):
     fmp_api_key: str = Field(default="")
     fmp_rate_limit: int = 100
 
+    # Logging
+    log_level: str = "WARNING"
+
     # Supabase auth (ES256 / P-256 asymmetric signing)
     supabase_jwt_public_key: str = Field(default="")
 

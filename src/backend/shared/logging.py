@@ -1,8 +1,9 @@
 import logging
 
 
-def setup_logging():
+def setup_logging(level: str = "WARNING") -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, level.upper(), logging.WARNING),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True,
     )
