@@ -133,7 +133,7 @@ def fetch_quote(
 ):
     """Get the latest quote (price, volume, etc.) for a security by symbol."""
     try:
-        quote = market_man.fetch_quote(symbol)
+        quote = market_man.fetch_single_quote(symbol)
 
         if not quote:
             raise HTTPException(
@@ -159,7 +159,7 @@ def fetch_profile(
 ):
     """Get the company profile (name, sector, description, etc.) for a security."""
     try:
-        profile = market_man.fetch_profile(symbol)
+        profile = market_man.fetch_single_profile(symbol)
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -196,7 +196,7 @@ def fetch_bars(
         )
 
     try:
-        return market_man.fetch_bars(symbol, start_date, end_date)
+        return market_man.fetch_single_bars(symbol, start_date, end_date)
     except Exception as e:
         _raise_http_error(e)
 
