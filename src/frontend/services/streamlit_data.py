@@ -255,7 +255,7 @@ def import_account_records(account_id: str, file_data: UploadedFile) -> None:
             except Exception:
                 pass
         st.toast(msg, icon="❌")
-        logger.exception(
+        logger.error(
             "Import from xlsx failed for account_id %s: %s",
             account_id,
             msg,
@@ -281,11 +281,11 @@ def create_account(payload: AccountCreateRequest) -> bool:
             except Exception:
                 pass
         st.toast(msg, icon="❌")
-        logger.exception("Create account failed: %s", msg)
+        logger.error("Create account failed: %s", msg)
         return False
     except Exception:
         st.toast("Create account failed.", icon="❌")
-        logger.exception("Create account failed")
+        logger.error("Create account failed")
         return False
 
 
@@ -308,11 +308,11 @@ def get_account_details(account_id: str) -> AccountEntity | None:
             except Exception:
                 pass
         st.toast(msg, icon="❌")
-        logger.exception("Get account details failed for %s: %s", account_id, msg)
+        logger.error("Get account details failed for %s: %s", account_id, msg)
         return None
     except Exception:
         st.toast("Get account details failed.", icon="❌")
-        logger.exception("Get account details failed for %s", account_id)
+        logger.error("Get account details failed for %s", account_id)
         return None
 
 
@@ -335,11 +335,11 @@ def delete_account(account_id: str) -> bool:
             except Exception:
                 pass
         st.toast(msg, icon="❌")
-        logger.exception("Delete account failed for %s: %s", account_id, msg)
+        logger.error("Delete account failed for %s: %s", account_id, msg)
         return False
     except Exception:
         st.toast("Delete account failed.", icon="❌")
-        logger.exception("Delete account failed for %s", account_id)
+        logger.error("Delete account failed for %s", account_id)
         return False
 
 
@@ -362,9 +362,9 @@ def patch_account(account_id: str, payload: AccountPatchRequest) -> bool:
             except Exception:
                 pass
         st.toast(msg, icon="❌")
-        logger.exception("Patch account failed for %s: %s", account_id, msg)
+        logger.error("Patch account failed for %s: %s", account_id, msg)
         return False
     except Exception:
         st.toast("Patch account failed.", icon="❌")
-        logger.exception("Patch account failed for %s", account_id)
+        logger.error("Patch account failed for %s", account_id)
         return False

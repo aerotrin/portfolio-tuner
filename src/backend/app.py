@@ -16,7 +16,7 @@ from backend.infra.api.v1.routers import securities as securities_routers
 from backend.shared.config import config
 from backend.shared.logging import setup_logging
 
-setup_logging()
+setup_logging(config.log_level)
 logger = logging.getLogger(__name__)
 
 
