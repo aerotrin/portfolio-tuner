@@ -31,7 +31,7 @@ class PgMarketDataRepository(MarketDataRepository):
 
     def read_securities_list(self) -> List[str]:
         rows = self.session.query(QuoteDB).all()
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [quote.symbol for quote in rows]
 
@@ -63,9 +63,18 @@ class PgMarketDataRepository(MarketDataRepository):
         if not quotes:
             return
         try:
-            symbols = [q.symbol for q in quotes]
-            self.session.query(QuoteDB).filter(QuoteDB.symbol.in_(symbols)).delete()
-            self.session.add_all([QuoteDB(**q.model_dump()) for q in quotes])
+            stmt = pg_insert(QuoteDB).values([q.model_dump() for q in quotes])
+            # Update all columns except the conflict key
+            update_cols = {
+                c.name: stmt.excluded[c.name]
+                for c in QuoteDB.__table__.columns
+                if c.name != "symbol"
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol"],
+                set_=update_cols,
+            )
+            self.session.execute(stmt)
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -79,7 +88,7 @@ class PgMarketDataRepository(MarketDataRepository):
 
     def read_quotes(self, symbols: list[str]) -> list[Quote]:
         rows = self.session.query(QuoteDB).filter(QuoteDB.symbol.in_(symbols)).all()
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [Quote.model_validate(row) for row in rows]
 
@@ -95,7 +104,7 @@ class PgMarketDataRepository(MarketDataRepository):
         if end_date:
             filters.append(BarDB.date <= end_date)
         rows = self.session.query(BarDB).filter(*filters).all()
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [Bar.model_validate(bar) for bar in rows]
 
@@ -155,6 +164,8 @@ class PgMarketDataRepository(MarketDataRepository):
             return
         try:
             stmt = pg_insert(BarsSyncStateDB).values([s.model_dump() for s in states])
+            # Explicit column list (not schema-driven) so that any future
+            # append-only columns (e.g. created_at) are never overwritten.
             stmt = stmt.on_conflict_do_update(
                 index_elements=["symbol"],
                 set_={
@@ -209,7 +220,7 @@ class PgMarketDataRepository(MarketDataRepository):
 
     def read_profiles(self, symbols: list[str]) -> list[Profile]:
         rows = self.session.query(ProfileDB).filter(ProfileDB.symbol.in_(symbols)).all()
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [Profile.model_validate(row) for row in rows]
 
@@ -228,9 +239,21 @@ class PgMarketDataRepository(MarketDataRepository):
         if not profiles:
             return
         try:
-            symbols = [p.symbol for p in profiles]
-            self.session.query(ProfileDB).filter(ProfileDB.symbol.in_(symbols)).delete()
-            self.session.add_all([ProfileDB(**p.model_dump()) for p in profiles])
+            rows = [p.model_dump() for p in profiles]
+
+            stmt = pg_insert(ProfileDB).values(rows)
+            # Update all columns except the conflict key
+            update_cols = {
+                c.name: stmt.excluded[c.name]
+                for c in ProfileDB.__table__.columns
+                if c.name != "symbol"
+            }
+
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol"],
+                set_=update_cols,
+            )
+            self.session.execute(stmt)
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -277,7 +300,7 @@ class PgAccountDataRepository(AccountDataRepository):
 
     def list_accounts(self) -> List[AccountEntity]:
         rows = self.session.query(AccountDB).all()
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [AccountEntity.model_validate(row) for row in rows]
 
@@ -364,7 +387,7 @@ class PgAccountDataRepository(AccountDataRepository):
             .filter(TransactionDB.account_number == account_number)
             .all()
         )
-        if rows is None or len(rows) == 0:
+        if not rows:
             return []
         return [Transaction.model_validate(row) for row in rows]
 
