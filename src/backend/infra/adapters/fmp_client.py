@@ -28,10 +28,8 @@ class FMPConfig:
     base_url: str = "https://financialmodelingprep.com/stable"
     timeout_sec: float = 10.0
     default_days_back: int = 365
-
-    # Rate limiting — see Config (shared/config.py) for env-var overrides
     rate_limiter: RateLimiterConfig = field(
-        default_factory=lambda: RateLimiterConfig(max_per_minute=280)
+        default_factory=lambda: RateLimiterConfig(max_per_minute=100)
     )
 
 

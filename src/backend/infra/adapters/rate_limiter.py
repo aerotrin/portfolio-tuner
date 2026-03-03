@@ -89,7 +89,9 @@ class RateLimiter:
         with self._lock:
             base_backoff = max(retry_after, 2)
             total_backoff = base_backoff * min(2**attempt, 8)
-            self._backoff_until = max(self._backoff_until, time.monotonic() + total_backoff)
+            self._backoff_until = max(
+                self._backoff_until, time.monotonic() + total_backoff
+            )
 
             logger.warning(
                 "RateLimiter: upstream 429, backing off %ds (attempt %d)",
