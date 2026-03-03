@@ -455,19 +455,19 @@ class MarketDataManager:
         quotes = {q.symbol: q for q in quotes_list}
         profiles = {p.symbol: p for p in profiles_list}
 
-        def build_one(symbol: str) -> Security:
+        async def build_one(symbol: str) -> tuple[str, Security]:
             quote = quotes.get(symbol)
+            bars = bars_map.get(symbol, [])
             profile = profiles.get(symbol)
-            if quote is None:  # profile is optional, but quote is not
+            if quote is None or not bars:
                 raise ValueError(f"Security data missing for symbol: {symbol}")
-            return Security(
-                quote=quote,
-                bars=bars_map.get(symbol, []),
-                profile=profile,
-                rates=rates,
+            sec = await asyncio.to_thread(
+                Security, quote=quote, bars=bars, profile=profile, rates=rates
             )
+            return symbol, sec
 
-        return {sym: build_one(sym) for sym in symbols}
+        pairs = await asyncio.gather(*[build_one(sym) for sym in symbols])
+        return dict(pairs)
 
     def compute_security_metrics(
         self,
