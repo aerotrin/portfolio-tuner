@@ -186,3 +186,5 @@ uv.lock
 src/data
 *.bat
 engineering/
+symbols.yml
+symbols_*.yml

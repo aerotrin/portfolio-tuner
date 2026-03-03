@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.config_loader import SymbolGroup
+from frontend.shared.symbols_loader import SymbolGroup
 from frontend.shared.settings import RETURN_HORIZONS
 from frontend.shared.styles import PERFORMANCE_TABLE_CONFIG, performance_table_styler
 from frontend.widgets.growth_chart import render_growth_chart

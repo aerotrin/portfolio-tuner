@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.config_loader import SymbolGroup
+from frontend.shared.symbols_loader import SymbolGroup
 from frontend.shared.settings import MOVER_SHOW_COUNT
 from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
 from frontend.widgets.treemaps import render_treemap_intraday

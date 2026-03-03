@@ -1,14 +1,10 @@
 # Symbol Configuration for Portfolio Tuner
 
 # HOW TO USE THIS FILE
-# - Add or remove symbols in each group's symbols: list as needed.
-# - Only use ticker symbols supported by your data provider (Financial Modeling Prep).
-#   See: https://site.financialmodelingprep.com/developer/docs/stable/search-symbol to look up symbols.
-# - Include only symbols you have access to with your subscription.
-# - To specify an exchange, add its code to the symbol (e.g., .TO for Toronto; only .TO is supported).
-# - To comment out (disable) a symbol, start the line with #.
-# - Keep in mind: more symbols = slower refreshes.
-# - Check your subscription's API limits before adding many symbols.
+# - Add or remove symbols in each group as needed.
+# - Only use ticker symbols supported by your data provider (e.g. Financial Modeling Prep).
+# - To specify a non-US exchange, add its suffix code to the symbol. Currently supported: .TO (Toronto).
+# - Keep in mind: more symbols = slower refreshes. Check your subscription's API limits before bulk adding symbols.
 
 # Required ------------------------------
 benchmarks:
@@ -17,6 +13,8 @@ benchmarks:
     - ^GSPC
     - ^IXIC
     - ^DJI
+    - ^GSPTSE
+
 
 snapshot:
   label: Market Snapshot
@@ -24,10 +22,9 @@ snapshot:
     - ^GSPC
     - ^IXIC
     - ^DJI
+    - ^GSPTSE
     - ^VIX
-    - GCUSD
-    - SIUSD
-    - BZUSD
+
 
 # Select market ETFs labelled by theme. Do not add stocks here.
 base_market_etfs:
@@ -71,6 +68,7 @@ base_market_etfs:
       - XLY
       - XLC
 
+
 # Select market stocks labelled by theme. Do not add ETFs here.
 base_market_stocks:
   - label: Magnificent 7
@@ -82,3 +80,36 @@ base_market_stocks:
       - AMZN
       - TSLA
       - NVDA
+
+  - label: Dow 30
+    symbols:
+      - AAPL
+      - AMGN
+      - AMZN
+      - AXP
+      - BA
+      - CAT
+      - CRM
+      - CSCO
+      - CVX
+      - DIS
+      - GS
+      - HD
+      - HON
+      - IBM
+      - JNJ
+      - JPM
+      - KO
+      - MCD
+      - MMM
+      - MRK
+      - MSFT
+      - NKE
+      - NVDA
+      - PG
+      - SHW
+      - TRV
+      - UNH
+      - V
+      - VZ
+      - WMT

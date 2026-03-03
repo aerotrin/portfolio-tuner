@@ -4,6 +4,11 @@ from typing import Any
 from pydantic import BaseModel, ValidationError, field_validator
 import yaml
 
+# Project root (portfolio-tuner)
+_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DEFAULT_SYMBOLS_FILE = _ROOT / "symbols.yml"
+
+
 # Symbols loader ----------------------------------------------------------------
 
 
@@ -42,12 +47,12 @@ class SymbolsConfig(BaseModel):
 
 def load_symbols_config(yaml_path: Path | None = None) -> SymbolsConfig:
     if yaml_path is None:
-        yaml_path = Path(__file__).parent / "symbols.yml"
+        yaml_path = _DEFAULT_SYMBOLS_FILE
 
     if not yaml_path.exists():
         raise FileNotFoundError(
             f"Symbols configuration file not found: {yaml_path}\n"
-            "Please ensure config/symbols.yml exists in the project root."
+            "Please ensure symbols.yml exists in the project root."
         )
 
     with yaml_path.open("r", encoding="utf-8") as f:

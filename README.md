@@ -73,6 +73,8 @@ git clone https://github.com/aerotrin/portfolio-tuner.git
 cd portfolio-tuner
 cp .env.example .env
 # Fill in the required environment variables (see below)
+cp symbols.example.yml symbols.yml
+# (Optional) Customise symbols.yml (see instructions in file)
 docker compose up --build
 ```
 
@@ -106,7 +108,7 @@ MAX_CONCURRENCY=5
 
 ### Symbols Configuration
 
-The market research pages and benchmark lists are driven by `src/frontend/shared/symbols.yml`. Edit this file to add or remove symbols, grouped by category. See the file for detailed instructions.
+The market research pages and benchmark lists are driven by `symbols.yml` in the project root. Edit this file to add or remove symbols, grouped by category. See `symbols.example.yml` for the full format and instructions.
 
 ---
 
