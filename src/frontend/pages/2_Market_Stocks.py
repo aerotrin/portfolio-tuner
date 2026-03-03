@@ -3,7 +3,7 @@ import logging
 import streamlit as st
 
 from frontend.services.streamlit_data import check_missing_symbols, load_security_data
-from frontend.shared.config_loader import load_symbols_config
+from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.dataframe import (
     add_sparkline,
     build_security_analytics,

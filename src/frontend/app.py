@@ -12,7 +12,7 @@ from frontend.services.streamlit_data import (
     load_accounts_list,
     load_rates,
 )
-from frontend.shared.config_loader import load_symbols_config
+from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
 from frontend.shared.jobs import start_refresh_job
 from frontend.shared.logging import setup_logging
@@ -424,10 +424,6 @@ with st.sidebar:
     if account_benchmark in benchmark_symbols:
         benchmark_idx = benchmark_symbols.index(account_benchmark)
     else:
-        st.toast(
-            f"Account benchmark {account_benchmark} not found. Using default benchmark.",
-            icon="⚠️",
-        )
         logger.warning(
             "Account benchmark %s not found in benchmarks list. Using default.",
             account_benchmark,
