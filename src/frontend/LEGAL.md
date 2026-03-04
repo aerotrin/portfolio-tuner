@@ -16,9 +16,11 @@ If you require financial, investment, tax, or legal advice, you should consult a
 
 ### Data Sources
 
-Market data is provided by third-party APIs including Financial Modeling Prep (FMP) and EODHD. Data may be delayed, incomplete, or inaccurate.
+Market data is sourced from independent third-party providers, including Financial Modeling Prep (FMP) and Yahoo Finance (via the `yfinance` open-source library). Data retrieved through these sources may be delayed, incomplete, inaccurate, or subject to change without notice. Portfolio Tuner makes no representations regarding the accuracy, completeness, or timeliness of any data obtained from these providers.
 
-Use of third-party data sources is subject to the **terms and licensing conditions of the respective providers**. Portfolio Tuner does not redistribute market data and requires users to supply their own API credentials. Users are solely responsible for ensuring that their use of any third-party data complies with applicable licensing terms, including any restrictions on commercial use.
+**Portfolio Tuner does not store, cache, or redistribute any market data.** All data is fetched directly by the user's own instance of the software at runtime and is not transmitted to, or hosted by, the Portfolio Tuner project or its contributors.
+
+Where third-party APIs require authentication, **users must supply their own API credentials**. Portfolio Tuner does not provide, broker, or share API keys on behalf of users. Users are solely responsible for obtaining valid credentials, complying with the terms of service of each respective data provider, and ensuring that their use of any third-party data — including any restrictions on commercial, redistribution, or automated use — is fully compliant with applicable licensing terms.
 
 ### Copyright
-© 2026 Jason Naipaul (Aerotrin Software). All rights reserved.
+© 2026 Jason Naipaul (Aerotrin). All rights reserved.

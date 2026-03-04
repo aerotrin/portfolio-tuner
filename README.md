@@ -37,6 +37,8 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Multi-account support** | Switch between accounts; each user's data is isolated at the database level via RLS |
 | **Options tracking** | Call and put positions tracked with intrinsic value, DTE, and breakeven |
 
+![Quick demo](docs/images/streamlit_wide_fast.gif)
+
 ---
 
 ## Running Locally
@@ -99,11 +101,6 @@ ENABLE_FMP_AS_PRIMARY=false
 FMP_API_KEY=
 FMP_RATE_LIMIT=100
 
-# Logging
-LOG_LEVEL=WARNING
-
-# Concurrency
-MAX_CONCURRENCY=5
 ```
 
 ### Symbols Configuration
