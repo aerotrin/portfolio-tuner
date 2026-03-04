@@ -253,24 +253,23 @@ async def _run_refresh_job(
         bars_pending, sync_states = market_man.pending_bars(
             job.symbols, start_date, job.force
         )
+        logger.debug("Bars pending: %d", len(bars_pending))
         profiles_pending = market_man.pending_profiles(job.symbols, job.force)
+        logger.debug("Profiles pending: %d", len(profiles_pending))
         quotes_pending = market_man.pending_quotes(job.symbols)
+        logger.debug("Quotes pending: %d", len(quotes_pending))
         job.work_total = len(bars_pending) + len(profiles_pending) + len(quotes_pending)
         job.work_remaining = job.work_total
 
         def on_progress(symbol: str):
             if job.work_remaining > 0:
                 job.work_remaining -= 1
+            logger.debug(
+                "Progress: %d/%d remaining", job.work_remaining, job.work_total
+            )
 
         # Start refresh sequence
         market_man.refresh_global_rates()
-        logger.debug(f"Refreshing {len(quotes_pending)} quotes...")
-        await market_man.refresh_quotes_async(
-            quotes_pending,
-            batch_size=100,
-            max_concurrency=config.max_concurrency,
-            on_progress=on_progress,
-        )
 
         if len(bars_pending) > 0:
             logger.debug(f"Refreshing {len(bars_pending)} bars...")
@@ -289,6 +288,13 @@ async def _run_refresh_job(
                 max_concurrency=config.max_concurrency,
                 on_progress=on_progress,
             )
+
+        logger.debug(f"Refreshing {len(quotes_pending)} quotes...")
+        await market_man.refresh_quotes_async(
+            quotes_pending,
+            max_concurrency=config.max_concurrency,
+            on_progress=on_progress,
+        )
 
         job.status = "success"
         logger.debug("Securities refresh job %s completed successfully", job_id)

@@ -208,7 +208,12 @@ class MarketDataManager:
                 try:
                     bars: list[Bar] | None = None
                     try:
-                        logger.debug("Fetching %s bars on primary...", symbol)
+                        logger.debug(
+                            "Fetching %s bars on primary from %s to %s",
+                            symbol,
+                            fetch_start,
+                            fetch_end,
+                        )
                         bars = await asyncio.to_thread(
                             self.ds_primary.fetch_bars, symbol, fetch_start, fetch_end
                         )
@@ -220,7 +225,12 @@ class MarketDataManager:
                         # Tier 2: Secondary
                         if self.ds_backup is not None:
                             try:
-                                logger.debug("Fetching %s bars on backup...", symbol)
+                                logger.debug(
+                                    "Fetching %s bars on backup from %s to %s",
+                                    symbol,
+                                    fetch_start,
+                                    fetch_end,
+                                )
                                 bars = await asyncio.to_thread(
                                     self.ds_backup.fetch_bars,
                                     symbol,
@@ -310,7 +320,7 @@ class MarketDataManager:
     async def refresh_quotes_async(
         self,
         symbols: list[str],
-        batch_size: int = 25,
+        batch_size: int = 5,  # FTRK-496: provides smoother UI progress bar updating
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -324,9 +334,8 @@ class MarketDataManager:
 
         async def fetch_batch(batch: list[str]) -> list[Quote]:
             async with sem:
+                quotes: list[Quote] = []
                 try:
-                    quotes: list[Quote] = []
-
                     # Tier 1: Primary batch
                     try:
                         logger.debug("Fetching %d quotes on primary...", len(batch))

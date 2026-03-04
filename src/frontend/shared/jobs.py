@@ -126,6 +126,7 @@ def check_job_status() -> None:
     st.session_state["job_status"] = status
     st.session_state["job_started_at"] = job.get("started_at")
     st.session_state["job_progress"] = job.get("progress_percent")
+    logger.debug("Job status: %s, progress: %s", status, job.get("progress_percent"))
 
     if status == "success":
         logger.info("Securities refresh job %s succeeded", job_id)
@@ -156,7 +157,7 @@ def render_refresh_job_ui(active_page: str) -> None:
     Rules:
     - If job_blocking AND job_page == active_page:
         * block rendering (st.stop)
-        * fast poll (1000ms)
+        * fast poll (500ms)
         * show progress bar in MAIN area (not sidebar)
     - Else:
         * show ONLY a sidebar-bottom caption (no progress)
@@ -190,7 +191,7 @@ def render_refresh_job_ui(active_page: str) -> None:
         )
 
         # fast refresh + stop page content rendering
-        st_autorefresh(interval=1000, key="job_autorefresh_blocking")
+        st_autorefresh(interval=500, key="job_autorefresh_blocking")
         st.stop()
 
     # ---- SIDEBAR bottom caption only ----
