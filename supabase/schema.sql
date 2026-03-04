@@ -297,6 +297,10 @@ ALTER TABLE ONLY "public"."transactions"
 
 
 
+CREATE INDEX "bars_date_idx" ON "public"."bars" USING "btree" ("date");
+
+
+
 CREATE INDEX "ix_bars_symbol_date" ON "public"."bars" USING "btree" ("symbol", "date");
 
 

@@ -107,7 +107,9 @@ class YFinanceClient(MarketDataProvider):
             start = from_date or date.today() - timedelta(
                 days=self.cfg.default_days_back
             )
-            end = to_date or date.today()
+            end = (
+                (to_date + timedelta(days=1)) if to_date else date.today()
+            )  # FTRK-498: yFinance end date is exclusive, so add 1 day
 
             df = yf.Ticker(symbol).history(start=start, end=end)
 
