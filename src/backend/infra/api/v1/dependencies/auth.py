@@ -1,6 +1,6 @@
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import jwt
 from jwt import PyJWK
 
 from backend.shared.config import config
@@ -20,6 +20,7 @@ def verify_token(
             public_key,
             algorithms=["ES256"],
             audience="authenticated",
+            leeway=10,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -45,6 +46,7 @@ def get_current_user_id(
             public_key,
             algorithms=["ES256"],
             audience="authenticated",
+            leeway=10,
         )
         return payload["sub"]
     except jwt.ExpiredSignatureError:
