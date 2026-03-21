@@ -16,7 +16,7 @@ class Config(BaseSettings):
     )
 
     project_name: str = "PortfolioTuner"
-    backend_url: str = "http://127.0.0.1:8000"
+    backend_url: str = "http://127.0.0.1:8001"
     api_prefix: str = "/api/v1"
 
     # DB

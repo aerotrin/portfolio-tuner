@@ -27,6 +27,7 @@ def render_account_summary(
             f"{portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
+            delta_description="of portfolio",
         )
         st.metric(
             "Securities",
@@ -34,6 +35,7 @@ def render_account_summary(
             f"{1 - portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",
+            delta_description="of portfolio",
         )
         st.metric(
             "Unrealized P/L",
@@ -109,17 +111,17 @@ def render_portfolio_kpis(df: pd.DataFrame) -> None:
     st.metric(
         "Market Value",
         f"${df['market_value'].sum():,.2f} CAD",
-        f"{df['intraday_change'].sum():+,.2f}",  # TODO: Add intraday chg percent
+        f"{df['intraday_change'].sum():+,.2f} CAD",
     )
     st.metric(
         "Best Intraday",
         f"{df['symbol'][df['intraday_change'].idxmax()]}",
-        f"{df['intraday_change'].max():+,.2f}",
+        f"{df['intraday_change'].max():+,.2f} CAD",
     )
     st.metric(
         "Worst Intraday",
         f"{df['symbol'][df['intraday_change'].idxmin()]}",
-        f"{df['intraday_change'].min():+,.2f}",
+        f"{df['intraday_change'].min():+,.2f} CAD",
     )
     st.metric(
         "Total FX Exposure",

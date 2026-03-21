@@ -324,8 +324,6 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
 # Sidebar
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    if config.debug:
-        st.warning("Developer mode on", icon="⚠️")
 
     st.subheader("Portfolio Options")
 
@@ -507,14 +505,17 @@ with st.sidebar:
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# Run Navigation (pages render after sidebar state is established)
-# -----------------------------------------------------------------------------
-pg.run()
-
-# -----------------------------------------------------------------------------
 # Debug
 # -----------------------------------------------------------------------------
+if config.debug:
+    st.warning("Developer mode", icon="⚠️")
+
 if st.session_state.get("show_session_state_toggle", False):
     st.divider()
     st.subheader("Debug Data")
     st.write(st.session_state)
+
+# -----------------------------------------------------------------------------
+# Run Navigation (pages render after sidebar state is established)
+# -----------------------------------------------------------------------------
+pg.run()

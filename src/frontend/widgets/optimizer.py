@@ -218,7 +218,7 @@ def _build_frontier_chart(
         )
         holdings_pt = (
             alt.Chart(holdings_df)
-            .mark_point(shape="square", size=150, color=base_color, filled=True)
+            .mark_point(shape="diamond", size=250, color=base_color, filled=True)
             .encode(
                 x="volatility:Q",
                 y="return1Y:Q",
@@ -256,7 +256,7 @@ def _build_frontier_chart(
     )
     optimal_pt = (
         alt.Chart(opt_df)
-        .mark_point(shape="diamond", size=150, color="cyan", filled=True)
+        .mark_point(shape="diamond", size=250, color="cyan", filled=True)
         .encode(
             x="volatility:Q",
             y="return1Y:Q",
@@ -294,7 +294,7 @@ def _build_frontier_chart(
         )
         bench_pt = (
             alt.Chart(bench_df)
-            .mark_circle(color=benchmark_color, size=150, filled=False)
+            .mark_circle(color=benchmark_color, size=250, filled=False)
             .encode(
                 x="volatility:Q",
                 y="return1Y:Q",
@@ -450,6 +450,9 @@ def render_optimizer(
     if result is None:
         return
 
+    st.markdown("---")
+    st.markdown("#### :material/analytics: Optimization Results")
+
     if result_account_id != account_id:
         st.info(
             "Switch back to the account this optimization was run for, or run the optimizer again."
@@ -458,7 +461,7 @@ def render_optimizer(
 
     # Metric selector — drives optimal portfolio selection and all downstream sections
     selected_metric: str = st.selectbox(
-        "Optimization metric",
+        "Select optimization metric",
         options=list(METRIC_CONFIG.keys()),
         format_func=lambda k: METRIC_CONFIG[k]["label"],
         index=0,
@@ -472,13 +475,14 @@ def render_optimizer(
         st.warning("No valid portfolios found for the selected metric.")
         return
 
-    st.markdown("---")
-    st.markdown("#### :material/analytics: Optimization Results")
-
     # D1 — KPI summary cards
     kpi_keys = _resolve_kpi_keys(selected_metric)
 
+    _metric_cfg = METRIC_CONFIG[selected_metric]
+    objective_text = f"Objective: {_metric_cfg['objective']} {_metric_cfg['label']}"
     st.markdown("##### Optimized Portfolio Summary")
+    st.markdown(f"*{objective_text}*")
+
     with st.container(border=True, horizontal=True):
         for key in kpi_keys:
             cfg = METRIC_CONFIG[key]
@@ -591,16 +595,15 @@ def render_optimizer(
             key="table-optimizer-kpi-comparison",
         )
 
-        # D4 — Config footer
-        optimizer_config = st.session_state.get("optimizer_config", {})
-        run_at = optimizer_config.get("run_at", "")
-        stored_seed = optimizer_config.get("seed")
-        seed_display = str(stored_seed) if stored_seed is not None else "random"
+    # D4 — Config footer
+    optimizer_config = st.session_state.get("optimizer_config", {})
+    run_at = optimizer_config.get("run_at", "")
+    stored_seed = optimizer_config.get("seed")
+    seed_display = str(stored_seed) if stored_seed is not None else "random"
     chart_footer = (
         f"Run at: {run_at} · seed: {seed_display} · "
-        f"n={optimizer_config.get('n_p', '?')} · "
+        f"n={optimizer_config.get('n_p', '?')} · {objective_text}"
     )
-    st.caption(chart_footer)
 
     with col_right:
         # D5 — Efficient Frontier chart
