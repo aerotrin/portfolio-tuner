@@ -28,6 +28,7 @@ from frontend.shared.jobs import (
 )
 from frontend.widgets.allocation import render_portfolio_allocation
 from frontend.widgets.correlation import render_correlation_matrix
+from frontend.widgets.intraday import render_portfolio_intraday
 from frontend.widgets.kpis import (
     render_account_summary,
     render_market_snapshot,
@@ -166,14 +167,6 @@ if portfolio_symbols:
         portfolio_symbols, portfolio.securities
     )
     holdings_close_norm = holdings_analytics.close_norm
-
-    # holdings_profiles = make_scalar_wide_df(
-    #     {s: portfolio.securities.profile[s] for s in portfolio_symbols}
-    # )
-    # new_cols = holdings_profiles.columns.difference(holdings_positions.columns)
-    # holdings_positions = holdings_positions.join(
-    #     holdings_profiles[new_cols], how="left"
-    # )
     holdings_positions = add_sparkline(
         holdings_positions, holdings_analytics.closes, add_intraday_close=True
     )
@@ -232,16 +225,27 @@ if not cash_flows.empty:
 
 # --- Render tabs --------------------------------------------------------------------
 tabs = st.tabs(
-    ["Positions", "Allocation", "Performance", "Optimization", "Correlation", "Records"]
+    [
+        "Intraday",
+        "Positions",
+        "Allocation",
+        "Performance",
+        "Optimization",
+        "Correlation",
+        "Records",
+    ]
 )
 
 with tabs[0]:
-    render_portfolio_positions(holdings_data)
+    render_portfolio_intraday(holdings_data)
 
 with tabs[1]:
-    render_portfolio_allocation(portfolio.summary, holdings_data)
+    render_portfolio_positions(holdings_data)
 
 with tabs[2]:
+    render_portfolio_allocation(portfolio.summary, holdings_data)
+
+with tabs[3]:
     render_performance_view(
         metrics=holdings_data,
         close_norm_eod=holdings_close_norm,
@@ -254,7 +258,7 @@ with tabs[2]:
         use_group_filter=False,
     )
 
-with tabs[3]:
+with tabs[4]:
     render_optimizer(
         portfolio_symbols=portfolio_symbols,
         holdings_data=holdings_data,
@@ -264,11 +268,11 @@ with tabs[3]:
         risk_free_rate=rates["rf_rate"],
     )
 
-with tabs[4]:
+with tabs[5]:
     render_correlation_matrix(portfolio_correlation_matrix)
 
 
-with tabs[5]:
+with tabs[6]:
     start_date, end_date = render_records_header(transactions)
     if start_date:
         render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)

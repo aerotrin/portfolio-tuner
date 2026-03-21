@@ -95,7 +95,11 @@ def render_risk_chart(
                 axis=alt.Axis(format=".0%"),
             ),
             color=alt.Color("symbol:N", title="Symbol", legend=None),
-            size=alt.Size("sharpe_period:Q", title="Sharpe", legend=None),
+            size=alt.Size(
+                "weight:Q" if portfolio_plot is not None else "sharpe_period:Q",
+                title="Sharpe",
+                legend=None,
+            ),
             tooltip=[
                 alt.Tooltip("symbol:N"),
                 alt.Tooltip("name:N"),
@@ -108,6 +112,11 @@ def render_risk_chart(
                 alt.Tooltip("volatility:Q", title="Vol (annualized)", format=".0%"),
                 alt.Tooltip(
                     "sharpe_period:Q", title=f"Sharpe ({horizon_label})", format=".2f"
+                ),
+                *(
+                    [alt.Tooltip("weight:Q", title="Weight", format=".1%")]
+                    if portfolio_plot is not None
+                    else []
                 ),
             ],
             fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3)),
@@ -151,10 +160,12 @@ def render_risk_chart(
     if portfolio_plot is not None:
         portf_chart = alt.Chart(portfolio_plot)
 
-        portf_circle = portf_chart.mark_circle(color=base_color).encode(
+        portf_circle = portf_chart.mark_point(
+            shape="diamond", color=base_color, filled=True
+        ).encode(
             x="volatility_period:Q",
             y=f"{horizon_metric}:Q",
-            size=alt.Size("sharpe_period:Q", legend=None),
+            size=alt.value(250),
             tooltip=[
                 alt.Tooltip("symbol:N"),
                 alt.Tooltip("name:N"),
@@ -197,7 +208,9 @@ def render_risk_chart(
         ).encode(
             x="volatility_period:Q",
             y=f"{horizon_metric}:Q",
-            size=alt.Size("sharpe_period:Q", legend=None),
+            size=alt.value(250)
+            if portfolio_plot is not None
+            else alt.Size("sharpe_period:Q", title="Sharpe", legend=None),
             tooltip=[
                 alt.Tooltip("symbol:N"),
                 alt.Tooltip("name:N"),

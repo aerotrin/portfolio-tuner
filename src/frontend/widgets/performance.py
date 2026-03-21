@@ -121,9 +121,14 @@ def render_performance_view(
                 )
                 show_signal = st.checkbox(
                     "Signal",
-                    value=True,
+                    value=False,
                     key=f"{key_prefix}-signal-checkbox",
                 )
+
+                if portfolio_metrics is not None:
+                    st.caption("Bubble size represents weight in portfolio")
+                else:
+                    st.caption("Bubble size represents Sharpe ratio")
 
     sel_horizon = RETURN_HORIZONS[sel_horizon_label]
 
