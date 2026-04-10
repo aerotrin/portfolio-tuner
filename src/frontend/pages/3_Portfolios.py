@@ -226,7 +226,6 @@ if not cash_flows.empty:
 # --- Render tabs --------------------------------------------------------------------
 tabs = st.tabs(
     [
-        "Intraday",
         "Positions",
         "Allocation",
         "Performance",
@@ -237,15 +236,12 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    render_portfolio_intraday(holdings_data)
-
-with tabs[1]:
     render_portfolio_positions(holdings_data)
 
-with tabs[2]:
+with tabs[1]:
     render_portfolio_allocation(portfolio.summary, holdings_data)
 
-with tabs[3]:
+with tabs[2]:
     render_performance_view(
         metrics=holdings_data,
         close_norm_eod=holdings_close_norm,
@@ -258,7 +254,7 @@ with tabs[3]:
         use_group_filter=False,
     )
 
-with tabs[4]:
+with tabs[3]:
     render_optimizer(
         portfolio_symbols=portfolio_symbols,
         holdings_data=holdings_data,
@@ -268,11 +264,11 @@ with tabs[4]:
         risk_free_rate=rates["rf_rate"],
     )
 
-with tabs[5]:
+with tabs[4]:
     render_correlation_matrix(portfolio_correlation_matrix)
 
 
-with tabs[6]:
+with tabs[5]:
     start_date, end_date = render_records_header(transactions)
     if start_date:
         render_closed_lots_table(closed_lots, account.tax_status, start_date, end_date)

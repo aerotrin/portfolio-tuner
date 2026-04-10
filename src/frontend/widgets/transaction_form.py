@@ -71,6 +71,11 @@ def transaction_form(
             except ValueError:
                 currency_default = Currency.CAD
 
+        if transaction_type == TransactionKind.BUY:
+            exchange_rate_default = fx_rate if currency_default == Currency.USD else 1.0
+            cost_per_share = price_default * exchange_rate_default
+            max_qty = int(cash_balance / cost_per_share) if cost_per_share > 0 else None
+
         if (
             portfolio_symbols is not None
             and symbol in portfolio_symbols
@@ -109,6 +114,12 @@ def transaction_form(
                 max_value=max_qty,
                 key="tx_qty",
             )
+            if max_qty is not None:
+                st.button(
+                    f"Max ({max_qty:,})",
+                    on_click=lambda: st.session_state.update({"tx_qty": max_qty}),
+                    use_container_width=True,
+                )
         with c[1]:
             price = st.number_input("Price", min_value=0.0, key="tx_price")
         with c[2]:

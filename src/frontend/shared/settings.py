@@ -45,6 +45,8 @@ TRADE_SIZING_GUIDE = {
     "2%": 0.02,
     "5%": 0.05,
     "10%": 0.10,
+    "15%": 0.15,
+    "20%": 0.20,
 }
 
 # [Market/Portfolio] Treemap and Chart height defaults

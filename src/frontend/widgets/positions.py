@@ -1,15 +1,20 @@
 from typing import cast
 
-import pandas as pd
-import streamlit as st
-
 from frontend.shared.styles import (
     POSITIONS_EQUITY_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
+    QUOTE_TABLE_CONFIG,
     positions_table_styler,
+    quote_table_styler,
 )
-from frontend.widgets.kpis import render_portfolio_kpis, render_positions_health_bar
-from frontend.widgets.treemaps import render_treemap_positions
+from frontend.widgets.kpis import (
+    render_intraday_health_bar,
+    render_portfolio_kpis,
+    render_positions_health_bar,
+)
+from frontend.widgets.treemaps import render_treemap_intraday, render_treemap_positions
+import pandas as pd
+import streamlit as st
 
 
 def render_portfolio_positions(
@@ -34,11 +39,44 @@ def render_portfolio_positions(
             render_portfolio_kpis(holdings)
 
         # Treemap
-        fig = render_treemap_positions(df)
-        st.plotly_chart(fig, key="chart-holdings-open")
+        c = st.columns(2)
+        with c[0]:
+            fig = render_treemap_intraday(
+                holdings, top_label="Intraday", has_weight=True, row_px=275
+            )
+            st.plotly_chart(fig, key="chart-holdings-intraday")
+            # Health bar
+            render_intraday_health_bar(df)
 
-        # Health bar
-        render_positions_health_bar(df)
+        with c[1]:
+            fig = render_treemap_positions(df, row_px=275)
+            st.plotly_chart(fig, key="chart-holdings-open")
+
+            # Health bar
+            render_positions_health_bar(df)
+
+        with st.expander("Intraday Quotes"):
+            # Quote table — sorted by intraday change
+            intraday_equity_df = equity_df.sort_values(by="change_percent", ascending=False)
+            intraday_option_df = option_df.sort_values(by="change_percent", ascending=False)
+            if not intraday_equity_df.empty:
+                st.markdown("###### Stocks & ETFs")
+                st.dataframe(
+                    quote_table_styler(intraday_equity_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-intraday-quote-stocks",
+                )
+            if not intraday_option_df.empty:
+                st.markdown("###### Options")
+                st.dataframe(
+                    quote_table_styler(intraday_option_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-intraday-quote-options",
+                )
 
         # Positions Table
         if not equity_df.empty:

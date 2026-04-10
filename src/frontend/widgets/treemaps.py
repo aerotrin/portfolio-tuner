@@ -21,10 +21,15 @@ def render_treemap_intraday(
     top_label: str = "",
     size_by: str | None = None,
     has_weight: bool = False,
+    row_px=None,
 ) -> go.Figure:
     df = df.copy()
 
-    height = _size_treemap(df.shape[0])
+    height = (
+        _size_treemap(df.shape[0], row_px=row_px)
+        if row_px is not None
+        else _size_treemap(df.shape[0])
+    )
 
     df["display_text"] = (
         df["close"].map("{:,.2f}".format)
@@ -78,13 +83,17 @@ def render_treemap_intraday(
     return fig
 
 
-def render_treemap_positions(df: pd.DataFrame) -> go.Figure:
+def render_treemap_positions(df: pd.DataFrame, row_px=None) -> go.Figure:
     df = df.copy()
 
-    height = _size_treemap(df.shape[0])
+    height = (
+        _size_treemap(df.shape[0], row_px=row_px)
+        if row_px is not None
+        else _size_treemap(df.shape[0])
+    )
 
     option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
-    standard_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]
+    stocks_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]
 
     common_text = (
         df["market_value"].map("{:,.2f} CAD".format)
@@ -95,15 +104,17 @@ def render_treemap_positions(df: pd.DataFrame) -> go.Figure:
         + "<br>"
     )
 
-    if not standard_df.empty:
-        standard_text = (
+    if not stocks_df.empty:
+        stocks_text = (
             common_text
             + df["open_qty"].astype(str)
             + " shares<br>"
             + df["days_held"].map("{:,.0f} days held".format)
+            + "<br>"
+            + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
         )
     else:
-        standard_text = ""
+        stocks_text = ""
 
     if not option_df.empty:
         option_text = (
@@ -111,6 +122,8 @@ def render_treemap_positions(df: pd.DataFrame) -> go.Figure:
             + df["open_qty"].astype(str)
             + " contracts<br>"
             + df["option_dte"].map("{:,.0f} DTE".format)
+            + "<br>"
+            + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
         )
     else:
         option_text = ""
@@ -118,7 +131,7 @@ def render_treemap_positions(df: pd.DataFrame) -> go.Figure:
     df["display_text"] = np.where(
         df["holding_category"].isin(["Call Option", "Put Option"]),
         option_text,
-        standard_text,
+        stocks_text,
     )
 
     fig = px.treemap(

@@ -22,12 +22,14 @@ def render_account_summary(
             f"${portfolio_summary['total_value']:,.2f} CAD",
         )
         st.metric(
-            "Cash",
-            f"${portfolio_summary['cash_balance']:,.2f} CAD",
-            f"{portfolio_summary['cash_pct']:.1%}",
-            delta_color="off",
-            delta_arrow="off",
-            delta_description="of portfolio",
+            "Unrealized P/L",
+            f"${portfolio_summary['unrealized_gain']:,.2f} CAD",
+            f"{portfolio_summary['return_on_cost']:+.2%}",
+        )
+        st.metric(
+            "Total Return | MWRR",
+            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f} CAD",
+            f"{portfolio_summary['mwrr']:+.2%}",
         )
         st.metric(
             "Securities",
@@ -38,14 +40,12 @@ def render_account_summary(
             delta_description="of portfolio",
         )
         st.metric(
-            "Unrealized P/L",
-            f"${portfolio_summary['unrealized_gain']:,.2f} CAD",
-            f"{portfolio_summary['return_on_cost']:+.2%}",
-        )
-        st.metric(
-            "Return | MWRR",
-            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f} CAD",
-            f"{portfolio_summary['mwrr']:+.2%}",
+            "Cash",
+            f"${portfolio_summary['cash_balance']:,.2f} CAD",
+            f"{portfolio_summary['cash_pct']:.1%}",
+            delta_color="off",
+            delta_arrow="off",
+            delta_description="of portfolio",
         )
 
 
@@ -109,7 +109,7 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
 def render_portfolio_kpis(df: pd.DataFrame) -> None:
     """Render the portfolio KPIs."""
     st.metric(
-        "Market Value",
+        "Securities Value Intraday",
         f"${df['market_value'].sum():,.2f} CAD",
         f"{df['intraday_change'].sum():+,.2f} CAD",
     )
