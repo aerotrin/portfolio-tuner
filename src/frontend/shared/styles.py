@@ -79,6 +79,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "signal": st.column_config.TextColumn("Signal"),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),

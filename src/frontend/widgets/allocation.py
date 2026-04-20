@@ -2,6 +2,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from frontend.shared.settings import TRADE_SIZING_GUIDE
+
 
 def render_portfolio_allocation(
     portfolio_summary: dict, df: pd.DataFrame | None
@@ -70,3 +72,13 @@ def render_portfolio_allocation(
         )
         fig.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig)
+
+    portfolio_value = portfolio_summary["total_value"]
+    st.markdown("##### Position Sizing Guide")
+    st.markdown(
+        "**Based on current portfolio value:**\n"
+        + "\n".join(
+            f"- **{k}**: ${v * portfolio_value:,.2f} CAD"
+            for k, v in TRADE_SIZING_GUIDE.items()
+        )
+    )
