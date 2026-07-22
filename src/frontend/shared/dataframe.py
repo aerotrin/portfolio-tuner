@@ -117,6 +117,12 @@ def add_trade_signal(df: pd.DataFrame) -> pd.DataFrame:
         default="",
     )
 
+    df["signal"] += np.select(
+        [df["rsi"] > 70, df["rsi"] < 30],
+        ["⚠", "▽"],
+        default="",
+    )
+
     return df
 
 

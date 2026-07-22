@@ -14,17 +14,23 @@ from frontend.shared.settings import (
 )
 
 
+SIGNAL_HELP = (
+    "●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > 50 + up trend | "
+    "⚠ = RSI > 70 (overbought) | ▽ = RSI < 30 (oversold)"
+)
+
+
 QUOTE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "signal": st.column_config.TextColumn("Signal"),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
     "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
+    "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
     "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "previous_close": st.column_config.NumberColumn("Prev. Close", format="accounting"),
@@ -79,7 +85,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "signal": st.column_config.TextColumn("Signal"),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
@@ -199,13 +205,10 @@ PERFORMANCE_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "signal": st.column_config.TextColumn(
-        "Signal",
-        help="●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > 50 + up trend",
-    ),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
+    # "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
-    "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Return 1M", format="percent"),
     "return3M": st.column_config.NumberColumn("Return 3M", format="percent"),
