@@ -11,6 +11,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+MASKED_VALUE = "••••••••••••••••••••"
+
 
 def _humanize_timestamp_or_na(timestamp: pd.Timestamp | None) -> tuple[str, str]:
     """Format a timestamp for display, falling back to N/A when missing."""
@@ -21,11 +23,16 @@ def _humanize_timestamp_or_na(timestamp: pd.Timestamp | None) -> tuple[str, str]
 
 
 def _render_cash_securities_donut(
-    cash_balance: float, securities_value: float
+    cash_balance: float, securities_value: float, hide_balances: bool
 ) -> go.Figure:
     """Tiny donut showing the cash / securities split."""
     total = cash_balance + securities_value
     securities_pct = securities_value / total if total else 0
+    hovertemplate = (
+        "%{label}: %{percent}<extra></extra>"
+        if hide_balances
+        else "%{label}: $%{value:,.2f} CAD<extra></extra>"
+    )
     fig = go.Figure(
         go.Pie(
             labels=["Securities", "Cash"],
@@ -35,7 +42,7 @@ def _render_cash_securities_donut(
             direction="clockwise",
             marker=dict(colors=[DONUT_SECURITIES_COLOR, DONUT_CASH_COLOR]),
             textinfo="none",
-            hovertemplate="%{label}: $%{value:,.2f} CAD<extra></extra>",
+            hovertemplate=hovertemplate,
         )
     )
     fig.update_layout(
@@ -58,7 +65,11 @@ def _render_cash_securities_donut(
 
 
 def render_account_summary(
-    account_number: str, account_type: str, account_owner: str, portfolio_summary: dict
+    account_number: str,
+    account_type: str,
+    account_owner: str,
+    portfolio_summary: dict,
+    hide_balances: bool,
 ) -> None:
     """Draw KPIs for the balances of a selected portfolio."""
 
@@ -70,15 +81,20 @@ def render_account_summary(
     )
     last_update_natural, last_update_color = _humanize_timestamp_or_na(latest_timestamp)
 
+    def _fmt_amount(amount: float) -> str:
+        return MASKED_VALUE if hide_balances else f"${amount:,.2f} CAD"
+
     with st.container(border=True, horizontal=True, width="stretch"):
         st.metric(
-            f"{account_type} #{account_number}",
-            account_owner,
+            f"{account_type} {MASKED_VALUE}"
+            if hide_balances
+            else f"{account_type} #{account_number}",
+            MASKED_VALUE if hide_balances else account_owner,
             border=False,
         )
         st.metric(
             "Total Value",
-            f"${portfolio_summary['total_value']:,.2f} CAD",
+            _fmt_amount(portfolio_summary["total_value"]),
             last_update_natural,
             delta_color=last_update_color,
             delta_arrow="off",
@@ -86,13 +102,15 @@ def render_account_summary(
         )
         st.metric(
             "Unrealized P/L",
-            f"${portfolio_summary['unrealized_gain']:,.2f} CAD",
+            _fmt_amount(portfolio_summary["unrealized_gain"]),
             f"{portfolio_summary['return_on_cost']:+.2%}",
             border=False,
         )
         st.metric(
             "Total Return | MWRR",
-            f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f} CAD",
+            _fmt_amount(
+                portfolio_summary["total_value"] - portfolio_summary["net_investment"]
+            ),
             f"{portfolio_summary['mwrr']:+.2%}",
             border=False,
         )
@@ -102,12 +120,13 @@ def render_account_summary(
                     portfolio_summary["cash_balance"],
                     portfolio_summary["total_value"]
                     - portfolio_summary["cash_balance"],
+                    hide_balances,
                 ),
                 config={"displayModeBar": False},
             )
         st.metric(
             "Cash",
-            f"${portfolio_summary['cash_balance']:,.2f} CAD",
+            _fmt_amount(portfolio_summary["cash_balance"]),
             f"{portfolio_summary['cash_pct']:.1%}",
             delta_color="off",
             delta_arrow="off",

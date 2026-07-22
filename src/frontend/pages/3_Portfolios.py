@@ -133,10 +133,9 @@ st.session_state["last_ca_timestamp"] = header_quotes[
 # Render KPIs --------------------------------------------------------------------
 render_status_strip(rates)
 
-if not hide_balances:
-    render_account_summary(
-        account.number, account.type, account.name, portfolio.summary
-    )
+render_account_summary(
+    account.number, account.type, account.name, portfolio.summary, hide_balances
+)
 
 # --- Market snapshot --------------------------------------------------------------------
 render_market_snapshot(header_quotes)
