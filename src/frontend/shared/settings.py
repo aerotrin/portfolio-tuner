@@ -54,6 +54,11 @@ HEIGHT_TREEMAP = 120
 HEIGHT_RISK_RETURN_CHART = 450
 HEIGHT_EFFICIENT_FRONTIER_CHART = 400
 HEIGHT_MARKET_SNAPSHOT = 150
+HEIGHT_ACCOUNT_DONUT = 72
+
+# [Portfolio] Cash / Securities split donut colors
+DONUT_SECURITIES_COLOR = "#4C8BF5"
+DONUT_CASH_COLOR = "#9E9E9E"
 
 # General color palette for styling tables and icons
 GREEN = "#4CAF50"  # softer green for dark mode

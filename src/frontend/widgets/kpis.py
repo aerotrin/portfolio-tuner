@@ -1,10 +1,60 @@
 from datetime import datetime
 
+from frontend.shared.settings import (
+    DONUT_CASH_COLOR,
+    DONUT_SECURITIES_COLOR,
+    HEIGHT_ACCOUNT_DONUT,
+    HEIGHT_MARKET_SNAPSHOT,
+)
+from frontend.shared.time import humanize_timestamp
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
-from frontend.shared.settings import HEIGHT_MARKET_SNAPSHOT
-from frontend.shared.time import humanize_timestamp
+
+def _humanize_timestamp_or_na(timestamp: pd.Timestamp | None) -> tuple[str, str]:
+    """Format a timestamp for display, falling back to N/A when missing."""
+    if not timestamp or pd.isna(timestamp):
+        return "N/A", "gray"
+    natural, _, color = humanize_timestamp(timestamp.tz_convert("UTC"))
+    return natural, color
+
+
+def _render_cash_securities_donut(
+    cash_balance: float, securities_value: float
+) -> go.Figure:
+    """Tiny donut showing the cash / securities split."""
+    total = cash_balance + securities_value
+    securities_pct = securities_value / total if total else 0
+    fig = go.Figure(
+        go.Pie(
+            labels=["Securities", "Cash"],
+            values=[securities_value, cash_balance],
+            hole=0.7,
+            sort=False,
+            direction="clockwise",
+            marker=dict(colors=[DONUT_SECURITIES_COLOR, DONUT_CASH_COLOR]),
+            textinfo="none",
+            hovertemplate="%{label}: $%{value:,.2f} CAD<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=0, b=0, l=0, r=0),
+        height=HEIGHT_ACCOUNT_DONUT,
+        annotations=[
+            dict(
+                text=f"{securities_pct:.0%}",
+                x=0.5,
+                y=0.5,
+                font=dict(size=13),
+                showarrow=False,
+            )
+        ],
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
 
 
 def render_account_summary(
@@ -12,33 +62,49 @@ def render_account_summary(
 ) -> None:
     """Draw KPIs for the balances of a selected portfolio."""
 
-    with st.container(border=True, horizontal=True):
+    last_us_timestamp = st.session_state.get("last_us_timestamp")
+    last_ca_timestamp = st.session_state.get("last_ca_timestamp")
+    latest_timestamp = max(
+        (ts for ts in (last_us_timestamp, last_ca_timestamp) if ts and not pd.isna(ts)),
+        default=None,
+    )
+    last_update_natural, last_update_color = _humanize_timestamp_or_na(latest_timestamp)
+
+    with st.container(border=True, horizontal=True, width="stretch"):
         st.metric(
             f"{account_type} #{account_number}",
             account_owner,
+            border=False,
         )
         st.metric(
             "Total Value",
             f"${portfolio_summary['total_value']:,.2f} CAD",
+            last_update_natural,
+            delta_color=last_update_color,
+            delta_arrow="off",
+            border=False,
         )
         st.metric(
             "Unrealized P/L",
             f"${portfolio_summary['unrealized_gain']:,.2f} CAD",
             f"{portfolio_summary['return_on_cost']:+.2%}",
+            border=False,
         )
         st.metric(
             "Total Return | MWRR",
             f"${portfolio_summary['total_value'] - portfolio_summary['net_investment']:,.2f} CAD",
             f"{portfolio_summary['mwrr']:+.2%}",
+            border=False,
         )
-        st.metric(
-            "Securities",
-            f"${portfolio_summary['market_value']:,.2f} CAD",
-            f"{1 - portfolio_summary['cash_pct']:.1%}",
-            delta_color="off",
-            delta_arrow="off",
-            delta_description="of portfolio",
-        )
+        with st.container(border=False):
+            st.plotly_chart(
+                _render_cash_securities_donut(
+                    portfolio_summary["cash_balance"],
+                    portfolio_summary["total_value"]
+                    - portfolio_summary["cash_balance"],
+                ),
+                config={"displayModeBar": False},
+            )
         st.metric(
             "Cash",
             f"${portfolio_summary['cash_balance']:,.2f} CAD",
@@ -46,6 +112,7 @@ def render_account_summary(
             delta_color="off",
             delta_arrow="off",
             delta_description="of portfolio",
+            border=False,
         )
 
 
@@ -53,31 +120,10 @@ def render_status_strip(rates: dict) -> None:
     """
     Render the status strip.
     """
-    last_us_timestamp = st.session_state.get("last_us_timestamp")
-    last_ca_timestamp = st.session_state.get("last_ca_timestamp")
-
-    if not last_us_timestamp or pd.isna(last_us_timestamp):
-        last_us_timestamp_natural = "N/A"
-        color_us = "gray"
-    else:
-        last_us_timestamp_natural, _, color_us = humanize_timestamp(
-            last_us_timestamp.tz_convert("UTC")
-        )
-
-    if not last_ca_timestamp or pd.isna(last_ca_timestamp):
-        last_ca_timestamp_natural = "N/A"
-        color_ca = "gray"
-    else:
-        last_ca_timestamp_natural, _, color_ca = humanize_timestamp(
-            last_ca_timestamp.tz_convert("UTC")
-        )
-
     with st.container(horizontal=True, border=False):
         st.caption(datetime.now().strftime("%a %Y-%m-%d %I:%M:%S %p %Z"))
         st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
         st.caption(f"T-Bill 6m: {rates['rf_rate']:.2f}%")
-        st.badge(f"{last_ca_timestamp_natural}", icon="🇨🇦", color=color_ca)
-        st.badge(f"{last_us_timestamp_natural}", icon="🇺🇸", color=color_us)
         if st.session_state.get("live_data_toggle", False):
             st.badge("Live data mode", icon="🔄", color="blue")
 
