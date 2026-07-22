@@ -5,13 +5,12 @@ from frontend.shared.settings import (
     DONUT_SECURITIES_COLOR,
     HEIGHT_ACCOUNT_DONUT,
     HEIGHT_MARKET_SNAPSHOT,
+    MASKED_VALUE,
 )
 from frontend.shared.time import humanize_timestamp
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-
-MASKED_VALUE = "••••••••••••••••••••"
 
 
 def _humanize_timestamp_or_na(timestamp: pd.Timestamp | None) -> tuple[str, str]:
@@ -86,9 +85,11 @@ def render_account_summary(
 
     with st.container(border=True, horizontal=True, width="stretch"):
         st.metric(
-            f"{account_type} {MASKED_VALUE}"
-            if hide_balances
-            else f"{account_type} #{account_number}",
+            (
+                f"{account_type} {MASKED_VALUE}"
+                if hide_balances
+                else f"{account_type} #{account_number}"
+            ),
             MASKED_VALUE if hide_balances else account_owner,
             border=False,
         )
@@ -171,26 +172,35 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
             )
 
 
-def render_portfolio_kpis(df: pd.DataFrame) -> None:
+def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
     """Render the portfolio KPIs."""
+
+    def _fmt_delta(amount: float) -> str:
+        return MASKED_VALUE if hide_balances else f"{amount:+,.2f} CAD"
+
+    delta_kwargs = {"delta_color": "off", "delta_arrow": "off"} if hide_balances else {}
+
     st.metric(
         "Securities Value Intraday",
-        f"${df['market_value'].sum():,.2f} CAD",
-        f"{df['intraday_change'].sum():+,.2f} CAD",
+        MASKED_VALUE if hide_balances else f"${df['market_value'].sum():,.2f} CAD",
+        _fmt_delta(df["intraday_change"].sum()),
+        **delta_kwargs,
     )
     st.metric(
         "Best Intraday",
         f"{df['symbol'][df['intraday_change'].idxmax()]}",
-        f"{df['intraday_change'].max():+,.2f} CAD",
+        _fmt_delta(df["intraday_change"].max()),
+        **delta_kwargs,
     )
     st.metric(
         "Worst Intraday",
         f"{df['symbol'][df['intraday_change'].idxmin()]}",
-        f"{df['intraday_change'].min():+,.2f} CAD",
+        _fmt_delta(df["intraday_change"].min()),
+        **delta_kwargs,
     )
     st.metric(
         "Total FX Exposure",
-        f"${df['fx_exposure'].sum():,.2f} CAD",
+        MASKED_VALUE if hide_balances else f"${df['fx_exposure'].sum():,.2f} CAD",
     )
     st.metric("No. of Holdings", f"{len(df)}")
     st.metric(

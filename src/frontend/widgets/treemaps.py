@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from frontend.shared.settings import HEIGHT_TREEMAP
+from frontend.shared.settings import HEIGHT_TREEMAP, MASKED_VALUE
 from frontend.shared.time import humanize_timestamp
 
 
@@ -22,6 +22,7 @@ def render_treemap_intraday(
     size_by: str | None = None,
     has_weight: bool = False,
     row_px=None,
+    hide_balances: bool = False,
 ) -> go.Figure:
     df = df.copy()
 
@@ -57,11 +58,11 @@ def render_treemap_intraday(
 
     if has_weight:
         base_config["values"] = "weight"
-        base_config["hover_data"] = [
-            "name",
-            "market_value",
-            "timestamp",
-        ]
+        base_config["hover_data"] = (
+            ["name", "timestamp"]
+            if hide_balances
+            else ["name", "market_value", "timestamp"]
+        )
 
     if size_by is not None and size_by in df.columns:
         base_config["values"] = size_by
@@ -83,7 +84,9 @@ def render_treemap_intraday(
     return fig
 
 
-def render_treemap_positions(df: pd.DataFrame, row_px=None) -> go.Figure:
+def render_treemap_positions(
+    df: pd.DataFrame, row_px=None, hide_balances: bool = False
+) -> go.Figure:
     df = df.copy()
 
     height = (
@@ -95,20 +98,28 @@ def render_treemap_positions(df: pd.DataFrame, row_px=None) -> go.Figure:
     option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
     stocks_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]
 
-    common_text = (
-        df["market_value"].map("{:,.2f} CAD".format)
-        + "<br>"
-        + df["gain"].map("{:+,.2f}".format)
-        + " "
-        + df["gain_pct"].map("{:+.2%}".format)
-        + "<br>"
-    )
+    if hide_balances:
+        common_text = (
+            MASKED_VALUE + "<br>" + df["gain_pct"].map("{:+.2%}".format) + "<br>"
+        )
+        stocks_qty_text = ""
+        option_qty_text = ""
+    else:
+        common_text = (
+            df["market_value"].map("{:,.2f} CAD".format)
+            + "<br>"
+            + df["gain"].map("{:+,.2f}".format)
+            + " "
+            + df["gain_pct"].map("{:+.2%}".format)
+            + "<br>"
+        )
+        stocks_qty_text = df["open_qty"].astype(str) + " shares<br>"
+        option_qty_text = df["open_qty"].astype(str) + " contracts<br>"
 
     if not stocks_df.empty:
         stocks_text = (
             common_text
-            + df["open_qty"].astype(str)
-            + " shares<br>"
+            + stocks_qty_text
             + df["days_held"].map("{:,.0f} days held".format)
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
@@ -119,8 +130,7 @@ def render_treemap_positions(df: pd.DataFrame, row_px=None) -> go.Figure:
     if not option_df.empty:
         option_text = (
             common_text
-            + df["open_qty"].astype(str)
-            + " contracts<br>"
+            + option_qty_text
             + df["option_dte"].map("{:,.0f} DTE".format)
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
@@ -142,7 +152,11 @@ def render_treemap_positions(df: pd.DataFrame, row_px=None) -> go.Figure:
         color_continuous_scale="RdYlGn",
         color_continuous_midpoint=0,
         custom_data=["display_text"],
-        hover_data=["name", "market_value", "timestamp"],
+        hover_data=(
+            ["name", "timestamp"]
+            if hide_balances
+            else ["name", "market_value", "timestamp"]
+        ),
     )
 
     fig.update_traces(

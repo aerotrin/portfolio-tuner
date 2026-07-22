@@ -13,11 +13,27 @@ from frontend.shared.settings import (
     TAKE_PROFIT_LIMIT,
 )
 
-
 SIGNAL_HELP = (
     "●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > 50 + up trend | "
     "⚠ = RSI > 70 (overbought) | ▽ = RSI < 30 (oversold)"
 )
+
+# Columns that reveal account size — dropped from tables when Hide Balances is on
+BALANCE_COLUMNS = (
+    "open_qty",
+    "intraday_change",
+    "market_value",
+    "gain",
+    "book_value",
+    "fx_exposure",
+    "option_value",
+)
+
+
+def balance_safe_column_order(config: dict, hide_balances: bool) -> list[str]:
+    if not hide_balances:
+        return list(config)
+    return [c for c in config if c not in BALANCE_COLUMNS]
 
 
 QUOTE_TABLE_CONFIG = {
@@ -202,13 +218,15 @@ def positions_table_styler(df: pd.DataFrame) -> Styler:
 PERFORMANCE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
+    "weight": st.column_config.NumberColumn("Weight", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     # "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
-    "close": st.column_config.NumberColumn("Price", format="accounting"),
-    "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
+    "close": st.column_config.NumberColumn("Last Price", format="accounting"),
+    "currency": st.column_config.TextColumn("CUR"),
+    "change_percent": st.column_config.NumberColumn("Intraday", format="percent"),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Return 1M", format="percent"),
     "return3M": st.column_config.NumberColumn("Return 3M", format="percent"),
@@ -220,7 +238,6 @@ PERFORMANCE_TABLE_CONFIG = {
     "max_drawdown": st.column_config.NumberColumn("MDD", format="percent"),
     "max_drawdown_date": st.column_config.DateColumn("MDD Date", format="YYYY-MM-DD"),
     "exchange": st.column_config.TextColumn("Exchange"),
-    "currency": st.column_config.TextColumn("Currency"),
     "last_calculated": st.column_config.DatetimeColumn("Last Computed"),
 }
 
