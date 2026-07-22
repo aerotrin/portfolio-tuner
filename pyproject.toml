@@ -6,3 +6,5 @@ pythonpath = [".", "src"]
 
 [tool.pyright]
 extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"

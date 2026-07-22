@@ -14,22 +14,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync --all-groups
 ```
 
-Both commands raise `ModuleNotFoundError` (`No module named 'backend'` / `'frontend'`) unless `PYTHONPATH` is set to `src/` explicitly (mirrors `ENV PYTHONPATH=/usr/src` in `src/frontend/Dockerfile`) — always set it, run from `src/`:
+**Run backend** (PowerShell — sets `PYTHONPATH` and launches uvicorn; extra flags pass through):
+```powershell
+.\run-backend.ps1
+```
+
+**Run frontend** (PowerShell — sets `PYTHONPATH` and launches streamlit; extra flags pass through):
+```powershell
+.\run-frontend.ps1
+```
+
+Both `run-backend.ps1` and `run-frontend.ps1` run from the repo root. They exist because the workspace members have no `build-system`, so `uv sync` never installs `backend`/`frontend` into the venv — imports raise `ModuleNotFoundError` (`No module named 'backend'` / `'frontend'`) unless `src/` is on `PYTHONPATH` (mirrors `ENV PYTHONPATH=/usr/src` in `src/frontend/Dockerfile`). To run the commands manually instead, set it first, run from `src/`:
 ```powershell
 $env:PYTHONPATH = (Get-Location).Path
+uv run uvicorn backend.app:app --reload --port 8000
+uv run streamlit run frontend/app.py --server.port 8501
 ```
 ```bash
 export PYTHONPATH=.
-```
-
-**Run backend**:
-```bash
-uv run uvicorn backend.app:app --reload --port 8000
-```
-
-**Run frontend**:
-```bash
-uv run streamlit run frontend/app.py --server.port 8501
 ```
 
 **Run all tests**:
