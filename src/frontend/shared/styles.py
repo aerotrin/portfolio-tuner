@@ -98,6 +98,7 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
 POSITIONS_EQUITY_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
@@ -112,7 +113,6 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "days_held": st.column_config.NumberColumn("Days", format="compact"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),

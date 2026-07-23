@@ -361,6 +361,10 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
 # Sidebar
 # -----------------------------------------------------------------------------
 with st.sidebar:
+    if config.debug:
+        st.badge("Developer mode", icon=":material/warning:", color="orange")
+        st.toggle("Show Session State", key="show_session_state_toggle")
+
     st.subheader("Portfolio Options")
 
     st.toggle("Hide Balances", key="hide_balances_toggle")
@@ -489,15 +493,11 @@ with st.sidebar:
         )
         st.session_state["show_transaction_form_dialog"] = False
 
-    st.divider()
-
-    # --- Data refresh ---
-    st.subheader("Data Refresh Options")
-
+    # --- Force Data refresh ---
     if st.button(
         "Force Data Refresh",
         icon=":material/refresh:",
-        type="primary",
+        type="secondary",
         key="full_data_refresh_button",
         width="stretch",
     ):
@@ -512,11 +512,6 @@ with st.sidebar:
             start_date=st.session_state["start_date"],
             end_date=st.session_state["end_date"],
         )
-
-    if config.debug:
-        st.divider()
-        st.subheader("Debug Options")
-        st.toggle("Show Session State", key="show_session_state_toggle")
 
     st.divider()
     if st.button(
@@ -538,9 +533,6 @@ with st.sidebar:
 # -----------------------------------------------------------------------------
 # Debug
 # -----------------------------------------------------------------------------
-if config.debug:
-    st.warning("Developer mode", icon="⚠️")
-
 if st.session_state.get("show_session_state_toggle", False):
     st.divider()
     st.subheader("Debug Data")
