@@ -109,7 +109,9 @@ def _show_login() -> None:
 
 
 if not st.session_state.get("authenticated"):
-    _show_login()
+    # Register a hidden single-page navigation so the previous session's nav
+    # (with account links) is cleared from the sidebar on the login screen.
+    st.navigation([st.Page(_show_login, title="Sign In")], position="hidden").run()
     st.stop()
 
 # Sync the current access token on every rerun so token rotation is picked up.
@@ -147,17 +149,6 @@ st.session_state.setdefault("disclaimer_accepted", False)
 if not st.session_state["disclaimer_accepted"]:
     show_disclaimer_dialog()
     st.stop()
-
-# -----------------------------------------------------------------------------
-# Navigation
-# -----------------------------------------------------------------------------
-pages = [
-    st.Page(page="pages/1_Market_ETFs.py", title="🏦 ETF Research", default=False),
-    st.Page(page="pages/2_Market_Stocks.py", title="🏦 Stocks Research", default=False),
-    st.Page(page="pages/3_Portfolios.py", title="📊 Portfolios", default=True),
-    st.Page(page="pages/9_About.py", title="ℹ️ About", default=False),
-]
-pg = st.navigation(pages)
 
 # -----------------------------------------------------------------------------
 # Session bootstrap
@@ -266,16 +257,62 @@ market_symbols = st.session_state.get("market_symbols", [])
 # Account gating (still done before rendering pages)
 # -----------------------------------------------------------------------------
 if not accounts:
-    st.warning("No accounts found — create a new account")
-    create_account_dialog(benchmark_symbols)
+
+    def _show_no_accounts() -> None:
+        st.warning("No accounts found — create a new account")
+        create_account_dialog(benchmark_symbols)
+
+    st.navigation(
+        [st.Page(_show_no_accounts, title="Create Account")], position="hidden"
+    ).run()
     st.stop()
 
-account_numbers = [account.number for account in accounts]
 account_display_labels = [f"{account.type} #{account.number}" for account in accounts]
 account_ids = [account.id for account in accounts]
 
-# Choose default account only if not set
-st.session_state.setdefault("account_display_label", account_display_labels[0])
+# -----------------------------------------------------------------------------
+# Navigation — one page per account, all backed by pages/3_Portfolios.py.
+# Page identity in st.navigation is the url_path, so sharing the script is fine.
+# -----------------------------------------------------------------------------
+account_pages = []
+for i, account in enumerate(accounts):
+    account_pages.append(
+        (
+            st.Page(
+                page="pages/3_Portfolios.py",
+                title=f"📊 {account_display_labels[i]}",
+                url_path=f"account-{account.number}",
+                default=(i == 0),
+            ),
+            account,
+            account_display_labels[i],
+        )
+    )
+
+pg = st.navigation(
+    {
+        "Markets": [
+            st.Page(page="pages/1_Market_ETFs.py", title="🏦 ETFs Research"),
+            st.Page(page="pages/2_Market_Stocks.py", title="🏦 Stocks Research"),
+        ],
+        "Accounts": [page for page, _, _ in account_pages],
+        "Help": [st.Page(page="pages/9_About.py", title="ℹ️ About")],
+    }
+)
+
+# Resolve the active account from the selected page (identity comparison —
+# the default page's public url_path is "" so it can't be matched by path).
+for page, account, label in account_pages:
+    if pg is page:
+        st.session_state["account_id"] = account.id
+        st.session_state["account_display_label"] = label
+        break
+else:
+    # Market/About page: keep last-visited account; fall back to first if unset
+    # or if the remembered account was deleted.
+    if st.session_state.get("account_id") not in account_ids:
+        st.session_state["account_id"] = account_ids[0]
+        st.session_state["account_display_label"] = account_display_labels[0]
 
 
 # -----------------------------------------------------------------------------
@@ -324,20 +361,14 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
 # Sidebar
 # -----------------------------------------------------------------------------
 with st.sidebar:
-
     st.subheader("Portfolio Options")
 
     st.toggle("Hide Balances", key="hide_balances_toggle")
 
-    account_display_label = st.radio(
-        "Select an account",
-        account_display_labels,
-        key="account_display_label",
-    )
-    # Update selected account state (derived, but tied to user selection)
-    idx = account_display_labels.index(account_display_label)
-    selected = accounts[idx]
-    st.session_state["account_id"] = selected.id
+    # Active account is driven by the navigation (per-account pages)
+    account_display_label = st.session_state["account_display_label"]
+    selected = accounts[account_ids.index(st.session_state["account_id"])]
+    st.caption(f"Active account: {account_display_label}")
 
     # --- Account operations row ---
     col1, col2, col3, col4 = st.columns(4)

@@ -94,6 +94,62 @@ def render_performance_view(
     chart_close_norm = close_norm_eod[chart_symbols]
     chart_metrics = sub_metrics.loc[chart_symbols]
 
+    # ── Statistics ─────────────────────────────────────────────────────
+    if portfolio_metrics is not None:
+        with st.container(border=True, horizontal=True):
+            pm = portfolio_metrics.iloc[0]
+            bm = benchmark_metrics.iloc[0]
+
+            annual_return = pm["return1Y"]
+            benchmark_return = bm["return1Y"]
+            annual_volatility = pm["volatility"]
+            benchmark_volatility = bm["volatility"]
+            max_drawdown = pm["max_drawdown"]
+            annual_sharpe = pm["sharpe"]
+            benchmark_sharpe = bm["sharpe"]
+            annual_sortino = pm["sortino"]
+            benchmark_sortino = bm["sortino"]
+            max_drawdown_date = pd.to_datetime(pm["max_drawdown_date"]).strftime(
+                "%Y-%m-%d"
+            )
+
+            st.metric(
+                "Return (1Y)",
+                f"{annual_return:.1%}",
+                f"{annual_return - benchmark_return:+.1%}",
+                delta_arrow="off",
+            )
+            st.metric(
+                "Volatility (1Y)",
+                f"{annual_volatility:.1%}",
+                f"{annual_volatility - benchmark_volatility:+.1%}",
+                delta_arrow="off",
+                delta_color="inverse",
+            )
+            st.metric(
+                "Sharpe Ratio (1Y)",
+                f"{annual_sharpe:.3f}",
+                f"{annual_sharpe - benchmark_sharpe:+.3f}",
+                delta_arrow="off",
+            )
+            st.metric(
+                "Sortino Ratio (1Y)",
+                f"{annual_sortino:.3f}",
+                f"{annual_sortino - benchmark_sortino:+.3f}",
+                delta_arrow="off",
+            )
+            st.metric(
+                "Max Drawdown",
+                f"{max_drawdown:.1%}",
+                f"{max_drawdown_date}",
+                delta_arrow="off",
+                delta_color="blue",
+            )
+
+        st.caption(
+            rf"Trailing 1Y, annualized. Delta vs. {st.session_state['benchmark']} benchmark."
+        )
+
     # ── Charts ────────────────────────────────────────────────────────────────
     if use_group_filter:
         st.multiselect(
@@ -156,80 +212,7 @@ def render_performance_view(
             )
             st.altair_chart(chart, key=f"chart-{key_prefix}-risk-return")
 
-    # ── Statistics tables ─────────────────────────────────────────────────────
-    if portfolio_metrics is not None:
-        with st.container(border=True, horizontal=True):
-            pm = portfolio_metrics.iloc[0]
-            bm = benchmark_metrics.iloc[0]
-
-            annual_return = pm["return1Y"]
-            benchmark_return = bm["return1Y"]
-            annual_volatility = pm["volatility"]
-            benchmark_volatility = bm["volatility"]
-            max_drawdown = pm["max_drawdown"]
-            annual_sharpe = pm["sharpe"]
-            benchmark_sharpe = bm["sharpe"]
-            annual_sortino = pm["sortino"]
-            benchmark_sortino = bm["sortino"]
-            max_drawdown_date = pd.to_datetime(pm["max_drawdown_date"]).strftime(
-                "%Y-%m-%d"
-            )
-
-            st.metric(
-                "Return (1Y)",
-                f"{annual_return:.1%}",
-                f"{annual_return - benchmark_return:+.1%}",
-                delta_arrow="off",
-            )
-            st.metric(
-                "Volatility (1Y)",
-                f"{annual_volatility:.1%}",
-                f"{annual_volatility - benchmark_volatility:+.1%}",
-                delta_arrow="off",
-                delta_color="inverse",
-            )
-            st.metric(
-                "Sharpe Ratio (1Y)",
-                f"{annual_sharpe:.3f}",
-                f"{annual_sharpe - benchmark_sharpe:+.3f}",
-                delta_arrow="off",
-            )
-            st.metric(
-                "Sortino Ratio (1Y)",
-                f"{annual_sortino:.3f}",
-                f"{annual_sortino - benchmark_sortino:+.3f}",
-                delta_arrow="off",
-            )
-            st.metric(
-                "Max Drawdown",
-                f"{max_drawdown:.1%}",
-                f"{max_drawdown_date}",
-                delta_arrow="off",
-                delta_color="blue",
-            )
-
-        st.caption(
-            rf"Trailing 1Y, annualized. Delta vs. {st.session_state['benchmark']} benchmark."
-        )
-
-        st.markdown("##### Portfolio")
-        st.dataframe(
-            performance_table_styler(portfolio_metrics),
-            hide_index=True,
-            column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-            column_config=PERFORMANCE_TABLE_CONFIG,
-            key=f"table-{key_prefix}-portfolio-performance",
-        )
-
-    st.markdown("##### Benchmark")
-    st.dataframe(
-        performance_table_styler(benchmark_metrics),
-        hide_index=True,
-        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-        column_config=PERFORMANCE_TABLE_CONFIG,
-        key=f"table-{key_prefix}-benchmark-performance",
-    )
-
+    # ── Tables ─────────────────────────────────────────────────────
     st.markdown("##### Securities")
     event = st.dataframe(
         performance_table_styler(sub_metrics),
@@ -246,3 +229,21 @@ def render_performance_view(
         st.caption(
             f"{len(sub_metrics)} securities shown{selection_label} · metrics based on trailing 1Y returns data"
         )
+
+    st.markdown("##### Portfolio")
+    st.dataframe(
+        performance_table_styler(portfolio_metrics),
+        hide_index=True,
+        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+        column_config=PERFORMANCE_TABLE_CONFIG,
+        key=f"table-{key_prefix}-portfolio-performance",
+    )
+
+    st.markdown("##### Benchmark")
+    st.dataframe(
+        performance_table_styler(benchmark_metrics),
+        hide_index=True,
+        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+        column_config=PERFORMANCE_TABLE_CONFIG,
+        key=f"table-{key_prefix}-benchmark-performance",
+    )

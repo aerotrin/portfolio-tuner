@@ -109,11 +109,12 @@ def render_account_summary(
             border=False,
         )
         st.metric(
-            "Total Return | MWRR",
+            "Total Return",
             _fmt_amount(
                 portfolio_summary["total_value"] - portfolio_summary["net_investment"]
             ),
             f"{portfolio_summary['mwrr']:+.2%}",
+            delta_description="MWRR",
             border=False,
         )
         with st.container(border=False):
@@ -169,7 +170,7 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
                 help=row["name"],
                 border=True,
                 chart_data=row["sparkline"],
-                chart_type="area",
+                chart_type="line",
                 height=HEIGHT_MARKET_SNAPSHOT,
             )
 
