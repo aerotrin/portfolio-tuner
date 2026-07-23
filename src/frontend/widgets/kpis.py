@@ -6,6 +6,7 @@ from frontend.shared.settings import (
     HEIGHT_ACCOUNT_DONUT,
     HEIGHT_MARKET_SNAPSHOT,
     MASKED_VALUE,
+    SNAPSHOT_DISPLAY_NAMES,
 )
 from frontend.shared.time import humanize_timestamp
 import pandas as pd
@@ -160,11 +161,12 @@ def render_market_snapshot(header_data: pd.DataFrame) -> None:
 
     with st.container():
         c = st.columns(df.shape[0], border=False)
-        for i, (_, row) in enumerate(df.iterrows()):
+        for i, (symbol, row) in enumerate(df.iterrows()):
             c[i].metric(
-                f"{row['name']}",
+                SNAPSHOT_DISPLAY_NAMES.get(symbol, row["name"]),
                 value=f"${row['close']:,.2f}",
                 delta=f"{row['change_percent']:+.2%}",
+                help=row["name"],
                 border=True,
                 chart_data=row["sparkline"],
                 chart_type="area",
@@ -181,13 +183,13 @@ def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
     delta_kwargs = {"delta_color": "off", "delta_arrow": "off"} if hide_balances else {}
 
     st.metric(
-        "Securities Value Intraday",
+        "Securities Value",
         MASKED_VALUE if hide_balances else f"${df['market_value'].sum():,.2f} CAD",
         _fmt_delta(df["intraday_change"].sum()),
         **delta_kwargs,
     )
     st.metric(
-        "Best Intraday",
+        "Best Performer",
         f"{df['symbol'][df['intraday_change'].idxmax()]}",
         _fmt_delta(df["intraday_change"].max()),
         **delta_kwargs,
@@ -204,7 +206,7 @@ def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
     )
     st.metric("No. of Holdings", f"{len(df)}")
     st.metric(
-        "Average Days Open",
+        "Average Days Held",
         f"{df['days_held'].mean():.0f}",
     )
 

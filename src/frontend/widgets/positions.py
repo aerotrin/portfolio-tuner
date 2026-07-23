@@ -41,54 +41,30 @@ def render_portfolio_positions(
             render_portfolio_kpis(holdings, hide_balances)
 
         # Treemap
-        c = st.columns(2)
-        with c[0]:
+        view = st.segmented_control(
+            "Treemap view",
+            ["Intraday", "Total Return"],
+            default="Intraday",
+            key="positions_treemap_view",
+            label_visibility="collapsed",
+        )
+        if view == "Total Return":
+            fig = render_treemap_positions(df, row_px=300, hide_balances=hide_balances)
+            st.plotly_chart(fig, key="chart-holdings-open")
+            render_positions_health_bar(df)
+        else:
             fig = render_treemap_intraday(
                 holdings,
                 top_label="Intraday",
                 has_weight=True,
-                row_px=275,
+                row_px=300,
                 hide_balances=hide_balances,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")
-            # Health bar
             render_intraday_health_bar(df)
 
-        with c[1]:
-            fig = render_treemap_positions(df, row_px=275, hide_balances=hide_balances)
-            st.plotly_chart(fig, key="chart-holdings-open")
-
-            # Health bar
-            render_positions_health_bar(df)
-
-        with st.expander("Intraday Quotes"):
-            # Quote table — sorted by intraday change
-            intraday_equity_df = equity_df.sort_values(
-                by="change_percent", ascending=False
-            )
-            intraday_option_df = option_df.sort_values(
-                by="change_percent", ascending=False
-            )
-            if not intraday_equity_df.empty:
-                st.markdown("###### Stocks & ETFs")
-                st.dataframe(
-                    quote_table_styler(intraday_equity_df),
-                    hide_index=True,
-                    column_order=QUOTE_TABLE_CONFIG.keys(),
-                    column_config=QUOTE_TABLE_CONFIG,
-                    key="table-holdings-intraday-quote-stocks",
-                )
-            if not intraday_option_df.empty:
-                st.markdown("###### Options")
-                st.dataframe(
-                    quote_table_styler(intraday_option_df),
-                    hide_index=True,
-                    column_order=QUOTE_TABLE_CONFIG.keys(),
-                    column_config=QUOTE_TABLE_CONFIG,
-                    key="table-holdings-intraday-quote-options",
-                )
-
         # Positions Table
+        st.markdown("##### Holdings")
         if not equity_df.empty:
             st.markdown("###### Stocks & ETFs")
             st.dataframe(
@@ -114,3 +90,29 @@ def render_portfolio_positions(
             st.caption(
                 "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
             )
+
+        with st.expander("Intraday Quote Table", icon=":material/table:"):
+            intraday_equity_df = equity_df.sort_values(
+                by="change_percent", ascending=False
+            )
+            intraday_option_df = option_df.sort_values(
+                by="change_percent", ascending=False
+            )
+            if not intraday_equity_df.empty:
+                st.markdown("###### Stocks & ETFs")
+                st.dataframe(
+                    quote_table_styler(intraday_equity_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-intraday-quote-stocks",
+                )
+            if not intraday_option_df.empty:
+                st.markdown("###### Options")
+                st.dataframe(
+                    quote_table_styler(intraday_option_df),
+                    hide_index=True,
+                    column_order=QUOTE_TABLE_CONFIG.keys(),
+                    column_config=QUOTE_TABLE_CONFIG,
+                    key="table-holdings-intraday-quote-options",
+                )

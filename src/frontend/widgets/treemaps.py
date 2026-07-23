@@ -113,14 +113,14 @@ def render_treemap_positions(
             + df["gain_pct"].map("{:+.2%}".format)
             + "<br>"
         )
-        stocks_qty_text = df["open_qty"].astype(str) + " shares<br>"
-        option_qty_text = df["open_qty"].astype(str) + " contracts<br>"
+        stocks_qty_text = df["open_qty"].astype(str) + " shares"
+        option_qty_text = df["open_qty"].astype(str) + " contracts"
 
     if not stocks_df.empty:
         stocks_text = (
             common_text
             + stocks_qty_text
-            + df["days_held"].map("{:,.0f} days held".format)
+            + df["days_held"].map(" ({:,.0f} days)".format)
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
         )

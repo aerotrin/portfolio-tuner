@@ -56,6 +56,22 @@ HEIGHT_EFFICIENT_FRONTIER_CHART = 400
 HEIGHT_MARKET_SNAPSHOT = 150
 HEIGHT_ACCOUNT_DONUT = 72
 
+# [Market/Portfolio] Short display names for Market Snapshot cards.
+# Unmapped symbols fall back to the provider name (full name shown in tooltip).
+SNAPSHOT_DISPLAY_NAMES = {
+    "^GSPC": "S&P 500",
+    "^IXIC": "NASDAQ",
+    "^DJI": "Dow Jones",
+    "^GSPTSE": "S&P/TSX",
+    "^VIX": "VIX",
+    "GC=F": "Gold",
+    "SI=F": "Silver",
+    "BZ=F": "Brent Crude",
+    "GCUSD": "Gold",
+    "SIUSD": "Silver",
+    "BZUSD": "Brent Crude",
+}
+
 # [Portfolio] Cash / Securities split donut colors
 DONUT_SECURITIES_COLOR = "#4C8BF5"
 DONUT_CASH_COLOR = "#9E9E9E"
