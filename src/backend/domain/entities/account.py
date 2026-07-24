@@ -74,6 +74,8 @@ class Currency(StrEnum):
 
 TaxStatus = Literal["Registered", "Non-Registered"]
 
+ACCOUNT_NUMBER_PATTERN = r"^[A-Za-z0-9_-]+$"
+
 
 # Read/Write from/to ORM models - allow use of enum values and from_attributes
 class AccountEntity(BaseModel):
@@ -91,7 +93,7 @@ class AccountEntity(BaseModel):
 
 
 class AccountCreateRequest(BaseModel):
-    number: str
+    number: str = Field(pattern=ACCOUNT_NUMBER_PATTERN)
     name: str
     type: str
     currency: Currency
@@ -100,7 +102,7 @@ class AccountCreateRequest(BaseModel):
 
 
 class AccountPatchRequest(BaseModel):
-    number: Optional[str] = None
+    number: Optional[str] = Field(default=None, pattern=ACCOUNT_NUMBER_PATTERN)
     name: Optional[str] = None
     type: Optional[str] = None
     currency: Optional[Currency] = None

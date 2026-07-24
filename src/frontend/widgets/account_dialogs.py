@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -93,8 +94,11 @@ def create_account_dialog(benchmark_symbols: Sequence[str]) -> None:
     if not number:
         st.toast("Account number is required.", icon="⚠️")
         return
-    if not number.isdigit():
-        st.toast("Account number must contain digits only.", icon="⚠️")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", number):
+        st.toast(
+            "Account number may contain only letters, digits, hyphens, and underscores.",
+            icon="⚠️",
+        )
         return
 
     name = values.name.strip()
