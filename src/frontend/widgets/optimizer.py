@@ -53,6 +53,12 @@ METRIC_CONFIG: dict[str, dict[str, Any]] = {
     },
 }
 
+# Dirichlet weight sampling over many assets produces near-uniform weights, so
+# simulated portfolios cluster together and the frontier loses meaning. The
+# response payload also grows with n_p × symbols.
+WARN_OPTIMIZER_SYMBOLS = 25
+MAX_OPTIMIZER_SYMBOLS = 50
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -343,40 +349,69 @@ def render_optimizer(
     portfolio_symbols: list[str],
     holdings_data: pd.DataFrame | None,
     portfolio_metrics: pd.DataFrame | None,
-    account_id: str | None = None,
+    context_id: str,
+    context_label: str,
     benchmark_data: pd.DataFrame | None = None,
     risk_free_rate: float = 0.0,
+    data_source_label: str = "Holdings",
 ) -> None:
     """Render the Portfolio Weight Optimizer tab.
 
     Args:
-        portfolio_symbols: Sorted list of current holding symbols.
+        portfolio_symbols: Sorted list of candidate symbols for the optimization.
         holdings_data: Wide DataFrame indexed by symbol with a 'weight' column
-                       (decimal 0-1 representing current allocation per holding).
+                       (decimal 0-1 representing current allocation per holding),
+                       or None for research (no-holdings) contexts.
         portfolio_metrics: Wide DataFrame indexed by 'symbol', containing a
-                           'PORTF' row with actual portfolio metrics.
-        account_id: The account the optimizer is running for. Results are only
-                    shown when the stored account matches the current one.
+                           'PORTF' row with actual portfolio metrics, or None.
+        context_id: Namespace for stored results and widget state — one result
+                    slot per context (e.g. account id, "market-etf",
+                    "market-stock"). Results only render in the context they
+                    were run for.
+        context_label: Human-readable run context stamped on results
+                       (e.g. "TFSA-12345" or "Research").
         benchmark_data: Optional benchmark metrics DataFrame (has 'volatility',
                         'return1Y', 'symbol' columns) for frontier chart overlay.
         risk_free_rate: Annual risk-free rate as a decimal fraction (e.g. 0.038 = 3.8%).
+        data_source_label: Label shown in the disabled data-source selector.
     """
     st.markdown("#### :material/tune: Portfolio Weight Optimizer")
 
-    # --- Guard: no holdings -------------------------------------------------
+    result_key = f"optimizer-{context_id}-result"
+    has_holdings = holdings_data is not None
+
+    # --- Guards -------------------------------------------------------------
     if not portfolio_symbols:
         st.info(
             "No holdings found. Add positions to your portfolio to use the optimizer."
+            if has_holdings
+            else "No symbols selected. Adjust the group filter or table selection "
+            "on the Performance tab."
         )
         return
+
+    n_symbols = len(portfolio_symbols)
+    if n_symbols > MAX_OPTIMIZER_SYMBOLS:
+        st.error(
+            f"Too many symbols selected ({n_symbols}). The optimizer supports at "
+            f"most {MAX_OPTIMIZER_SYMBOLS} — narrow the selection on the "
+            "Performance tab via the group filter or table selection."
+        )
+        return
+    if n_symbols > WARN_OPTIMIZER_SYMBOLS:
+        st.warning(
+            f"Optimizing over {n_symbols} symbols: random weight sampling spreads "
+            "thin across many assets, so simulated portfolios cluster together and "
+            "results become less meaningful. Consider narrowing the selection."
+        )
 
     # --- Form ---------------------------------------------------------------
     st.selectbox(
         "Select data source",
-        options=["Holdings"],
+        options=[data_source_label],
         index=0,
         disabled=True,
-        key="optimizer_data_source",
+        key=f"optimizer-{context_id}-data-source",
     )
 
     with st.container(border=True):
@@ -386,7 +421,7 @@ def render_optimizer(
             max_value=5000,
             step=500,
             value=2500,
-            key="optimizer_n_p_slider",
+            key=f"optimizer-{context_id}-n-p-slider",
         )
 
         seed_raw = st.number_input(
@@ -396,14 +431,14 @@ def render_optimizer(
             value=None,
             step=1,
             placeholder="Leave blank for random",
-            key="optimizer_seed_input",
+            key=f"optimizer-{context_id}-seed-input",
         )
         seed: int | None = int(seed_raw) if seed_raw is not None else None
 
         run_clicked = st.button(
             "Run Optimizer",
             type="primary",
-            key="optimizer_run_button",
+            key=f"optimizer-{context_id}-run-button",
             icon=":material/play_arrow:",
         )
 
@@ -417,11 +452,9 @@ def render_optimizer(
                     n_p=n_p,
                     seed=seed,
                 )
-                st.session_state["optimizer_result"] = result
-                st.session_state["optimizer_config"] = result.get("config", {})
-                st.session_state["optimizer_account_id"] = account_id
+                st.session_state[result_key] = result
             except requests.HTTPError as e:
-                st.session_state["optimizer_result"] = None
+                st.session_state[result_key] = None
                 detail = ""
                 if e.response is not None:
                     try:
@@ -436,7 +469,7 @@ def render_optimizer(
                 logger.exception("simulate_portfolios HTTP error: %s", msg)
                 return
             except Exception:
-                st.session_state["optimizer_result"] = None
+                st.session_state[result_key] = None
                 st.error("Optimizer failed: unexpected error. Check logs for details.")
                 logger.exception("simulate_portfolios unexpected error")
                 return
@@ -444,20 +477,26 @@ def render_optimizer(
         st.success("Optimization complete!")
 
     # --- Results ------------------------------------------------------------
-    result: dict | None = st.session_state.get("optimizer_result")
-    result_account_id = st.session_state.get("optimizer_account_id")
+    result: dict | None = st.session_state.get(result_key)
 
     if result is None:
         return
 
+    optimizer_config = result.get("config", {})
+    run_symbols: list[str] = optimizer_config.get("symbols", [])
+    run_at = optimizer_config.get("run_at", "")
+    stored_seed = optimizer_config.get("seed")
+    seed_display = str(stored_seed) if stored_seed is not None else "random"
+
     st.markdown("---")
     st.markdown("#### :material/analytics: Optimization Results")
+    st.caption(f"{context_label} · {len(run_symbols)} symbols · run at {run_at}")
 
-    if result_account_id != account_id:
+    if sorted(run_symbols) != sorted(portfolio_symbols):
         st.info(
-            "Switch back to the account this optimization was run for, or run the optimizer again."
+            f"Selection has changed since this run ({len(run_symbols)} → "
+            f"{n_symbols} symbols) — run the optimizer again to update."
         )
-        return
 
     # Metric selector — drives optimal portfolio selection and all downstream sections
     selected_metric: str = st.selectbox(
@@ -465,7 +504,7 @@ def render_optimizer(
         options=list(METRIC_CONFIG.keys()),
         format_func=lambda k: METRIC_CONFIG[k]["label"],
         index=0,
-        key="optimizer_metric_select",
+        key=f"optimizer-{context_id}-metric-select",
     )
 
     optimal: dict | None = _find_optimal_portfolio(
@@ -512,11 +551,16 @@ def render_optimizer(
 
     with col_left:
         # D2 — Asset Allocation Comparison
-        st.markdown("##### Asset Allocation Comparison")
+        st.markdown(
+            "##### Asset Allocation Comparison"
+            if has_holdings
+            else "##### Optimal Asset Allocation"
+        )
 
+        show_actual = has_holdings and "weight" in holdings_data.columns
         actual_weights: dict[str, float] = {}
-        if holdings_data is not None and "weight" in holdings_data.columns:
-            for sym in portfolio_symbols:
+        if show_actual:
+            for sym in run_symbols:
                 if sym in holdings_data.index:
                     actual_weights[sym] = float(holdings_data.loc[sym, "weight"])
 
@@ -529,80 +573,80 @@ def render_optimizer(
                 "Optimal": optimal_weights.get(sym, 0.0),
                 "Delta": optimal_weights.get(sym, 0.0) - actual_weights.get(sym, 0.0),
             }
-            for sym in sorted(portfolio_symbols)
+            for sym in sorted(run_symbols)
         ]
         alloc_df = pd.DataFrame(alloc_rows)
 
         st.dataframe(
             alloc_df,
             hide_index=True,
-            column_order=["Symbol", "Actual", "Optimal", "Delta"],
+            column_order=(
+                ["Symbol", "Actual", "Optimal", "Delta"]
+                if show_actual
+                else ["Symbol", "Optimal"]
+            ),
             column_config={
                 "Symbol": st.column_config.TextColumn("Symbol"),
                 "Actual": st.column_config.NumberColumn("Actual", format="percent"),
                 "Optimal": st.column_config.NumberColumn("Optimal", format="percent"),
                 "Delta": st.column_config.NumberColumn("Delta", format="percent"),
             },
-            key="table-optimizer-allocation",
+            key=f"table-optimizer-{context_id}-allocation",
         )
         st.caption(
             "Actual weights reflect current holdings at market value. "
             "Optimal weights assume no cash allocation."
+            if show_actual
+            else "Optimal weights assume no cash allocation."
         )
 
-        # D3 — KPI Comparison
-        st.markdown("##### KPI Comparison")
-
+        # D3 — KPI Comparison (only when actual portfolio metrics exist)
         actual_portf = (
             portfolio_metrics.loc["PORTF"]
             if portfolio_metrics is not None and "PORTF" in portfolio_metrics.index
             else None
         )
 
-        actual_row: dict[str, Any] = {"Scenario": "Actual"}
-        optimal_row: dict[str, Any] = {"Scenario": "Optimal"}
-        delta_row: dict[str, Any] = {"Scenario": "Delta"}
+        if actual_portf is not None:
+            st.markdown("##### KPI Comparison")
 
-        for key in kpi_keys:
-            cfg = METRIC_CONFIG[key]
-            col_label = cfg["label"]
+            actual_row: dict[str, Any] = {"Scenario": "Actual"}
+            optimal_row: dict[str, Any] = {"Scenario": "Optimal"}
+            delta_row: dict[str, Any] = {"Scenario": "Delta"}
 
-            opt_val = optimal.get(key)
-            act_val: float | None = None
-            if (
-                actual_portf is not None
-                and key in actual_portf.index
-                and not pd.isna(actual_portf[key])
-            ):
-                act_val = float(actual_portf[key])
+            for key in kpi_keys:
+                cfg = METRIC_CONFIG[key]
+                col_label = cfg["label"]
 
-            actual_row[col_label] = (
-                cfg["format_value"](act_val) if act_val is not None else "N/A"
+                opt_val = optimal.get(key)
+                act_val: float | None = None
+                if key in actual_portf.index and not pd.isna(actual_portf[key]):
+                    act_val = float(actual_portf[key])
+
+                actual_row[col_label] = (
+                    cfg["format_value"](act_val) if act_val is not None else "N/A"
+                )
+                optimal_row[col_label] = (
+                    cfg["format_value"](opt_val) if opt_val is not None else "N/A"
+                )
+                if act_val is not None and opt_val is not None:
+                    delta_row[col_label] = cfg["format_delta"](opt_val - act_val)
+                else:
+                    delta_row[col_label] = "N/A"
+
+            kpi_df = pd.DataFrame([actual_row, optimal_row, delta_row])
+
+            st.dataframe(
+                kpi_df,
+                hide_index=True,
+                key=f"table-optimizer-{context_id}-kpi-comparison",
             )
-            optimal_row[col_label] = (
-                cfg["format_value"](opt_val) if opt_val is not None else "N/A"
-            )
-            if act_val is not None and opt_val is not None:
-                delta_row[col_label] = cfg["format_delta"](opt_val - act_val)
-            else:
-                delta_row[col_label] = "N/A"
-
-        kpi_df = pd.DataFrame([actual_row, optimal_row, delta_row])
-
-        st.dataframe(
-            kpi_df,
-            hide_index=True,
-            key="table-optimizer-kpi-comparison",
-        )
 
     # D4 — Config footer
-    optimizer_config = st.session_state.get("optimizer_config", {})
-    run_at = optimizer_config.get("run_at", "")
-    stored_seed = optimizer_config.get("seed")
-    seed_display = str(stored_seed) if stored_seed is not None else "random"
     chart_footer = (
         f"Run at: {run_at} · seed: {seed_display} · "
-        f"n={optimizer_config.get('n_p', '?')} · {objective_text}"
+        f"n={optimizer_config.get('n_p', '?')} · {objective_text} · "
+        f"{context_label} · {len(run_symbols)} symbols"
     )
 
     with col_right:

@@ -261,7 +261,8 @@ with tabs[4]:
         portfolio_symbols=portfolio_symbols,
         holdings_data=holdings_data,
         portfolio_metrics=portfolio_metrics,
-        account_id=account_id,
+        context_id=account_id,
+        context_label=f"{account.type}-{account.number}",
         benchmark_data=benchmark_data,
         risk_free_rate=rates["rf_rate"],
     )

@@ -286,7 +286,7 @@ The frontend is a Streamlit multi-page application. `app.py` is the entry point 
 
 **Pages:**
 
-- **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart, correlation tab. Symbols driven by `symbols.yml`.
+- **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart, correlation tab, optimization tab. Symbols driven by `symbols.yml`.
 - **`2_Market_Stocks.py`** — Stock research dashboard: same structure as the ETF page but for the stock symbol groups.
 - **`3_Portfolios.py`** — Main portfolio dashboard, registered once per account in the navigation: account summary KPIs, market snapshot strip, holdings positions table (with sparklines), performance tab, allocation chart, correlation matrix, and transaction records/reports.
 - **`9_About.py`** — Legal disclaimer and project information.
@@ -332,6 +332,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Portfolio allocation chart (treemap or pie) |
 | `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes |
+| `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page) |
 | `growth_chart.py` | Normalised growth chart |
 | `risk_chart.py` | Risk/return scatter chart |
 | `movers.py` | Top movers table grouped by category |
@@ -571,7 +572,7 @@ The `PortfolioSimulator` (`domain/aggregates/portfolio_simulator.py`) implements
 3. Compute performance metrics (Sharpe, volatility, return) for each simulated portfolio.
 4. Find the portfolio with the highest Sharpe ratio and return its metrics and weights as the "optimal" allocation.
 
-The simulator is called from `PortfolioManager.run_simulated_portfolio` and surfaced in the frontend's allocation widget as an alternative to the current holdings allocation.
+The simulator is called from `PortfolioManager.run_simulated_portfolio` and surfaced in the frontend's optimizer widget on the Portfolios page (holdings) and both market research pages (Performance tab symbol selection).
 
 The current default of `n_p=5000` provides a reasonable approximation of the efficient frontier for small symbol sets. The approach is straightforward but not vectorised across portfolios; performance scales linearly with the number of securities and portfolios simulated.
 

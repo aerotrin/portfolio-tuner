@@ -20,6 +20,7 @@ from frontend.widgets.correlation import render_market_correlation
 from frontend.widgets.intraday import render_market_intraday
 from frontend.widgets.kpis import render_market_snapshot, render_status_strip
 from frontend.widgets.movers import create_mover_groups, render_market_movers
+from frontend.widgets.optimizer import render_optimizer
 from frontend.widgets.performance import render_performance_view
 
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
 etf_groups = create_mover_groups(market_data, symbols_config.base_market_etfs)
 
 # --- Tabs ----------------------------------------
-tabs = st.tabs(["Movers", "Intraday", "Performance", "Correlation"])
+tabs = st.tabs(["Movers", "Intraday", "Performance", "Correlation", "Optimization"])
 
 with tabs[0]:
     render_market_movers(market_data, market_type="ETF")
@@ -165,3 +166,15 @@ with tabs[2]:
 
 with tabs[3]:
     render_market_correlation(market_analytics.closes, chart_symbols)
+
+with tabs[4]:
+    render_optimizer(
+        portfolio_symbols=chart_symbols,
+        holdings_data=None,
+        portfolio_metrics=None,
+        context_id="market-etf",
+        context_label="Research",
+        benchmark_data=benchmark_data,
+        risk_free_rate=rates["rf_rate"],
+        data_source_label="Performance tab selection",
+    )
