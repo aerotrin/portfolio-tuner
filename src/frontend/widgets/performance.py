@@ -230,14 +230,15 @@ def render_performance_view(
             f"{len(sub_metrics)} securities shown{selection_label} · metrics based on trailing 1Y returns data"
         )
 
-    st.markdown("##### Portfolio")
-    st.dataframe(
-        performance_table_styler(portfolio_metrics),
-        hide_index=True,
-        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-        column_config=PERFORMANCE_TABLE_CONFIG,
-        key=f"table-{key_prefix}-portfolio-performance",
-    )
+    if portfolio_metrics is not None:
+        st.markdown("##### Portfolio")
+        st.dataframe(
+            performance_table_styler(portfolio_metrics),
+            hide_index=True,
+            column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+            column_config=PERFORMANCE_TABLE_CONFIG,
+            key=f"table-{key_prefix}-portfolio-performance",
+        )
 
     st.markdown("##### Benchmark")
     st.dataframe(

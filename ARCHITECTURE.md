@@ -279,15 +279,16 @@ The frontend is a Streamlit multi-page application. `app.py` is the entry point 
 
 - Handles authentication (login form, session token management, token refresh)
 - Shows the disclaimer dialog on first load
-- Builds the sidebar (account selection, benchmark selection, account management buttons, refresh controls, logout)
+- Builds the navigation via `st.navigation` with one page per account (all backed by `3_Portfolios.py` — page identity is the `url_path`, so the script is shared) plus the market research and About pages, and derives the active account from the selected page
+- Builds the sidebar (active account display, benchmark selection, account management buttons, refresh controls, logout)
 - Bootstraps session state (stable defaults, symbols config, date range defaults) exactly once per session via a versioned `BOOT_VERSION` guard
-- Runs the selected page via `st.navigation`
+- Runs the selected page via `pg.run()`
 
 **Pages:**
 
 - **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart. Symbols driven by `symbols.yml`.
 - **`2_Market_Stocks.py`** — Stock research dashboard: same structure as the ETF page but for the stock symbol groups.
-- **`3_Portfolios.py`** — Main portfolio dashboard: account summary KPIs, market snapshot strip, holdings positions table (with sparklines), performance tab, allocation chart, correlation matrix, and transaction records/reports.
+- **`3_Portfolios.py`** — Main portfolio dashboard, registered once per account in the navigation: account summary KPIs, market snapshot strip, holdings positions table (with sparklines), performance tab, allocation chart, correlation matrix, and transaction records/reports.
 - **`9_About.py`** — Legal disclaimer and project information.
 
 ### Session State Management
@@ -296,7 +297,7 @@ Streamlit reruns the entire script on every user interaction. A versioned `boots
 
 Each page reads its required state from `st.session_state` at the top, and fails fast with an informative error if keys are missing (e.g., due to a browser refresh mid-session).
 
-The sidebar always runs before any page renders, establishing the selected account, benchmark, and other controls that all pages depend on.
+The navigation and sidebar always run before any page renders: the navigation establishes the active account (from the selected per-account page, falling back to the last-visited account on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on.
 
 ### Symbols Configuration
 
