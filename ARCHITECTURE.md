@@ -359,7 +359,7 @@ The database is hosted on Supabase (Postgres). SQLAlchemy is used as the ORM wit
 | `bars` | Daily OHLCV history. Composite primary key `(symbol, date)`. Composite index on `(symbol, date)`. |
 | `bars_sync_state` | Tracks the last successful bar fetch per symbol (`last_bar_date`, `last_checked_at`, status). Used for smart sync. |
 | `profiles` | Company profile data (sector, industry, beta, market cap, etc.). One row per symbol. |
-| `global_rates` | Current risk-free rate and CAD/USD FX rate. Single row, updated on refresh. |
+| `global_rates` | Current risk-free rate and CAD/USD FX rate. Single row, updated on refresh. `rf_rate` is stored as an annual decimal fraction (0.038 = 3.8%), regardless of provider. |
 
 The `bars_sync_state` table is particularly important for efficiency. Before fetching bars for a symbol, the system checks whether it has a recent successful sync. If so, it only fetches bars newer than `last_bar_date`, avoiding re-downloading redundant history on every refresh. The `force=True` flag bypasses this and re-fetches the full requested range.
 
