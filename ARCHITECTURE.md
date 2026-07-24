@@ -286,7 +286,7 @@ The frontend is a Streamlit multi-page application. `app.py` is the entry point 
 
 **Pages:**
 
-- **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart. Symbols driven by `symbols.yml`.
+- **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart, correlation tab. Symbols driven by `symbols.yml`.
 - **`2_Market_Stocks.py`** — Stock research dashboard: same structure as the ETF page but for the stock symbol groups.
 - **`3_Portfolios.py`** — Main portfolio dashboard, registered once per account in the navigation: account summary KPIs, market snapshot strip, holdings positions table (with sparklines), performance tab, allocation chart, correlation matrix, and transaction records/reports.
 - **`9_About.py`** — Legal disclaimer and project information.
@@ -331,7 +331,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `positions.py` | Holdings table with sparklines, gain/loss colouring, FX exposure, options info |
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Portfolio allocation chart (treemap or pie) |
-| `correlation.py` | Correlation matrix heatmap |
+| `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes |
 | `growth_chart.py` | Normalised growth chart |
 | `risk_chart.py` | Risk/return scatter chart |
 | `movers.py` | Top movers table grouped by category |

@@ -16,6 +16,7 @@ from frontend.shared.jobs import (
     render_refresh_job_ui,
     start_refresh_job,
 )
+from frontend.widgets.correlation import render_market_correlation
 from frontend.widgets.intraday import render_market_intraday
 from frontend.widgets.kpis import render_market_snapshot, render_status_strip
 from frontend.widgets.movers import create_mover_groups, render_market_movers
@@ -137,7 +138,7 @@ market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
 stock_groups = create_mover_groups(market_data, symbols_config.base_market_stocks)
 
 # --- Tabs ----------------------------------------
-tabs = st.tabs(["Movers", "Intraday", "Performance"])
+tabs = st.tabs(["Movers", "Intraday", "Performance", "Correlation"])
 
 with tabs[0]:
     render_market_movers(market_data, market_type="stock")
@@ -151,7 +152,7 @@ with tabs[1]:
     )
 
 with tabs[2]:
-    render_performance_view(
+    chart_symbols = render_performance_view(
         risk_free_rate=rates["rf_rate"],
         key_prefix="market-stock",
         benchmark_metrics=benchmark_data,
@@ -161,3 +162,6 @@ with tabs[2]:
         use_group_filter=True,
         groups=stock_groups,
     )
+
+with tabs[3]:
+    render_market_correlation(market_analytics.closes, chart_symbols)

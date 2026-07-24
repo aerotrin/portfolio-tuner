@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from frontend.services.streamlit_data import SecurityData
+from frontend.shared.settings import TRADING_DAYS_PER_YEAR
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
@@ -170,3 +171,18 @@ def build_security_analytics(
         closes=closes,
         close_norm=close_norm,
     )
+
+
+def compute_correlation_matrix(
+    closes: pd.DataFrame,
+    symbols: list[str] | None = None,
+) -> pd.DataFrame:
+    """Correlation of daily returns over the trailing TRADING_DAYS_PER_YEAR window.
+
+    Mirrors backend compute_correlation_matrix semantics (ffill, tail, pct_change, corr).
+    """
+    sub = closes.filter(items=symbols) if symbols is not None else closes
+    C = sub.sort_index().ffill().tail(TRADING_DAYS_PER_YEAR)
+    R = C.pct_change(fill_method=None).dropna(how="all")
+    corr = R.corr()
+    return corr.dropna(axis=0, how="all").dropna(axis=1, how="all")

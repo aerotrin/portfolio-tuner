@@ -29,7 +29,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Real-time valuation** | Combines ledger cost basis with live market quotes |
 | **Performance metrics** | MWRR (IRR-based), Sharpe ratio, volatility, returns across any date range |
 | **Technical indicators** | Timeseries indicators computed over historical OHLCV bars |
-| **Correlation matrix** | Inter-security return correlation for holdings |
+| **Correlation matrix** | Inter-security return correlation for holdings and market research pages |
 | **Portfolio simulation** | Monte Carlo simulation across random weight distributions; optimise for Sharpe, volatility, max drawdown, or 1Y return with an interactive efficient frontier chart |
 | **Market research pages** | ETF and stock screener views with movers, performance tables, and intraday chart |
 | **Transaction entry** | Manual transaction recording and broker Excel import |

@@ -19,7 +19,7 @@ def render_performance_view(
     portfolio_close_norm_eod: pd.DataFrame | None = None,
     use_group_filter: bool = False,
     groups: list[SymbolGroup] = [],
-) -> None:
+) -> list[str]:
     """EOD performance view: growth chart, risk/return chart, and statistics tables.
 
     Args:
@@ -33,11 +33,14 @@ def render_performance_view(
         portfolio_close_norm_eod: Optional portfolio normalized close prices
         use_group_filter: If True, use group-based filtering; if False, no filter widget
         groups: List of symbol groups to filter by
+
+    Returns:
+        Symbols currently in scope after the group filter and table row selection.
     """
     st.markdown("#### :material/trending_up: Performance")
     if metrics is None or metrics.empty:
         st.info("No metrics found")
-        return
+        return []
 
     # ── Filters ───────────────────────────────────────────────────────────────
     # Defaults overridden by widgets that render inside the chart columns below.
@@ -248,3 +251,5 @@ def render_performance_view(
         column_config=PERFORMANCE_TABLE_CONFIG,
         key=f"table-{key_prefix}-benchmark-performance",
     )
+
+    return chart_symbols

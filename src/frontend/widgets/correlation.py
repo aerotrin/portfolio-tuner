@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from frontend.shared.dataframe import compute_correlation_matrix
+
 
 def _top_corr_pairs(
     corr: pd.DataFrame, n: int = 3
@@ -82,3 +84,24 @@ def render_correlation_matrix(matrix: pd.DataFrame | None = None) -> None:
                 delta_color="inverse",
                 delta_arrow="off",
             )
+
+
+def render_market_correlation(closes: pd.DataFrame, symbols: list[str]) -> None:
+    """Correlation view scoped to the Performance tab's group filter and row selection."""
+    if len(symbols) < 2:
+        st.info(
+            "Select at least two securities via the Performance tab's group filter "
+            "or table selection to compute correlations."
+        )
+        return
+
+    matrix = compute_correlation_matrix(closes, symbols)
+    if matrix.shape[0] < 2:
+        st.info("Not enough price history to compute correlations.")
+        return
+
+    render_correlation_matrix(matrix)
+    st.caption(
+        "Daily-return correlation, trailing 252 trading days. "
+        "Scope follows the Performance tab's group filter and row selection."
+    )
