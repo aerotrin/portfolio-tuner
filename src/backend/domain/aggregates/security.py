@@ -33,7 +33,7 @@ class Security:
         self.quote = quote
         self.bars = bars
         self.profile = profile
-        self.rf_rate = float(rates.rf_rate) / 100
+        self.rf_rate = float(rates.rf_rate)
         self.fx_rate = float(rates.fx_rate)
 
         self.indicators_df: pd.DataFrame = pd.DataFrame()  # keep for fast internal use

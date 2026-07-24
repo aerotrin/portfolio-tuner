@@ -44,7 +44,7 @@ def _build_security(symbol: str, prices: list[float], rates: GlobalRates) -> Sec
 
 
 def _build_securities() -> list[Security]:
-    rates = GlobalRates(rf_rate=2.0, fx_rate=1.0)
+    rates = GlobalRates(rf_rate=0.02, fx_rate=1.0)
     days = 140
 
     prices_a = [100 + i * 0.3 + (i % 4) * 0.1 for i in range(days)]
@@ -63,7 +63,7 @@ def test_run_simulator_produces_expected_artifacts() -> None:
     n_p = 4
     simulator = SimPortfolios(
         securities=securities,
-        rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
+        rates=GlobalRates(rf_rate=0.02, fx_rate=1.0),
         n_p=n_p,
         seed=42,
     )
@@ -85,7 +85,7 @@ def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None
     securities = _build_securities()
     simulator = SimPortfolios(
         securities=securities,
-        rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
+        rates=GlobalRates(rf_rate=0.02, fx_rate=1.0),
         n_p=3,
     )
 
@@ -115,7 +115,7 @@ def test_find_optimal_portfolio_uses_max_sharpe_and_correct_weight_row() -> None
 def test_find_optimal_portfolio_raises_before_run_simulator() -> None:
     simulator = SimPortfolios(
         securities=_build_securities(),
-        rates=GlobalRates(rf_rate=2.0, fx_rate=1.0),
+        rates=GlobalRates(rf_rate=0.02, fx_rate=1.0),
         n_p=2,
     )
 

@@ -246,7 +246,9 @@ class FMPClient(MarketDataProvider):
             raise ValueError("No treasury rates data retrieved")
 
         date = data[0].get("date", "")
-        rf_rate = data[0].get("month6", "")  # use 6-month rate
+        # 6-month rate, reported in percent — normalize to a decimal fraction
+        rf_raw = data[0].get("month6")
+        rf_rate = (float(rf_raw) / 100.0) if rf_raw not in (None, "") else 0.0
 
         # 2) FX quote for USDCAD
         url = f"{self.cfg.base_url}/quote"

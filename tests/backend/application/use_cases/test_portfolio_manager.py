@@ -33,7 +33,7 @@ class FakeMarketDataManager:
         return {symbol: SimpleNamespace(symbol=symbol) for symbol in symbols}
 
     def read_global_rates(self):
-        return GlobalRates(rf_rate=4.5, fx_rate=1.34)
+        return GlobalRates(rf_rate=0.045, fx_rate=1.34)
 
 
 class FakeAccountManager:

@@ -145,7 +145,7 @@ def render_status_strip(rates: dict) -> None:
     with st.container(horizontal=True, border=False):
         st.caption(datetime.now().strftime("%a %Y-%m-%d %I:%M:%S %p %Z"))
         st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
-        st.caption(f"T-Bill 6m: {rates['rf_rate']:.2f}%")
+        st.caption(f"T-Bill 6m: {rates['rf_rate']:.2%}")
         if st.session_state.get("live_data_toggle", False):
             st.badge("Live data mode", icon="🔄", color="blue")
 

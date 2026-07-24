@@ -301,6 +301,21 @@ def test_build_correlation_matrix_empty_securities_guard():
     assert portfolio.correlation_matrix.entries is None
 
 
+def test_portfolio_stores_rf_rate_as_decimal_fraction():
+    # rates.rf_rate is an annual decimal fraction (0.038 = 3.8%) and must be
+    # consumed as-is — no percent-to-fraction rescaling.
+    portfolio = Portfolio(
+        id="acct-4",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[],
+        securities={},
+        rates=GlobalRates(rf_rate=0.038, fx_rate=1.0),
+    )
+
+    assert portfolio.rf_rate == pytest.approx(0.038)
+
+
 # ---------------------------------------------------------------------------
 # Helpers for MWRR / XIRR tests
 # ---------------------------------------------------------------------------

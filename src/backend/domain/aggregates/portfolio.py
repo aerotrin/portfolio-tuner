@@ -80,7 +80,7 @@ class Portfolio:
         self.positions = positions
         self.external_cash_flows = external_cash_flows
         self.securities = securities
-        self.rf_rate = float(rates.rf_rate or 0.0) / 100
+        self.rf_rate = float(rates.rf_rate or 0.0)
         self.fx_rate = float(rates.fx_rate or 1.0)
 
         self.indicators_df: pd.DataFrame = pd.DataFrame()

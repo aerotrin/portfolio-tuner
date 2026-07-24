@@ -111,14 +111,14 @@ def _build_frontier_chart(
     optimal: dict,
     portfolio_metrics: pd.DataFrame | None,
     benchmark_data: pd.DataFrame | None,
-    risk_free_rate: float,  # annual %, e.g. 5.0
+    risk_free_rate: float,  # annual decimal fraction, e.g. 0.038 = 3.8%
     footer_text: str = "",
 ) -> alt.LayerChart:
     """Build an Altair layered scatter chart of the simulated efficient frontier."""
     theme = st.context.theme.type
     base_color = "white" if theme == "dark" else "black"
     benchmark_color = "magenta"
-    rf_annual = risk_free_rate / 100.0
+    rf_annual = risk_free_rate
 
     # --- Layer 1: scatter cloud of all simulated portfolios -----------------
     df = pd.DataFrame(
@@ -359,7 +359,7 @@ def render_optimizer(
                     shown when the stored account matches the current one.
         benchmark_data: Optional benchmark metrics DataFrame (has 'volatility',
                         'return1Y', 'symbol' columns) for frontier chart overlay.
-        risk_free_rate: Annual risk-free rate as a percentage (e.g. 5.0 = 5%).
+        risk_free_rate: Annual risk-free rate as a decimal fraction (e.g. 0.038 = 3.8%).
     """
     st.markdown("#### :material/tune: Portfolio Weight Optimizer")
 

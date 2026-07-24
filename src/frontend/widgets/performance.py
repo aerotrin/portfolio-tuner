@@ -23,7 +23,7 @@ def render_performance_view(
     """EOD performance view: growth chart, risk/return chart, and statistics tables.
 
     Args:
-        risk_free_rate: Risk-free rate
+        risk_free_rate: Annual risk-free rate as a decimal fraction (e.g. 0.038 = 3.8%)
         key_prefix: Prefix for Streamlit widget keys (e.g., "market-etf" or "holdings")
         benchmark_metrics: Benchmark metrics
         benchmark_close_norm_eod: Benchmark normalized close prices

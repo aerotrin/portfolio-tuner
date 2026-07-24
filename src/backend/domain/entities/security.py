@@ -91,7 +91,10 @@ class GlobalRates(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     date: datetime = Field(default_factory=datetime.now)
-    rf_rate: Optional[float] = Field(default=0.0)
+    rf_rate: Optional[float] = Field(
+        default=0.0,
+        description="Annual risk-free rate as a decimal fraction (0.038 = 3.8%)",
+    )
     fx_rate: Optional[float] = Field(default=0.0)
 
 

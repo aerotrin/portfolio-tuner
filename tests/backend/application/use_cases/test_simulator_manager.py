@@ -18,7 +18,7 @@ class FakeMarketDataManager:
         return {s: object() for s in symbols}
 
     def read_global_rates(self):
-        return GlobalRates(rf_rate=4.5, fx_rate=1.34)
+        return GlobalRates(rf_rate=0.045, fx_rate=1.34)
 
 
 def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):

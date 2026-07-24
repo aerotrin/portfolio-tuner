@@ -83,7 +83,7 @@ def build_profile(
 
 
 def build_global_rates(
-    rf_rate: float = 4.5,
+    rf_rate: float = 0.045,
     fx_rate: float = 1.35,
     as_of: datetime = datetime(2025, 1, 10, 16, 0, 0),
 ) -> GlobalRates:
@@ -164,7 +164,7 @@ def build_portfolio_inputs() -> dict[str, object]:
                 book_value=810.6,
             )
         ],
-        "rates": build_global_rates(rf_rate=4.5, fx_rate=1.35),
+        "rates": build_global_rates(rf_rate=0.045, fx_rate=1.35),
     }
 
 
@@ -180,7 +180,7 @@ def quote_profile_rates() -> dict[str, Quote | Profile | GlobalRates]:
     return {
         "quote": build_quote(symbol="AAPL", close=106.0),
         "profile": build_profile(symbol="AAPL"),
-        "rates": build_global_rates(rf_rate=4.25, fx_rate=1.34),
+        "rates": build_global_rates(rf_rate=0.0425, fx_rate=1.34),
     }
 
 

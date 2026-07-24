@@ -42,7 +42,7 @@ class SimPortfolios:
         seed: int | None = None,
     ):
         self.securities = securities
-        self.rf_rate = float(rates.rf_rate) / 100
+        self.rf_rate = float(rates.rf_rate)
         self.fx_rate = float(rates.fx_rate)
         self.n_p = n_p
         self.seed = seed

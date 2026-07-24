@@ -8,7 +8,7 @@ from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART, TRADING_DAYS_PER_
 
 def render_risk_chart(
     securities: pd.DataFrame,
-    risk_free_rate: float,  # annual % (e.g. 5.0)
+    risk_free_rate: float,  # annual decimal fraction (e.g. 0.038 = 3.8%)
     horizon_metric: str,  # PERIOD return column (e.g. "return_1m")
     horizon_label: str,
     horizon_days: int,  # calendar days, not used in math below
@@ -29,7 +29,7 @@ def render_risk_chart(
     # ----------------------------
     # Scale RF (annual -> period)
     # ----------------------------
-    rf_ann = risk_free_rate / 100.0
+    rf_ann = risk_free_rate
     rf_period = (1.0 + rf_ann) ** (n / TRADING_DAYS_PER_YEAR) - 1.0
 
     # ----------------------------
