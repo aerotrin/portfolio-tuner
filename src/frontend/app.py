@@ -44,8 +44,8 @@ def apply_compact_css() -> None:
         """
         <style>
             .block-container {
-                padding-top: 3rem;
-                padding-bottom: 1rem;
+                padding-top: 2.25rem;
+                padding-bottom: 2rem;
                 padding-left: 2rem;
                 padding-right: 2rem;
                 max-width: 1200px;
@@ -56,12 +56,16 @@ def apply_compact_css() -> None:
             }
 
             div[data-testid="stMetricValue"] {
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
             }
 
             div[data-testid="stMetricDelta"] {
                 font-size: 12px;
+            }
+            div[data-testid="stMetricChart"] svg {
+                transform: scaleY(0.70);   /* 56px → ~24px; use 0.36 for 20px */
+                transform-origin: top left;
             }
         </style>
         """,
