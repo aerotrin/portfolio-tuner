@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Final, Literal
 from zoneinfo import ZoneInfo
 
 import humanize
@@ -7,13 +8,13 @@ import pandas as pd
 UTC = ZoneInfo("UTC")
 M_TO_SEC = 60
 MINS_STALE = 60
-COLOR_FRESH = "blue"
-COLOR_STALE = "yellow"
+COLOR_FRESH: Final = "blue"
+COLOR_STALE: Final = "yellow"
 
 
 def humanize_timestamp(
     time_in: str | datetime | pd.Timestamp | None,
-) -> tuple[str, int, str]:
+) -> tuple[str, int, Literal["blue", "yellow"]]:
     if time_in is None or time_in is pd.NaT:
         return "N/A", -1, COLOR_STALE
 

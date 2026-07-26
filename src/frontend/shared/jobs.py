@@ -1,9 +1,11 @@
 import logging
+import time
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from frontend.services.streamlit_data import get_api_client
+from frontend.shared.env_loader import config
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,8 @@ def start_refresh_job(
     job_id = st.session_state.get("job_id")
     if job_id:
         st.toast(
-            "Refresh job already in progress. Please wait for it to complete.", icon="⚠️"
+            "Refresh job already in progress. Please wait for it to complete.",
+            icon="⚠️",
         )
         st.stop()
 
@@ -114,6 +117,47 @@ def auto_refresh_if_missing(
     )
 
 
+def render_auto_refresh_toggle() -> None:
+    """Toggle for periodic background data refresh, shown next to Refresh Data."""
+    minutes = max(1, round(config.auto_refresh_data_interval / 60_000))
+    st.toggle(
+        "Auto Refresh",
+        key="auto_refresh_toggle",
+        help=f"Automatically refresh market data every {minutes} min",
+    )
+
+
+def maybe_auto_refresh_data(interval_ms: int) -> None:
+    """Trigger a smart, non-blocking refresh of the current page's symbols when
+    the Auto Refresh Data toggle is on and the interval has elapsed.
+
+    Fires immediately when first enabled. The timestamp is set before starting
+    the job so a skipped or failed attempt waits a full interval before retrying.
+    """
+    if not st.session_state.get("auto_refresh_toggle"):
+        return
+    if st.session_state.get("job_id"):
+        return
+    symbols = st.session_state.get("page_symbols") or []
+    if not symbols:
+        return
+
+    now = time.monotonic()
+    last = st.session_state.get("_last_auto_refresh_at")
+    if last is not None and (now - last) * 1000 < interval_ms:
+        return
+
+    st.session_state["_last_auto_refresh_at"] = now
+    logger.info("Auto refresh triggered for %d symbols", len(symbols))
+    start_refresh_job(
+        symbols=symbols,
+        blocking=False,
+        active_page=st.session_state.get("active_page"),
+        start_date=st.session_state.get("start_date"),
+        end_date=st.session_state.get("end_date"),
+    )
+
+
 def check_job_status() -> None:
     job_id = st.session_state.get("job_id")
     if not job_id:
@@ -138,6 +182,12 @@ def check_job_status() -> None:
         )
         st.session_state["job_just_completed"] = True
 
+        page = st.session_state.get("job_page")
+        if page:
+            st.session_state.setdefault("last_refresh_by_page", {})[page] = job.get(
+                "finished_at"
+            )
+
         _clear_job_state()
         st.cache_data.clear()
         st.rerun()
@@ -152,6 +202,21 @@ def check_job_status() -> None:
         st.rerun()
 
 
+@st.fragment(run_every="1s")
+def _refresh_status_fragment() -> None:
+    """One-stop status UI for non-blocking refresh jobs.
+
+    Runs as a scoped fragment: only this region reruns each second, so the
+    rest of the page stays untouched while polling. On job completion,
+    check_job_status() clears the data cache and triggers a single
+    full-page rerun, after which this fragment is no longer rendered and
+    its timer stops.
+    """
+    check_job_status()
+    p = st.session_state.get("job_progress")
+    st.progress(0 if p is None else int(p), text="Refreshing data…")
+
+
 def render_refresh_job_ui(active_page: str) -> None:
     """
     Rules:
@@ -160,8 +225,7 @@ def render_refresh_job_ui(active_page: str) -> None:
         * fast poll (500ms)
         * show progress bar in MAIN area (not sidebar)
     - Else:
-        * show ONLY a sidebar-bottom caption (no progress)
-        * slow poll (e.g. 5s) to catch completion
+        * show a sidebar progress fragment that polls without page reruns
     """
     if st.session_state.pop("job_just_completed", False):
         st.toast("Refresh complete", icon="✅")
@@ -194,9 +258,8 @@ def render_refresh_job_ui(active_page: str) -> None:
         st_autorefresh(interval=500, key="job_autorefresh_blocking")
         st.stop()
 
-    # ---- SIDEBAR bottom caption only ----
+    # ---- SIDEBAR non-blocking status (scoped fragment; no full-page polling) ----
     with st.sidebar:
         st.divider()
         st.subheader("Refresh Status")
-        st.caption("Refresh in progress…")
-    # app global refresh will detect completion automatically, so no need to poll here
+        _refresh_status_fragment()

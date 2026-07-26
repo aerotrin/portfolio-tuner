@@ -1,5 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
+from frontend.shared.jobs import render_auto_refresh_toggle
 from frontend.shared.settings import (
     DONUT_CASH_COLOR,
     DONUT_SECURITIES_COLOR,
@@ -9,17 +15,26 @@ from frontend.shared.settings import (
     SNAPSHOT_DISPLAY_NAMES,
 )
 from frontend.shared.time import humanize_timestamp
-import pandas as pd
-import plotly.graph_objects as go
-import streamlit as st
 
 
-def _humanize_timestamp_or_na(timestamp: pd.Timestamp | None) -> tuple[str, str]:
+def _humanize_timestamp_or_na(
+    timestamp: str | pd.Timestamp | None,
+) -> tuple[str, Literal["blue", "yellow", "gray"]]:
     """Format a timestamp for display, falling back to N/A when missing."""
-    if not timestamp or pd.isna(timestamp):
+    if timestamp is None or pd.isna(timestamp):
         return "N/A", "gray"
-    natural, _, color = humanize_timestamp(timestamp.tz_convert("UTC"))
+    natural, _, color = humanize_timestamp(timestamp)
     return natural, color
+
+
+def _last_trade_timestamp() -> pd.Timestamp | None:
+    """Latest quote last-trade timestamp across US and Canadian markets."""
+    last_us_timestamp = st.session_state.get("last_us_timestamp")
+    last_ca_timestamp = st.session_state.get("last_ca_timestamp")
+    return max(
+        (ts for ts in (last_us_timestamp, last_ca_timestamp) if ts and not pd.isna(ts)),
+        default=None,
+    )
 
 
 def _render_cash_securities_donut(
@@ -73,14 +88,6 @@ def render_account_summary(
 ) -> None:
     """Draw KPIs for the balances of a selected portfolio."""
 
-    last_us_timestamp = st.session_state.get("last_us_timestamp")
-    last_ca_timestamp = st.session_state.get("last_ca_timestamp")
-    latest_timestamp = max(
-        (ts for ts in (last_us_timestamp, last_ca_timestamp) if ts and not pd.isna(ts)),
-        default=None,
-    )
-    last_update_natural, last_update_color = _humanize_timestamp_or_na(latest_timestamp)
-
     def _fmt_amount(amount: float) -> str:
         return MASKED_VALUE if hide_balances else f"${amount:,.2f} CAD"
 
@@ -97,9 +104,6 @@ def render_account_summary(
         st.metric(
             "Total Value",
             _fmt_amount(portfolio_summary["total_value"]),
-            last_update_natural,
-            delta_color=last_update_color,
-            delta_arrow="off",
             border=False,
         )
         st.metric(
@@ -138,7 +142,7 @@ def render_account_summary(
         )
 
 
-def render_status_strip(rates: dict) -> None:
+def render_status_strip(rates: dict, active_page: str) -> None:
     """
     Render the status strip.
     """
@@ -146,8 +150,15 @@ def render_status_strip(rates: dict) -> None:
         st.caption(datetime.now().strftime("%a %Y-%m-%d %I:%M:%S %p %Z"))
         st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
         st.caption(f"T-Bill 6m: {rates['rf_rate']:.2%}")
-        if st.session_state.get("live_data_toggle", False):
-            st.badge("Live data mode", icon="🔄", color="blue")
+        st.container(width="stretch")  # spacer pins what follows to the right
+        render_auto_refresh_toggle()
+        refreshed = st.session_state.get("last_refresh_by_page", {}).get(active_page)
+        if refreshed:
+            natural, color = _humanize_timestamp_or_na(refreshed)
+            st.badge(f"Refreshed {natural}", color=color)
+        else:
+            natural, _ = _humanize_timestamp_or_na(_last_trade_timestamp())
+            st.badge(f"Last trade {natural}", color="gray")
 
 
 def render_market_snapshot(header_data: pd.DataFrame) -> None:

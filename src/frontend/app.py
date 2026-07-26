@@ -14,7 +14,7 @@ from frontend.services.streamlit_data import (
 )
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
-from frontend.shared.jobs import start_refresh_job
+from frontend.shared.jobs import maybe_auto_refresh_data, start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
 from frontend.widgets.transaction_form import transaction_form
@@ -153,7 +153,7 @@ if not st.session_state["disclaimer_accepted"]:
 # -----------------------------------------------------------------------------
 # Session bootstrap
 # -----------------------------------------------------------------------------
-BOOT_VERSION = 1  # bump this if you change bootstrap semantics
+BOOT_VERSION = 2  # bump this if you change bootstrap semantics
 
 
 def bootstrap_once() -> None:
@@ -166,8 +166,8 @@ def bootstrap_once() -> None:
 
     # --- Stable UI defaults ---
     st.session_state.setdefault("hide_balances_toggle", False)
-    st.session_state.setdefault("live_data_toggle", False)
     st.session_state.setdefault("show_session_state_toggle", False)
+    st.session_state.setdefault("auto_refresh_toggle", False)
 
     # --- Date range defaults (only if missing) ---
     if "start_date" not in st.session_state or "end_date" not in st.session_state:
@@ -231,6 +231,21 @@ bootstrap_once()
 # -----------------------------------------------------------------------------
 if config.app_refresh_interval and config.app_refresh_interval > 0:
     st_autorefresh(interval=config.app_refresh_interval, key="app_autorefresh")
+
+# The toggle widget lives on the pages; reassigning here (before any widget is
+# instantiated) keeps its state alive across pages that don't render it.
+st.session_state["auto_refresh_toggle"] = st.session_state.get(
+    "auto_refresh_toggle", False
+)
+
+# Data auto-refresh: mount a dedicated timer at the data cadence while the
+# toggle is on (independent of APP_REFRESH_INTERVAL), then fire if due.
+if (
+    st.session_state.get("auto_refresh_toggle")
+    and config.auto_refresh_data_interval > 0
+):
+    st_autorefresh(interval=config.auto_refresh_data_interval, key="data_autorefresh")
+maybe_auto_refresh_data(config.auto_refresh_data_interval)
 
 # -----------------------------------------------------------------------------
 # Services

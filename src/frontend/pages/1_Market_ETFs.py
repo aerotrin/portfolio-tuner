@@ -88,7 +88,7 @@ with h[1]:
     if market_refresh:
         start_refresh_job(
             symbols=page_symbols,
-            blocking=True,
+            blocking=False,
             active_page=active_page,
             start_date=start_date,
             end_date=end_date,
@@ -105,7 +105,7 @@ st.session_state["last_ca_timestamp"] = header_quotes[
 ]["timestamp"].max()
 
 # --- Render KPIs --------------------------------------------------------------------
-render_status_strip(rates)
+render_status_strip(rates, active_page)
 
 # --- Market snapshot --------------------------------------------------------------------
 render_market_snapshot(header_quotes)

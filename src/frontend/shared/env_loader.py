@@ -24,6 +24,9 @@ class Config(BaseSettings):
     connect_timeout: int = 5  # seconds
     read_timeout: int = 30  # seconds
     app_refresh_interval: int = 120_000  # ms
+    auto_refresh_data_interval: int = (
+        300_000  # ms; data auto-refresh cadence when toggle is on
+    )
 
     # Supabase auth
     supabase_url: str = ""
