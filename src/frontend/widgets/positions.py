@@ -49,7 +49,7 @@ def render_portfolio_positions(
             label_visibility="collapsed",
         )
         if view == "Total Return":
-            fig = render_treemap_positions(df, row_px=300, hide_balances=hide_balances)
+            fig = render_treemap_positions(df, row_px=120, hide_balances=hide_balances)
             st.plotly_chart(fig, key="chart-holdings-open")
             render_positions_health_bar(df)
         else:
@@ -57,7 +57,7 @@ def render_portfolio_positions(
                 holdings,
                 top_label="Intraday",
                 has_weight=True,
-                row_px=300,
+                row_px=120,
                 hide_balances=hide_balances,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")

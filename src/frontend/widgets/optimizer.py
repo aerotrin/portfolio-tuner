@@ -575,7 +575,9 @@ def render_optimizer(
             }
             for sym in sorted(run_symbols)
         ]
-        alloc_df = pd.DataFrame(alloc_rows)
+        alloc_df = pd.DataFrame(alloc_rows).sort_values(
+            "Optimal", ascending=False, ignore_index=True
+        )
 
         st.dataframe(
             alloc_df,
