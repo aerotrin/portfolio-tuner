@@ -14,7 +14,7 @@ from frontend.services.streamlit_data import (
 )
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
-from frontend.shared.jobs import maybe_auto_refresh_data, start_refresh_job
+from frontend.shared.jobs import start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
 from frontend.widgets.transaction_form import transaction_form
@@ -243,13 +243,14 @@ st.session_state["auto_refresh_toggle"] = st.session_state.get(
 )
 
 # Data auto-refresh: mount a dedicated timer at the data cadence while the
-# toggle is on (independent of APP_REFRESH_INTERVAL), then fire if due.
+# toggle is on (independent of APP_REFRESH_INTERVAL). The fire check itself
+# lives in the page scripts (maybe_auto_refresh_data) so it always sees the
+# current page's symbols, never a previous page's stale state.
 if (
     st.session_state.get("auto_refresh_toggle")
     and config.auto_refresh_data_interval > 0
 ):
     st_autorefresh(interval=config.auto_refresh_data_interval, key="data_autorefresh")
-maybe_auto_refresh_data(config.auto_refresh_data_interval)
 
 # -----------------------------------------------------------------------------
 # Services

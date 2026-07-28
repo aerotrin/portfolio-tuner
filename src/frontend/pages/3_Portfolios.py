@@ -7,6 +7,7 @@ from frontend.services.streamlit_data import (
     check_missing_symbols,
     load_account_details,
     load_account_records,
+    load_accounts_list,
     load_portfolio_snapshot,
     load_security_data,
 )
@@ -23,6 +24,7 @@ from frontend.shared.dataframe import (
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
     check_job_status,
+    maybe_auto_refresh_data,
     render_refresh_job_ui,
     start_refresh_job,
 )
@@ -88,12 +90,22 @@ records = load_account_records(account.id)
 # --- Load portfolio symbols -------------------------------------------------------
 portfolio_symbols = sorted(set(p["symbol"] for p in records.open_positions))
 st.session_state["portfolio_symbols"] = portfolio_symbols
-page_symbols = sorted(set(portfolio_symbols + base_symbols))
+
+# All account pages share the "portfolio" refresh scope, so refresh jobs cover
+# holdings across every account — switching accounts always shows current data.
+all_holdings: set[str] = set()
+for acc in load_accounts_list(st.session_state["user_id"]):
+    recs = load_account_records(acc.id)
+    all_holdings.update(p["symbol"] for p in recs.open_positions)
+page_symbols = sorted(all_holdings | set(base_symbols))
 st.session_state["page_symbols"] = page_symbols
 
 # --- Ensure all page symbols are available else blocking refresh job --------
 missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
 auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
+
+# --- Timed / first-visit background refresh (Auto Refresh toggle) ------------
+maybe_auto_refresh_data()
 
 # --- Load base data (header + benchmark only) ------------------------------
 securities = load_security_data(base_symbols, start_date, end_date)

@@ -127,12 +127,19 @@ def render_auto_refresh_toggle() -> None:
     )
 
 
-def maybe_auto_refresh_data(interval_ms: int) -> None:
+def maybe_auto_refresh_data() -> None:
     """Trigger a smart, non-blocking refresh of the current page's symbols when
-    the Auto Refresh Data toggle is on and the interval has elapsed.
+    the Auto Refresh toggle is on, with an independent cadence per page scope.
 
-    Fires immediately when first enabled. The timestamp is set before starting
-    the job so a skipped or failed attempt waits a full interval before retrying.
+    Each page keeps its own timer in ``_last_auto_refresh_at_by_page`` so heavy
+    market pages and the portfolio scope never postpone each other. A page that
+    was never refreshed this session fires immediately; one already refreshed
+    (manual or blocking job) just arms its timer and fires an interval later.
+
+    Call from page scripts after ``page_symbols`` / ``active_page`` are set, so
+    the check never sees a previous page's state. The timestamp is set before
+    starting the job so a skipped or failed attempt waits a full interval
+    before retrying.
     """
     if not st.session_state.get("auto_refresh_toggle"):
         return
@@ -142,17 +149,26 @@ def maybe_auto_refresh_data(interval_ms: int) -> None:
     if not symbols:
         return
 
+    page = st.session_state.get("active_page")
+    last_by_page: dict = st.session_state.setdefault(
+        "_last_auto_refresh_at_by_page", {}
+    )
+    last = last_by_page.get(page)
     now = time.monotonic()
-    last = st.session_state.get("_last_auto_refresh_at")
-    if last is not None and (now - last) * 1000 < interval_ms:
+
+    if last is None:
+        if page in st.session_state.get("last_refresh_by_page", {}):
+            last_by_page[page] = now
+            return
+    elif (now - last) * 1000 < config.auto_refresh_data_interval:
         return
 
-    st.session_state["_last_auto_refresh_at"] = now
+    last_by_page[page] = now
     logger.info("Auto refresh triggered for %d symbols", len(symbols))
     start_refresh_job(
         symbols=symbols,
         blocking=False,
-        active_page=st.session_state.get("active_page"),
+        active_page=page,
         start_date=st.session_state.get("start_date"),
         end_date=st.session_state.get("end_date"),
     )
