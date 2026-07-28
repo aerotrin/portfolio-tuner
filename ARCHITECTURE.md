@@ -332,7 +332,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Portfolio allocation chart (treemap or pie) |
 | `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes |
-| `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page) |
+| `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page); derives trailing 1M/3M period Sharpe metrics client-side from simulated window returns and annual volatility — when one is selected, the frontier chart and KPI cards render in that window's period space |
 | `growth_chart.py` | Normalised growth chart |
 | `risk_chart.py` | Risk/return scatter chart |
 | `movers.py` | Top movers table grouped by category |
