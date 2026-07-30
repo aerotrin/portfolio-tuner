@@ -56,7 +56,7 @@ class YFinanceClient(MarketDataProvider):
             fi = ticker.fast_info
             info = ticker.info
 
-            previous_close: float = fi.previous_close or 0.0
+            previous_close: float = fi.regular_market_previous_close or 0.0
             last_price: float = fi.last_price or 0.0
             change = last_price - previous_close
             change_pct = (change / previous_close) if previous_close else 0.0
