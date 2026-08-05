@@ -141,6 +141,34 @@ def test_build_account_and_summary_and_view_accessors(
     assert len(records.cash_flows) == 1
 
 
+def test_return_of_capital_is_cash_flow_but_not_external_flow(
+    sample_transactions: list[Transaction],
+):
+    roc = Transaction(
+        transaction_date=date(2024, 1, 15),
+        settlement_date=date(2024, 1, 17),
+        transaction_type=TransactionKind.RETURN_OF_CAPITAL,
+        symbol="AAPL",
+        market="USA",
+        description="Return of capital distribution",
+        quantity=0,
+        amount=40.0,
+    )
+    repo = FakeAccountDataRepository()
+    repo.transactions["ACC-1"] = sample_transactions + [roc]
+    manager = AccountManager(importer=FakeAccountDataImporter(), db=repo)
+
+    account = manager.build_account("ACC-1")
+
+    # Included in cash balance, excluded from external flows (net investment / MWRR)
+    assert account.cash_balance == pytest.approx(800.0)
+    assert sum(cf.amount for cf in account.external_cash_flows) == pytest.approx(1000.0)
+    assert [cf.amount for cf in account.roc_distributions] == [pytest.approx(40.0)]
+
+    records = manager.get_account_records("ACC-1")
+    assert len(records.cash_flows) == 2
+
+
 def test_create_account_rejects_duplicate_account_number():
     repo = FakeAccountDataRepository()
     existing = AccountEntity(

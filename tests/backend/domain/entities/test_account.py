@@ -4,7 +4,13 @@ from pydantic import ValidationError
 from src.backend.domain.entities.account import (
     AccountCreateRequest,
     AccountPatchRequest,
+    CASH_TRANSACTIONS,
     Currency,
+    EXPENSE_TRANSACTIONS,
+    INCOME_TRANSACTIONS,
+    QTY_EFFECT,
+    ROC_TRANSACTIONS,
+    TransactionKind,
 )
 
 
@@ -39,3 +45,24 @@ def test_patch_request_accepts_valid_number_and_none():
 def test_patch_request_rejects_invalid_account_numbers(number):
     with pytest.raises(ValidationError):
         AccountPatchRequest(number=number)
+
+
+def test_qty_effect_covers_every_transaction_kind():
+    # QTY_EFFECT is looked up unguarded during portfolio reconstruction;
+    # a missing entry crashes every account rebuild.
+    assert set(QTY_EFFECT) == {k.value for k in TransactionKind}
+
+
+def test_transaction_classification_sets_are_disjoint_kinds():
+    sets = [
+        CASH_TRANSACTIONS,
+        INCOME_TRANSACTIONS,
+        EXPENSE_TRANSACTIONS,
+        ROC_TRANSACTIONS,
+    ]
+    all_kinds = {k.value for k in TransactionKind}
+    seen: set[str] = set()
+    for s in sets:
+        assert s <= all_kinds
+        assert not (s & seen)
+        seen |= s

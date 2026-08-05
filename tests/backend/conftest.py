@@ -230,7 +230,7 @@ def option_transactions() -> list[Transaction]:
 
 @pytest.fixture
 def cashflow_transactions() -> list[Transaction]:
-    """Cashflow-only scenario: contribution, dividend, and fee."""
+    """Cashflow-only scenario: contribution, dividend, fee, and return of capital."""
     base = date(2025, 1, 5)
     return [
         Transaction(
@@ -277,6 +277,21 @@ def cashflow_transactions() -> list[Transaction]:
             exchange_rate=1.0,
             fees_paid=0.0,
             amount=-12.0,
+        ),
+        Transaction(
+            transaction_date=base + timedelta(days=14),
+            settlement_date=base + timedelta(days=14),
+            transaction_type=TransactionKind.RETURN_OF_CAPITAL,
+            symbol="XYZ.TO",
+            market="CDN",
+            description="Return of capital distribution",
+            quantity=0,
+            currency=Currency.CAD,
+            price=0.0,
+            commission=0.0,
+            exchange_rate=1.0,
+            fees_paid=0.0,
+            amount=35.0,
         ),
     ]
 

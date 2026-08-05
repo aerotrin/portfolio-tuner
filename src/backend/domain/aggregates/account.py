@@ -10,6 +10,7 @@ from backend.domain.entities.account import (
     EXPENSE_TRANSACTIONS,
     INCOME_TRANSACTIONS,
     OpenLot,
+    ROC_TRANSACTIONS,
     Transaction,
 )
 
@@ -33,6 +34,7 @@ class Account:
         self.external_cash_flows: list[CashFlow] = []
         self.income: list[CashFlow] = []
         self.expenses: list[CashFlow] = []
+        self.roc_distributions: list[CashFlow] = []
 
         # Quick attributes
         self.cash_balance: float = 0.0
@@ -64,4 +66,7 @@ class Account:
         ]
         self.expenses = [
             c for c in self.cash_flows if c.transaction_type in EXPENSE_TRANSACTIONS
+        ]
+        self.roc_distributions = [
+            c for c in self.cash_flows if c.transaction_type in ROC_TRANSACTIONS
         ]

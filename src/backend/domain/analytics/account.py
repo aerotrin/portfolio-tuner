@@ -15,6 +15,7 @@ from backend.domain.entities.account import (
     INCOME_TRANSACTIONS,
     OpenLot,
     QTY_EFFECT,
+    ROC_TRANSACTIONS,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,8 @@ def _identify_category(row: pd.Series) -> Category:
         return Category.INCOME
     if ttype in EXPENSE_TRANSACTIONS:
         return Category.EXPENSE
+    if ttype in ROC_TRANSACTIONS:
+        return Category.RETURN_OF_CAPITAL
     if desc.startswith("call "):
         return Category.CALL_OPTION
     if desc.startswith("put "):
@@ -184,7 +187,12 @@ def _parse_positions(
         row_qty = qty_effect * quantity
         sym = r["symbol"]
         cat = r["category"]
-        if cat in [Category.CASH, Category.INCOME, Category.EXPENSE]:
+        if cat in [
+            Category.CASH,
+            Category.INCOME,
+            Category.EXPENSE,
+            Category.RETURN_OF_CAPITAL,
+        ]:
             cash_flows.append(
                 CashFlow(
                     transaction_date=_to_python_date(r["transaction_date"]),

@@ -24,6 +24,7 @@ QTY_EFFECT: dict[str, int] = {
     "Withdrawal": 0,
     "Dividend": 0,
     "Interest": 0,
+    "Return of Capital": 0,  # distribution - cash in, no quantity effect
     "Tax": 0,
     "HST": 0,
     "Fee": 0,
@@ -47,6 +48,7 @@ class TransactionKind(StrEnum):
     WITHDRAWAL = "Withdrawal"
     DIVIDEND = "Dividend"
     INTEREST = "Interest"
+    RETURN_OF_CAPITAL = "Return of Capital"
     TAX = "Tax"
     HST = "HST"
     FEE = "Fee"
@@ -55,12 +57,14 @@ class TransactionKind(StrEnum):
 CASH_TRANSACTIONS = {"Contrib", "Transf In", "EFT", "Transfer", "Withdrawal"}
 INCOME_TRANSACTIONS = {"Dividend", "Interest"}
 EXPENSE_TRANSACTIONS = {"Tax", "HST", "Fee"}
+ROC_TRANSACTIONS = {"Return of Capital"}
 
 
 class Category(StrEnum):
     CASH = "Cash"
     INCOME = "Income"
     EXPENSE = "Expense"
+    RETURN_OF_CAPITAL = "Return of Capital"
     CALL_OPTION = "Call Option"
     PUT_OPTION = "Put Option"
     FIXED_INCOME = "Fixed Income"

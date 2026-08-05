@@ -7,7 +7,6 @@ import pytest
 from src.backend.domain.analytics.account import _prep_transactions, run_records_parser
 from src.backend.domain.entities.account import Category
 
-
 BASE_COLUMNS = {
     "transaction_date": pd.Timestamp("2024-01-01"),
     "settlement_date": pd.Timestamp("2024-01-03"),
@@ -73,6 +72,14 @@ def test_prep_transactions_symbol_category_and_option_fields():
                 quantity=1,
                 amount=-300,
             ),
+            _tx(
+                transaction_date=pd.Timestamp("2024-01-02"),
+                symbol="XYZ",
+                transaction_type="Return of Capital",
+                description="Return of capital distribution",
+                quantity=0,
+                amount=15.0,
+            ),
         ]
     )
 
@@ -92,6 +99,10 @@ def test_prep_transactions_symbol_category_and_option_fields():
     assert put_row["option_expiry"] == date(2024, 11, 15)
     assert put_row["option_strike"] == 410.5
     assert put_row["option_osi"] == "QQQ241115P00410500"
+
+    roc_row = prepped.loc[prepped["transaction_type"] == "Return of Capital"].iloc[0]
+    assert roc_row["category"] == Category.RETURN_OF_CAPITAL
+    assert roc_row["qty_effect"] == 0
 
 
 def test_run_records_parser_partial_full_close_and_oversell_clamp():
@@ -225,6 +236,15 @@ def test_run_records_parser_cashflow_mapping_settlement_and_none_normalization()
                 amount=-3.0,
                 settlement_date=pd.NaT,
             ),
+            _tx(
+                transaction_date=pd.Timestamp("2024-01-02"),
+                transaction_type="Return of Capital",
+                symbol="XYZ",
+                description="Return of capital distribution",
+                quantity=0,
+                amount=15.0,
+                settlement_date=pd.Timestamp("2024-01-04"),
+            ),
         ]
     )
 
@@ -232,9 +252,9 @@ def test_run_records_parser_cashflow_mapping_settlement_and_none_normalization()
 
     assert len(open_lots) == 0
     assert len(closed_lots) == 0
-    assert len(cash_flows) == 3
+    assert len(cash_flows) == 4
 
-    contrib, dividend, fee = cash_flows
+    contrib, dividend, fee, roc = cash_flows
     assert contrib.category == Category.CASH
     assert contrib.settlement_date == date(2024, 1, 4)
 
@@ -243,3 +263,7 @@ def test_run_records_parser_cashflow_mapping_settlement_and_none_normalization()
 
     assert fee.category == Category.EXPENSE
     assert fee.settlement_date is None
+
+    assert roc.category == Category.RETURN_OF_CAPITAL
+    assert roc.transaction_type == "Return of Capital"
+    assert roc.amount == pytest.approx(15.0)

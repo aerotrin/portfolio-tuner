@@ -13,6 +13,7 @@ BUY_SELL_TRANSACTIONS = {"Buy", "Purchase", "Sell", "Sold"}
 CASH_TRANSACTIONS = {"Contrib", "Transf In", "EFT", "Transfer", "Withdrawal"}
 INCOME_TRANSACTIONS = {"Dividend", "Interest"}
 EXPENSE_TRANSACTIONS = {"Tax", "HST", "Fee"}
+ROC_TRANSACTIONS = {"Return of Capital"}
 
 
 def get_date_filter_options(
@@ -157,7 +158,9 @@ def render_cash_flows_table(
         st.markdown("###### Income & Expenses")
         sub_df = df_filtered[
             df_filtered["transaction_type"].isin(
-                list(INCOME_TRANSACTIONS) + list(EXPENSE_TRANSACTIONS)
+                list(INCOME_TRANSACTIONS)
+                + list(EXPENSE_TRANSACTIONS)
+                + list(ROC_TRANSACTIONS)
             )
         ]
 
@@ -183,6 +186,10 @@ def render_cash_flows_table(
                 st.metric(
                     "Other Expenses",
                     f"${sub_df[(sub_df['category'] == 'Expense') & (sub_df['transaction_type'] != 'Tax')]['amount'].sum():,.2f}",
+                )
+                st.metric(
+                    "Return of Capital",
+                    f"${sub_df[sub_df['transaction_type'] == 'Return of Capital']['amount'].sum():,.2f}",
                 )
 
             st.dataframe(

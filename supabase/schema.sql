@@ -104,6 +104,7 @@ CREATE TYPE "public"."transactionkind" AS ENUM (
     'WITHDRAWAL',
     'DIVIDEND',
     'INTEREST',
+    'RETURN_OF_CAPITAL',
     'TAX',
     'HST',
     'FEE'

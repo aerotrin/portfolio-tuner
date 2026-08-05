@@ -98,6 +98,7 @@ A `Transaction` is the atomic unit of the ledger. It represents a single financi
 - **Cash events** — `Contrib`, `EFT`, `Transfer`, `Transf In`, `Withdrawal`
 - **Income events** — `Dividend`, `Interest`
 - **Expense events** — `Tax`, `HST`, `Fee`
+- **Distribution events** — `Return of Capital` (no quantity effect; own cash-flow category, excluded from external flows so it does not distort net investment or MWRR)
 
 Each transaction has a kind, date, symbol (optional), quantity, price, amount, currency, commission, exchange rate, and fees. The `QTY_EFFECT` mapping defines whether a given transaction kind increases, decreases, or leaves position size unchanged — this drives the portfolio reconstruction logic.
 
