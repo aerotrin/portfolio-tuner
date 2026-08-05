@@ -23,14 +23,23 @@ def render_treemap_intraday(
     has_weight: bool = False,
     row_px=None,
     hide_balances: bool = False,
+    group_cols: list[str] | None = None,
 ) -> go.Figure:
+    """Intraday treemap; `group_cols` nests symbols under those columns
+    (e.g. region -> group). A symbol appearing in several groups renders once
+    per parent. Height is capped when grouped — tiles shrink, not the page."""
     df = df.copy()
 
-    height = (
-        _size_treemap(df.shape[0], row_px=row_px)
-        if row_px is not None
-        else _size_treemap(df.shape[0])
-    )
+    if group_cols:
+        n_parents = df.groupby(group_cols, sort=False).ngroups
+        height = _size_treemap(df.index.nunique()) + 24 * n_parents
+        height = min(max(height, 3 * HEIGHT_TREEMAP), 6 * HEIGHT_TREEMAP)
+    else:
+        height = (
+            _size_treemap(df.shape[0], row_px=row_px)
+            if row_px is not None
+            else _size_treemap(df.shape[0])
+        )
 
     df["display_text"] = (
         df["close"].map("{:,.2f}".format)
@@ -46,9 +55,18 @@ def render_treemap_intraday(
         + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
     )
 
+    path: list = [px.Constant(top_label)]
+    if group_cols:
+        # An explicit leaf column: passing df.index alongside other path columns
+        # is ambiguous to plotly when a column shares the index's name ("symbol").
+        df["_leaf"] = df.index
+        path.extend([*group_cols, "_leaf"])
+    else:
+        path.append(df.index)
+
     base_config = {
         "data_frame": df,
-        "path": [px.Constant(top_label), df.index],
+        "path": path,
         "color": "change_percent",
         "color_continuous_scale": "RdYlGn",
         "color_continuous_midpoint": 0,

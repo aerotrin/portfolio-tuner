@@ -1,34 +1,58 @@
 # Symbol Configuration for Portfolio Tuner
 
 # HOW TO USE THIS FILE
-# - Add or remove symbols in each group as needed.
+# - Copy this file to symbols.yml in the project root, then edit it there.
+# - Add or remove symbols in each group's symbols: list as needed.
 # - Only use ticker symbols supported by your data provider (e.g. Financial Modeling Prep).
 # - To specify a non-US exchange, add its suffix code to the symbol. Currently supported: .TO (Toronto).
+# - To comment out (disable) a symbol, start the line with #.
 # - Keep in mind: more symbols = slower refreshes. Check your subscription's API limits before bulk adding symbols.
+#
+# GROUP ATTRIBUTES
+# Every section below is a list of groups, and every group is written the same
+# way: region, type, label, then symbols.
+#
+# - region: optional, defaults to "Global". Suggested values: US, Canada, World, Global.
+# - type:   optional, defaults to "Other". Suggested values: Equity, Fixed Income,
+#           Multi-Asset, Commodity, Crypto, Forex, Index.
+# - label:  required. Names a concept and is meant to repeat across regions and
+#           types — see the three "Core" groups below. Only the region + type +
+#           label combination has to be unique.
+#
+# Suggested values sort first in the filter chips; any other value is accepted and
+# sorts after them. region and type drive the Region / Type filters on the market
+# pages only — they are never validated against a symbol's exchange or holdings.
+#
+# The group filter lists each label once, so selecting "Core" with no region chosen
+# gives you every region's Core group; pick a region to narrow it.
 
 # Required ------------------------------
 benchmarks:
-  label: Benchmarks
-  symbols:
-    - ^GSPC
-    - ^IXIC
-    - ^DJI
-    - ^GSPTSE
-
+  - region: Global
+    type: Index
+    label: Benchmarks
+    symbols:
+      - ^GSPC
+      - ^IXIC
+      - ^DJI
+      - ^GSPTSE
 
 snapshot:
-  label: Market Snapshot
-  symbols:
-    - ^GSPC
-    - ^IXIC
-    - ^DJI
-    - ^GSPTSE
-    - ^VIX
-
+  - region: Global
+    type: Index
+    label: Market Snapshot
+    symbols:
+      - ^GSPC
+      - ^IXIC
+      - ^DJI
+      - ^GSPTSE
+      - ^VIX
 
 # Select market ETFs labelled by theme. Do not add stocks here.
 base_market_etfs:
-  - label: Index
+  - region: US
+    type: Equity
+    label: Core
     symbols:
       - VOO
       - QQQ
@@ -36,25 +60,26 @@ base_market_etfs:
       - VTI
       - IJH
       - IJR
+
+  # Same label as above — the region is what tells them apart.
+  - region: Canada
+    type: Equity
+    label: Core
+    symbols:
+      - XIC.TO
+      - XIU.TO
+      - VDY.TO
+
+  - region: World
+    type: Equity
+    label: Core
+    symbols:
       - VEA
       - VWO
 
-  - label: Commodity
-    symbols:
-      - USO
-      - BNO
-      - UNG
-      - UGA
-      - CPER
-      - SLV
-      - GLD
-
-  - label: Crypto
-    symbols:
-      - IBIT
-      - ETHA
-  
-  - label: US Sectors
+  - region: US
+    type: Equity
+    label: Sectors
     symbols:
       - XLI
       - XLV
@@ -68,10 +93,38 @@ base_market_etfs:
       - XLY
       - XLC
 
+  - region: US
+    type: Fixed Income
+    label: Government Bond
+    symbols:
+      - SHY
+      - IEF
+      - TLT
+
+  - region: Global
+    type: Commodity
+    label: Commodity
+    symbols:
+      - USO
+      - BNO
+      - UNG
+      - UGA
+      - CPER
+      - SLV
+      - GLD
+
+  - region: Global
+    type: Crypto
+    label: Crypto
+    symbols:
+      - IBIT
+      - ETHA
 
 # Select market stocks labelled by theme. Do not add ETFs here.
 base_market_stocks:
-  - label: Magnificent 7
+  - region: US
+    type: Equity
+    label: Magnificent 7
     symbols:
       - AAPL
       - MSFT
@@ -81,7 +134,9 @@ base_market_stocks:
       - TSLA
       - NVDA
 
-  - label: Dow 30
+  - region: US
+    type: Equity
+    label: Dow 30
     symbols:
       - AAPL
       - AMGN

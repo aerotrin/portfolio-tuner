@@ -20,7 +20,7 @@ from frontend.shared.jobs import (
 from frontend.widgets.correlation import render_market_correlation
 from frontend.widgets.intraday import render_market_intraday
 from frontend.widgets.kpis import render_market_snapshot, render_status_strip
-from frontend.widgets.movers import create_mover_groups, render_market_movers
+from frontend.widgets.movers import render_market_movers
 from frontend.widgets.optimizer import render_optimizer
 from frontend.widgets.performance import render_performance_view
 
@@ -139,9 +139,6 @@ market_quotes = add_sparkline(
 new_cols = market_analytics.metrics.columns.difference(market_quotes.columns)
 market_data = market_quotes.join(market_analytics.metrics[new_cols], how="left")
 
-# Create extended groups for market movers
-stock_groups = create_mover_groups(market_data, symbols_config.base_market_stocks)
-
 # --- Tabs ----------------------------------------
 tabs = st.tabs(["Movers", "Intraday", "Performance", "Correlation", "Optimization"])
 
@@ -165,7 +162,7 @@ with tabs[2]:
         metrics=market_data,
         close_norm_eod=market_close_norm,
         use_group_filter=True,
-        groups=stock_groups,
+        groups=symbols_config.base_market_stocks,
     )
 
 with tabs[3]:

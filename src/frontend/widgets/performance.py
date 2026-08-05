@@ -4,6 +4,7 @@ import streamlit as st
 from frontend.shared.symbols_loader import SymbolGroup
 from frontend.shared.settings import RETURN_HORIZONS
 from frontend.shared.styles import PERFORMANCE_TABLE_CONFIG, performance_table_styler
+from frontend.widgets.filters import render_group_facets, resolve_group_facets
 from frontend.widgets.growth_chart import render_growth_chart
 from frontend.widgets.risk_chart import render_risk_chart
 
@@ -18,7 +19,7 @@ def render_performance_view(
     portfolio_metrics: pd.DataFrame | None = None,
     portfolio_close_norm_eod: pd.DataFrame | None = None,
     use_group_filter: bool = False,
-    groups: list[SymbolGroup] = [],
+    groups: list[SymbolGroup] | None = None,
 ) -> list[str]:
     """EOD performance view: growth chart, risk/return chart, and statistics tables.
 
@@ -31,11 +32,11 @@ def render_performance_view(
         close_norm_eod: Normalized close prices for securities
         portfolio_metrics: Optional portfolio metrics (for holdings view)
         portfolio_close_norm_eod: Optional portfolio normalized close prices
-        use_group_filter: If True, use group-based filtering; if False, no filter widget
-        groups: List of symbol groups to filter by
+        use_group_filter: If True, render the region/type/group facet filter
+        groups: Symbol groups the facet filter draws its options from
 
     Returns:
-        Symbols currently in scope after the group filter and table row selection.
+        Symbols currently in scope after the facet filter and table row selection.
     """
     st.markdown("#### :material/trending_up: Performance")
     if metrics is None or metrics.empty:
@@ -46,23 +47,15 @@ def render_performance_view(
     # Defaults overridden by widgets that render inside the chart columns below.
     sel_horizon_label = next(iter(RETURN_HORIZONS))
     show_signal = True
-    groups_labels = [group.label for group in groups]
-    if use_group_filter:
-        # Read the group multiselect value from session state so that sel_symbols
-        # is available for derived state before the widget renders inside c[0].
-        _raw_sel: list[str] = st.session_state.get(
-            f"{key_prefix}-groups-selector",
-            [groups_labels[0]] if groups_labels else [],
+
+    # Resolved here, rendered lower down: sel_symbols feeds the derived state
+    # below, which the charts and the returned chart_symbols depend on.
+    facets = None
+    if use_group_filter and groups:
+        facets = resolve_group_facets(
+            groups, key_prefix, default_labels=(groups[0].label,)
         )
-        _sel_groups = _raw_sel if _raw_sel else groups_labels
-        sel_symbols = sorted(
-            {
-                symbol
-                for group in groups
-                if group.label in _sel_groups
-                for symbol in group.symbols
-            }
-        )
+        sel_symbols = [s for s in facets.symbols if s in metrics.index]
     else:
         sel_symbols = []
 
@@ -96,6 +89,63 @@ def render_performance_view(
     )
     chart_close_norm = close_norm_eod[chart_symbols]
     chart_metrics = sub_metrics.loc[chart_symbols]
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    if facets is not None:
+        render_group_facets(facets)
+
+    h = st.columns(2)
+    with h[0]:
+        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
+
+    with h[1]:
+        rh = st.columns([9, 1], vertical_alignment="center")
+        with rh[0]:
+            st.markdown("##### :material/scatter_plot: Risk/Return")
+        with rh[1]:
+            with st.popover(":material/settings:", type="tertiary"):
+                sel_horizon_label = st.radio(
+                    "Return range",
+                    RETURN_HORIZONS.keys(),
+                    horizontal=True,
+                    key=f"{key_prefix}-horizon-selector",
+                )
+                show_signal = st.checkbox(
+                    "Signal",
+                    value=False,
+                    key=f"{key_prefix}-signal-checkbox",
+                )
+
+                if portfolio_metrics is not None:
+                    st.caption("Bubble size represents weight in portfolio")
+                else:
+                    st.caption("Bubble size represents Sharpe ratio")
+
+    sel_horizon = RETURN_HORIZONS[sel_horizon_label]
+
+    c = st.columns(2)
+    with c[0]:
+        with st.container(border=True):
+            growth_chart_args = [chart_close_norm, benchmark_close_norm_eod]
+            if portfolio_close_norm_eod is not None:
+                growth_chart_args.append(portfolio_close_norm_eod)
+            fig = render_growth_chart(*growth_chart_args)
+            st.plotly_chart(fig, key=f"chart-{key_prefix}-growth")
+
+    with c[1]:
+        with st.container(border=True):
+            chart = render_risk_chart(
+                chart_metrics,
+                risk_free_rate=risk_free_rate,
+                horizon_metric=sel_horizon["metric"],
+                horizon_days=sel_horizon["days"],
+                horizon_trading_days=sel_horizon["trading_days"],
+                horizon_label=sel_horizon_label,
+                benchmark=benchmark_metrics,
+                portfolio=portfolio_metrics,
+                show_signal=show_signal,
+            )
+            st.altair_chart(chart, key=f"chart-{key_prefix}-risk-return")
 
     # ── Statistics ─────────────────────────────────────────────────────
     if portfolio_metrics is not None:
@@ -152,68 +202,6 @@ def render_performance_view(
         st.caption(
             rf"Trailing 1Y, annualized. Delta vs. {st.session_state['benchmark']} benchmark."
         )
-
-    # ── Charts ────────────────────────────────────────────────────────────────
-    if use_group_filter:
-        st.multiselect(
-            ":material/filter_list: Filter by groups",
-            groups_labels,
-            default=[groups_labels[0]] if groups_labels else [],
-            key=f"{key_prefix}-groups-selector",
-        )
-
-    h = st.columns(2)
-    with h[0]:
-        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
-
-    with h[1]:
-        rh = st.columns([9, 1], vertical_alignment="center")
-        with rh[0]:
-            st.markdown("##### :material/scatter_plot: Risk/Return")
-        with rh[1]:
-            with st.popover(":material/settings:", type="tertiary"):
-                sel_horizon_label = st.radio(
-                    "Return range",
-                    RETURN_HORIZONS.keys(),
-                    horizontal=True,
-                    key=f"{key_prefix}-horizon-selector",
-                )
-                show_signal = st.checkbox(
-                    "Signal",
-                    value=False,
-                    key=f"{key_prefix}-signal-checkbox",
-                )
-
-                if portfolio_metrics is not None:
-                    st.caption("Bubble size represents weight in portfolio")
-                else:
-                    st.caption("Bubble size represents Sharpe ratio")
-
-    sel_horizon = RETURN_HORIZONS[sel_horizon_label]
-
-    c = st.columns(2)
-    with c[0]:
-        with st.container(border=True):
-            growth_chart_args = [chart_close_norm, benchmark_close_norm_eod]
-            if portfolio_close_norm_eod is not None:
-                growth_chart_args.append(portfolio_close_norm_eod)
-            fig = render_growth_chart(*growth_chart_args)
-            st.plotly_chart(fig, key=f"chart-{key_prefix}-growth")
-
-    with c[1]:
-        with st.container(border=True):
-            chart = render_risk_chart(
-                chart_metrics,
-                risk_free_rate=risk_free_rate,
-                horizon_metric=sel_horizon["metric"],
-                horizon_days=sel_horizon["days"],
-                horizon_trading_days=sel_horizon["trading_days"],
-                horizon_label=sel_horizon_label,
-                benchmark=benchmark_metrics,
-                portfolio=portfolio_metrics,
-                show_signal=show_signal,
-            )
-            st.altair_chart(chart, key=f"chart-{key_prefix}-risk-return")
 
     # ── Tables ─────────────────────────────────────────────────────
     st.markdown("##### Securities")

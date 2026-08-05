@@ -104,7 +104,7 @@ This is a **Hexagonal Architecture (Ports & Adapters)** Python monorepo managed 
 - `app.py` — entry point: Supabase auth, sidebar, session state bootstrap
 - `pages/` — Streamlit multi-page app (auto-discovered)
 - `services/streamlit_data.py` — `@st.cache_data`-wrapped API loaders
-- `widgets/` — UI rendering components (one per concept: kpis, positions, optimizer, etc.)
+- `widgets/` — UI rendering components (one per concept: kpis, positions, optimizer, filters, etc.)
 - `shared/` — config, dataframe helpers, symbol loading from `symbols.yml`
 
 ### Database

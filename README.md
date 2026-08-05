@@ -105,7 +105,7 @@ FMP_RATE_LIMIT=100
 
 ### Symbols Configuration
 
-The market research pages and benchmark lists are driven by `symbols.yml` in the project root. Edit this file to add or remove symbols, grouped by category. See `symbols.example.yml` for the full format and instructions.
+The market research pages and benchmark lists are driven by `symbols.yml` in the project root. Edit this file to add or remove symbols, grouped by category. Each group can also declare a `type` and `region`, which drive the cascading filters on the market pages. See `symbols.example.yml` for the full format and instructions.
 
 ---
 
