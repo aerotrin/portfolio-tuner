@@ -45,12 +45,14 @@ QUOTE_TABLE_CONFIG = {
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
-    "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
-    "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
-    "volume": st.column_config.NumberColumn("Volume", format="compact"),
+    "change": st.column_config.NumberColumn("Chg $", format="%+.2f"),
+    "change_percent": st.column_config.NumberColumn("Chg 1D", format="percent"),
+    "return5D": st.column_config.NumberColumn("Chg 5D", format="percent"),
+    "return1M": st.column_config.NumberColumn("Chg 1M", format="percent"),
     "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
-    "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
+    "volume": st.column_config.NumberColumn("Volume", format="compact"),
     # "open": st.column_config.NumberColumn("Open", format="accounting"),
+    "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
     "exchange": st.column_config.TextColumn("Exchange"),
@@ -59,36 +61,29 @@ QUOTE_TABLE_CONFIG = {
 
 
 def quote_table_styler(df: pd.DataFrame) -> Styler:
-    VALUE_COLS = [
-        "change",
-        "change_percent",
-    ]
+    VALUE_COLS = ["change", "change_percent", "return5D", "return1M"]
 
     def style_row(row):
-        change = row["change"]
-        if pd.isna(change):
-            color = NO_STYLE
-        elif change >= 0:
-            color = f"color: {GREEN};"
-        elif change < 0:
-            color = f"color: {RED};"
-        else:
-            color = NO_STYLE
-
         style = pd.Series(NO_STYLE, index=df.columns)
+
         for col in VALUE_COLS:
-            if col in style.index:
-                style[col] = color
+            if col not in style.index:
+                continue
+            val = row[col]
+            if pd.isna(val):
+                continue
+            if val > 0:
+                style[col] = f"color: {GREEN};"
+            elif val < 0:
+                style[col] = f"color: {RED};"
 
         # RSI coloring
-        rsi = row["rsi"]
-        if not pd.isna(rsi):
+        rsi = row.get("rsi")
+        if "rsi" in style.index and not pd.isna(rsi):
             if rsi > 70:
-                color = f"color: {RED};"
+                style["rsi"] = f"color: {RED};"
             elif rsi < 30:
-                color = f"color: {GREEN};"
-            else:
-                color = NO_STYLE
+                style["rsi"] = f"color: {GREEN};"
 
         return style
 

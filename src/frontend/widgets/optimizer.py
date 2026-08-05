@@ -767,49 +767,7 @@ def render_optimizer(
             else "Optimal weights assume no cash allocation."
         )
 
-        # D3 — KPI Comparison (only when actual portfolio metrics exist)
-        actual_portf = (
-            portfolio_metrics.loc["PORTF"]
-            if portfolio_metrics is not None and "PORTF" in portfolio_metrics.index
-            else None
-        )
-
-        if actual_portf is not None:
-            st.markdown("##### KPI Comparison")
-
-            actual_row: dict[str, Any] = {"Scenario": "Actual"}
-            optimal_row: dict[str, Any] = {"Scenario": "Optimal"}
-            delta_row: dict[str, Any] = {"Scenario": "Delta"}
-
-            for key in kpi_keys:
-                cfg = ALL_METRIC_CONFIG[key]
-                col_label = cfg["label"]
-
-                opt_val = optimal.get(key)
-                act_val: float | None = None
-                if key in actual_portf.index and not pd.isna(actual_portf[key]):
-                    act_val = float(actual_portf[key])
-
-                actual_row[col_label] = (
-                    cfg["format_value"](act_val) if act_val is not None else "N/A"
-                )
-                optimal_row[col_label] = (
-                    cfg["format_value"](opt_val) if opt_val is not None else "N/A"
-                )
-                if act_val is not None and opt_val is not None:
-                    delta_row[col_label] = cfg["format_delta"](opt_val - act_val)
-                else:
-                    delta_row[col_label] = "N/A"
-
-            kpi_df = pd.DataFrame([actual_row, optimal_row, delta_row])
-
-            st.dataframe(
-                kpi_df,
-                hide_index=True,
-                key=f"table-optimizer-{context_id}-kpi-comparison",
-            )
-
-    # D4 — Config footer
+    # D3 — Config footer
     chart_footer = (
         f"Run at: {run_at} · seed: {seed_display} · "
         f"n={optimizer_config.get('n_p', '?')} · {objective_text} · "
@@ -817,7 +775,7 @@ def render_optimizer(
     )
 
     with col_right:
-        # D5 — Efficient Frontier chart
+        # D4 — Efficient Frontier chart
         horizon_label, horizon_days, return_field, sharpe_field, _ = _metric_horizon(
             selected_metric
         )
