@@ -14,7 +14,6 @@ from frontend.shared.dto import (
     TransactionCreate,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +37,7 @@ class PortfolioData:
     indicators: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     correlation_matrix: dict[str, dict[str, Any]] = field(default_factory=dict)
     securities: SecurityData = field(default_factory=SecurityData)
+    accounts: list[dict[str, Any]] = field(default_factory=list)  # total view only
 
 
 @dataclass
@@ -205,6 +205,36 @@ def load_portfolio_snapshot(
     except Exception:
         st.error("Failed to load portfolio data.")
         logger.exception("Failed to load portfolio snapshot for %s", account_id)
+        st.stop()
+    return portfolio
+
+
+@st.cache_data(show_spinner="Loading portfolio data…")
+def load_total_portfolio_snapshot(
+    user_id: str,  # noqa: ARG001 — cache key only; the cache is process-global
+    start_date: str | None,
+    end_date: str | None,
+) -> PortfolioData:
+    """Load the combined all-accounts portfolio snapshot in a single request."""
+    api = get_api_client()
+    portfolio = PortfolioData()
+    try:
+        snap = api.get_total_portfolio(start_date, end_date)
+        portfolio.summary = snap.get("summary", {})
+        portfolio.holdings = snap.get("holdings", {})
+        portfolio.metrics = snap.get("metrics", {})
+        portfolio.indicators["PORTF"] = snap.get("indicators", [])
+        portfolio.correlation_matrix = snap.get("correlation_matrix", {})
+        portfolio.accounts = snap.get("accounts", [])
+        for sym, analytics in snap.get("securities", {}).items():
+            portfolio.securities.quote[sym] = analytics.get("quote") or {}
+            portfolio.securities.profile[sym] = analytics.get("profile") or {}
+            portfolio.securities.metrics[sym] = analytics.get("metrics") or {}
+            portfolio.securities.bars[sym] = analytics.get("bars") or []
+            portfolio.securities.indicators[sym] = analytics.get("indicators") or []
+    except Exception:
+        st.error("Failed to load portfolio data.")
+        logger.exception("Failed to load total portfolio snapshot")
         st.stop()
     return portfolio
 

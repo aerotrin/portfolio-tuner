@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from frontend.services.streamlit_data import SecurityData
+from frontend.services.streamlit_data import PortfolioData, SecurityData
 from frontend.shared.settings import TRADING_DAYS_PER_YEAR
 
 
@@ -170,6 +170,79 @@ def build_security_analytics(
         indicators=indicators,
         closes=closes,
         close_norm=close_norm,
+    )
+
+
+@dataclass
+class HoldingsView:
+    holdings_data: pd.DataFrame  # positions + analytics metrics, index = holding key
+    performance_data: pd.DataFrame  # one row per quote symbol, index = symbol
+    close_norm: pd.DataFrame  # wide timeseries "close_norm" per symbol
+    portfolio_metrics: pd.DataFrame  # single "PORTF" row with sparkline/indicators
+    portfolio_close_norm: pd.DataFrame  # wide "PORTF" close_norm
+    correlation_matrix: pd.DataFrame | None  # square symbol matrix
+    equity_qty: dict[str, int]  # symbol -> open qty (equity rows only)
+
+
+def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> HoldingsView:
+    """Build the holdings/portfolio DataFrames a portfolio page renders.
+
+    Holdings are keyed by holding key (quote symbol, or OSI for options), so
+    per-symbol analytics are joined via the 'symbol' column, not the index.
+    """
+    positions = make_scalar_wide_df(portfolio.holdings)
+
+    analytics = build_security_analytics(symbols, portfolio.securities)
+    positions = add_sparkline(
+        positions, analytics.closes, add_intraday_close=True, symbol_col="symbol"
+    )
+
+    new_cols = analytics.metrics.columns.difference(positions.columns)
+    holdings_data = positions.join(analytics.metrics[new_cols], on="symbol", how="left")
+
+    equity = positions[positions["holding_category"] == "Equity"]
+    # Group-sum: a symbol can appear once per account in the total view
+    equity_qty = {
+        str(s): int(q) for s, q in equity.groupby("symbol")["open_qty"].sum().items()
+    }
+
+    # Per-symbol view for the performance charts/table: quote and metric columns
+    # are identical across a symbol's rows (they come from the underlying), so
+    # collapse to one row per symbol with position weights rolled up.
+    performance_data = holdings_data.copy()
+    performance_data["weight"] = performance_data.groupby("symbol")["weight"].transform(
+        "sum"
+    )
+    performance_data = performance_data[
+        ~performance_data["symbol"].duplicated(keep="first")
+    ].set_index("symbol", drop=False)
+
+    portfolio_metrics = make_scalar_wide_df(portfolio.metrics)
+    portfolio_metrics = portfolio_metrics.set_index("symbol", drop=False)
+
+    portfolio_indicators = make_timeseries_long_df(portfolio.indicators)
+    portfolio_closes = make_timeseries_wide_df(portfolio_indicators, "close")
+    portfolio_close_norm = make_timeseries_wide_df(portfolio_indicators, "close_norm")
+
+    correlation_matrix = None
+    entries = (portfolio.correlation_matrix or {}).get("entries")
+    if entries:
+        correlation_matrix = pd.DataFrame(entries).pivot(
+            index="row", columns="col", values="value"
+        )
+
+    portfolio_metrics = add_sparkline(portfolio_metrics, portfolio_closes)
+    portfolio_metrics = add_last_indicators(portfolio_metrics, portfolio_indicators)
+    portfolio_metrics = add_trade_signal(portfolio_metrics)
+
+    return HoldingsView(
+        holdings_data=holdings_data,
+        performance_data=performance_data,
+        close_norm=analytics.close_norm,
+        portfolio_metrics=portfolio_metrics,
+        portfolio_close_norm=portfolio_close_norm,
+        correlation_matrix=correlation_matrix,
+        equity_qty=equity_qty,
     )
 
 

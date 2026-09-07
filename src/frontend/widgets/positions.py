@@ -7,6 +7,7 @@ from frontend.shared.styles import (
     balance_safe_column_order,
     positions_table_styler,
     quote_table_styler,
+    with_account_column,
 )
 from frontend.widgets.kpis import (
     render_intraday_health_bar,
@@ -30,6 +31,23 @@ def render_portfolio_positions(
         st.info("No holdings found")
     else:
         df = holdings.copy()
+
+        # Multi-account frames (all-accounts scope) get an Account column and
+        # account-nested treemaps; single-account frames carry one value and
+        # render as before. Scope switching lives in the page-level selector.
+        has_accounts = "account" in df.columns and df["account"].nunique() > 1
+        group_cols = None
+        equity_config = POSITIONS_EQUITY_TABLE_CONFIG
+        option_config = POSITIONS_OPTION_TABLE_CONFIG
+        quote_config = QUOTE_TABLE_CONFIG
+        if has_accounts:
+            group_cols = ["account"]
+            equity_config = with_account_column(POSITIONS_EQUITY_TABLE_CONFIG, "symbol")
+            option_config = with_account_column(
+                POSITIONS_OPTION_TABLE_CONFIG, "option_osi"
+            )
+            quote_config = with_account_column(QUOTE_TABLE_CONFIG, "symbol")
+
         df = df.sort_values(by="gain_pct", ascending=False)
         equity_df = cast(pd.DataFrame, df[df["holding_category"] == "Equity"])
         option_df = cast(
@@ -37,8 +55,8 @@ def render_portfolio_positions(
         )
 
         # Metrics
-        with st.container(border=True, horizontal=True):
-            render_portfolio_kpis(holdings, hide_balances)
+        with st.container(border=False, horizontal=True):
+            render_portfolio_kpis(df, hide_balances)
 
         # Treemap
         view = st.segmented_control(
@@ -49,16 +67,19 @@ def render_portfolio_positions(
             label_visibility="collapsed",
         )
         if view == "Total Return":
-            fig = render_treemap_positions(df, row_px=120, hide_balances=hide_balances)
+            fig = render_treemap_positions(
+                df, row_px=120, hide_balances=hide_balances, group_cols=group_cols
+            )
             st.plotly_chart(fig, key="chart-holdings-open")
             render_positions_health_bar(df)
         else:
             fig = render_treemap_intraday(
-                holdings,
+                df,
                 top_label="Intraday",
                 has_weight=True,
                 row_px=120,
                 hide_balances=hide_balances,
+                group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")
             render_intraday_health_bar(df)
@@ -70,10 +91,8 @@ def render_portfolio_positions(
             st.dataframe(
                 positions_table_styler(equity_df),
                 hide_index=True,
-                column_order=balance_safe_column_order(
-                    POSITIONS_EQUITY_TABLE_CONFIG, hide_balances
-                ),
-                column_config=POSITIONS_EQUITY_TABLE_CONFIG,
+                column_order=balance_safe_column_order(equity_config, hide_balances),
+                column_config=equity_config,
                 key="table-holdings-open-stocks",
             )
         if not option_df.empty:
@@ -81,10 +100,8 @@ def render_portfolio_positions(
             st.dataframe(
                 positions_table_styler(option_df),
                 hide_index=True,
-                column_order=balance_safe_column_order(
-                    POSITIONS_OPTION_TABLE_CONFIG, hide_balances
-                ),
-                column_config=POSITIONS_OPTION_TABLE_CONFIG,
+                column_order=balance_safe_column_order(option_config, hide_balances),
+                column_config=option_config,
                 key="table-holdings-open-options",
             )
             st.caption(
@@ -103,8 +120,8 @@ def render_portfolio_positions(
                 st.dataframe(
                     quote_table_styler(intraday_equity_df),
                     hide_index=True,
-                    column_order=QUOTE_TABLE_CONFIG.keys(),
-                    column_config=QUOTE_TABLE_CONFIG,
+                    column_order=quote_config.keys(),
+                    column_config=quote_config,
                     key="table-holdings-intraday-quote-stocks",
                 )
             if not intraday_option_df.empty:
@@ -112,7 +129,7 @@ def render_portfolio_positions(
                 st.dataframe(
                     quote_table_styler(intraday_option_df),
                     hide_index=True,
-                    column_order=QUOTE_TABLE_CONFIG.keys(),
-                    column_config=QUOTE_TABLE_CONFIG,
+                    column_order=quote_config.keys(),
+                    column_config=quote_config,
                     key="table-holdings-intraday-quote-options",
                 )

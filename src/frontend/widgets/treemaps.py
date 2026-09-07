@@ -16,6 +16,21 @@ def _size_treemap(
     return base_px + rows * row_px
 
 
+def _leaf_labels(df: pd.DataFrame) -> "pd.Series | pd.Index":
+    """Tile label per row: OSI for options, else quote symbol.
+
+    Holdings frames may be indexed by a compound key ("account|symbol") in the
+    total-portfolio view, so grouped treemaps label leaves from the columns.
+    Frames without a symbol column (market pages) keep the index, which is the
+    symbol there.
+    """
+    if "symbol" not in df.columns:
+        return df.index
+    if "option_osi" in df.columns:
+        return df["option_osi"].fillna(df["symbol"])
+    return df["symbol"]
+
+
 def render_treemap_intraday(
     df: pd.DataFrame,
     top_label: str = "",
@@ -59,7 +74,7 @@ def render_treemap_intraday(
     if group_cols:
         # An explicit leaf column: passing df.index alongside other path columns
         # is ambiguous to plotly when a column shares the index's name ("symbol").
-        df["_leaf"] = df.index
+        df["_leaf"] = _leaf_labels(df)
         path.extend([*group_cols, "_leaf"])
     else:
         path.append(df.index)
@@ -103,15 +118,23 @@ def render_treemap_intraday(
 
 
 def render_treemap_positions(
-    df: pd.DataFrame, row_px=None, hide_balances: bool = False
+    df: pd.DataFrame,
+    row_px=None,
+    hide_balances: bool = False,
+    group_cols: list[str] | None = None,
 ) -> go.Figure:
     df = df.copy()
 
-    height = (
-        _size_treemap(df.shape[0], row_px=row_px)
-        if row_px is not None
-        else _size_treemap(df.shape[0])
-    )
+    if group_cols:
+        n_parents = df.groupby(group_cols, sort=False).ngroups
+        height = _size_treemap(df.index.nunique()) + 24 * n_parents
+        height = min(max(height, 3 * HEIGHT_TREEMAP), 6 * HEIGHT_TREEMAP)
+    else:
+        height = (
+            _size_treemap(df.shape[0], row_px=row_px)
+            if row_px is not None
+            else _size_treemap(df.shape[0])
+        )
 
     option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
     stocks_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]
@@ -164,9 +187,16 @@ def render_treemap_positions(
         stocks_text,
     )
 
+    path: list = [px.Constant("Holdings")]
+    if group_cols:
+        df["_leaf"] = _leaf_labels(df)
+        path.extend([*group_cols, "_leaf"])
+    else:
+        path.append(df.index)
+
     fig = px.treemap(
         data_frame=df,
-        path=[px.Constant("Holdings"), df.index],
+        path=path,
         values="weight",
         color="gain_pct",
         color_continuous_scale="RdYlGn",

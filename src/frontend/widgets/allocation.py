@@ -6,9 +6,15 @@ from frontend.shared.settings import TRADE_SIZING_GUIDE
 
 
 def render_portfolio_allocation(
-    portfolio_summary: dict, df: pd.DataFrame | None
+    portfolio_summary: dict,
+    df: pd.DataFrame | None,
+    accounts: list[dict] | None = None,
 ) -> None:
-    """Allocation breakdown for current holdings."""
+    """Allocation breakdown for current holdings.
+
+    `accounts` takes the total portfolio's per-account slices to add a
+    By Account chart; account pages leave it as None.
+    """
     df = df.copy() if df is not None else pd.DataFrame()
 
     st.markdown("#### :material/pie_chart: Allocation")
@@ -72,6 +78,23 @@ def render_portfolio_allocation(
         )
         fig.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig)
+
+        # Total Portfolio only: each account's slice of the combined value
+        if accounts and len(accounts) > 1:
+            st.markdown("##### By Account")
+            account_df = pd.DataFrame.from_records(accounts)
+            fig = px.pie(
+                account_df,
+                names="label",
+                values="total_value",
+                color="label",
+                hover_data=["name"],
+                height=450,
+                hole=0.3,
+            )
+            fig.update_traces(textposition="inside", textinfo="percent+label")
+            st.plotly_chart(fig)
+            st.caption("Total account value (securities + cash).")
 
     portfolio_value = portfolio_summary["total_value"]
     st.markdown("##### Position Sizing Guide")

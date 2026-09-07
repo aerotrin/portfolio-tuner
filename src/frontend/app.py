@@ -291,23 +291,15 @@ account_display_labels = [f"{account.type} #{account.number}" for account in acc
 account_ids = [account.id for account in accounts]
 
 # -----------------------------------------------------------------------------
-# Navigation — one page per account, all backed by pages/3_Portfolios.py.
-# Page identity in st.navigation is the url_path, so sharing the script is fine.
+# Navigation — a single Portfolio page; the account scope (All Accounts or a
+# specific account) is chosen on the page itself and held in session state.
 # -----------------------------------------------------------------------------
-account_pages = []
-for i, account in enumerate(accounts):
-    account_pages.append(
-        (
-            st.Page(
-                page="pages/3_Portfolios.py",
-                title=f"📊 {account_display_labels[i]}",
-                url_path=f"account-{account.number}",
-                default=(i == 0),
-            ),
-            account,
-            account_display_labels[i],
-        )
-    )
+portfolio_page = st.Page(
+    page="pages/3_Portfolio.py",
+    title="📊 Portfolio",
+    url_path="portfolio",
+    default=True,
+)
 
 pg = st.navigation(
     {
@@ -315,24 +307,24 @@ pg = st.navigation(
             st.Page(page="pages/1_Market_ETFs.py", title="🏦 ETFs Research"),
             st.Page(page="pages/2_Market_Stocks.py", title="🏦 Stocks Research"),
         ],
-        "Accounts": [page for page, _, _ in account_pages],
+        "Accounts": [portfolio_page],
         "Help": [st.Page(page="pages/9_About.py", title="ℹ️ About")],
     }
 )
 
-# Resolve the active account from the selected page (identity comparison —
-# the default page's public url_path is "" so it can't be matched by path).
-for page, account, label in account_pages:
-    if pg is page:
-        st.session_state["account_id"] = account.id
-        st.session_state["account_display_label"] = label
-        break
-else:
-    # Market/About page: keep last-visited account; fall back to first if unset
-    # or if the remembered account was deleted.
-    if st.session_state.get("account_id") not in account_ids:
-        st.session_state["account_id"] = account_ids[0]
-        st.session_state["account_display_label"] = account_display_labels[0]
+# Resolve the active account from the Portfolio page's scope selector (widget
+# state commits before a rerun, so the sidebar below is in sync in the same
+# run). "ALL" or no selection keeps the last active account — falling back to
+# the first account if unset or if the remembered account was deleted.
+_scope = st.session_state.get("portfolio_account_scope")
+if _scope in account_ids:
+    st.session_state["account_id"] = _scope
+    st.session_state["account_display_label"] = account_display_labels[
+        account_ids.index(_scope)
+    ]
+elif st.session_state.get("account_id") not in account_ids:
+    st.session_state["account_id"] = account_ids[0]
+    st.session_state["account_display_label"] = account_display_labels[0]
 
 
 # -----------------------------------------------------------------------------
@@ -389,7 +381,7 @@ with st.sidebar:
 
     st.toggle("Hide Balances", key="hide_balances_toggle")
 
-    # Active account is driven by the navigation (per-account pages)
+    # Active account is driven by the Portfolio page's scope selector
     account_display_label = st.session_state["account_display_label"]
     selected = accounts[account_ids.index(st.session_state["account_id"])]
     st.caption(f"Active account: {account_display_label}")

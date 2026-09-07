@@ -161,6 +161,25 @@ def render_status_strip(rates: dict, active_page: str) -> None:
             st.badge(f"Last trade {natural}", color="gray")
 
 
+def _render_refresh_badge(active_page: str) -> None:
+    refreshed = st.session_state.get("last_refresh_by_page", {}).get(active_page)
+    if refreshed:
+        natural, color = _humanize_timestamp_or_na(refreshed)
+        st.badge(f"Refreshed {natural}", color=color, help=str(refreshed))
+    else:
+        natural, _ = _humanize_timestamp_or_na(_last_trade_timestamp())
+        st.badge(f"Last trade {natural}", color="gray")
+
+
+def render_status_inline(rates: dict, active_page: str) -> None:
+    """Rates captions, Auto Refresh toggle, and refresh badge, rendered into
+    the caller's horizontal container (for compact page headers)."""
+    st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
+    st.caption(f"T-Bill 6m: {rates['rf_rate']:.2%}")
+    render_auto_refresh_toggle()
+    _render_refresh_badge(active_page)
+
+
 def render_market_snapshot(header_data: pd.DataFrame) -> None:
     """
     Render the index metrics cards.

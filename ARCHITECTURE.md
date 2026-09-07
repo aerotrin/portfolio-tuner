@@ -284,7 +284,7 @@ The frontend is a Streamlit multi-page application. `app.py` is the entry point 
 
 - Handles authentication (login form, session token management, token refresh)
 - Shows the disclaimer dialog on first load
-- Builds the navigation via `st.navigation` with one page per account (all backed by `3_Portfolios.py` — page identity is the `url_path`, so the script is shared) plus the market research and About pages, and derives the active account from the selected page
+- Builds the navigation via `st.navigation` with a single Portfolio page (`3_Portfolio.py`) plus the market research and About pages, and derives the active account from the Portfolio page's account-scope selector (session key `portfolio_account_scope`, read before the sidebar renders — widget state commits before a rerun, so the sidebar is in sync in the same run). An "All Accounts" scope keeps the last-selected account active for the sidebar dialogs and transaction form, like the market pages
 - Builds the sidebar (active account display, benchmark selection, account management buttons, refresh controls, logout)
 - Bootstraps session state (stable defaults, symbols config, date range defaults) exactly once per session via a versioned `BOOT_VERSION` guard
 - Runs the selected page via `pg.run()`
@@ -293,7 +293,7 @@ The frontend is a Streamlit multi-page application. `app.py` is the entry point 
 
 - **`1_Market_ETFs.py`** — ETF research dashboard: market snapshot strip, movers table, performance tab, intraday chart, correlation tab, optimization tab. Symbols driven by `symbols.yml`.
 - **`2_Market_Stocks.py`** — Stock research dashboard: same structure as the ETF page but for the stock symbol groups.
-- **`3_Portfolios.py`** — Main portfolio dashboard, registered once per account in the navigation: account summary KPIs, market snapshot strip, holdings positions table (with sparklines), performance tab, allocation chart, correlation matrix, and transaction records/reports.
+- **`3_Portfolio.py`** — Main portfolio dashboard with an account-scope segmented control ("All Accounts" + one option per account). The scope decides which cached loader backs the page: a single account uses `GET /accounts/{id}/portfolio`, All Accounts uses `GET /accounts/portfolio` — so every tab (positions, performance, allocation, correlation, optimization, records) is scoped by construction. All Accounts mode shows weights as a share of the combined total, pooled MWRR, cross-account correlation, an optimizer run under its own `total-portfolio` context (single accounts use their account id), and an info notice on the Records tab (ledger data renders only for a selected account).
 - **`9_About.py`** — Legal disclaimer and project information.
 
 ### Session State Management
@@ -302,7 +302,7 @@ Streamlit reruns the entire script on every user interaction. A versioned `boots
 
 Each page reads its required state from `st.session_state` at the top, and fails fast with an informative error if keys are missing (e.g., due to a browser refresh mid-session).
 
-The navigation and sidebar always run before any page renders: the navigation establishes the active account (from the selected per-account page, falling back to the last-visited account on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on.
+The navigation and sidebar always run before any page renders: `app.py` establishes the active account from the Portfolio page's scope selector (falling back to the last-selected account when the scope is All Accounts or on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on.
 
 ### Symbols Configuration
 

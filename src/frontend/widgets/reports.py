@@ -265,7 +265,10 @@ def confirm_delete_transaction_dialog(account_id: str, transaction_id: str) -> N
 
 
 def render_transactions_table(
-    transactions: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp | None
+    transactions: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp | None,
+    account_id: str,
 ) -> None:
     st.markdown("##### Transaction Records")
 
@@ -322,6 +325,6 @@ def render_transactions_table(
 
     pending_id = st.session_state.get("pending_delete_transaction_id")
     if pending_id:
-        confirm_delete_transaction_dialog(st.session_state["account_id"], pending_id)
+        confirm_delete_transaction_dialog(account_id, pending_id)
 
     st.divider()

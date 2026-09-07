@@ -35,6 +35,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Transaction entry** | Manual transaction recording and broker Excel import |
 | **Background refresh jobs** | Async market data updates with real-time progress tracking |
 | **Multi-account support** | Switch between accounts; each user's data is isolated at the database level via RLS |
+| **Total portfolio view** | One Portfolio page with an account selector — All Accounts combines every account (per-account position attribution, pooled MWRR, weights vs the combined total, cross-account correlation, allocation, optimization) or scope everything to a single account |
 | **Options tracking** | Call and put positions tracked with intrinsic value, DTE, and breakeven |
 
 ![Quick demo](docs/images/streamlit_wide_fast.gif)

@@ -11,8 +11,9 @@ This guide walks through the complete user flow for Portfolio Tuner: from first 
 3. [Creating Your First Account](#3-creating-your-first-account)
 4. [Importing Transaction Records](#4-importing-transaction-records)
 5. [The Sidebar](#5-the-sidebar)
-6. [Account Portfolio Pages](#6-account-portfolio-pages)
+6. [The Portfolio Page](#6-the-portfolio-page)
    - [Optimization Tab](#optimization-tab)
+   - [All Accounts View](#all-accounts-view)
 7. [Market Research Pages](#7-market-research-pages)
 8. [Recording a Transaction Manually](#8-recording-a-transaction-manually)
 9. [Refreshing Market Data](#9-refreshing-market-data)
@@ -67,7 +68,7 @@ Click **Create** to save. The account will appear immediately as a page link und
 Once an account exists, populate it with transaction history by importing your broker's ledger export.
 
 **Steps:**
-1. In the navigation, click the account page you want to populate.
+1. On the **📊 Portfolio** page, select the account you want to populate (this makes it the active account).
 2. Click the **Upload** icon button (import records) in the sidebar's account operations row.
 3. In the dialog, click **Browse files** and select your `.xlsx` export file.
 4. Click **Import**.
@@ -88,7 +89,7 @@ The sidebar is always visible and provides global controls that affect all pages
 
 ### Active Account
 
-Each account has its own page link under **Accounts** in the navigation, listed by type and number. Clicking one opens that account's portfolio and makes it the active account. The sidebar shows the active account label — the account operations, **Record Transaction**, and benchmark controls all apply to it. Visiting the market research pages keeps the last-visited account active.
+The **📊 Portfolio** page (under **Accounts** in the navigation) hosts an account selector at the top of the page: **All Accounts** plus one option per account, listed by type and number. Selecting an account makes it the active account. The sidebar shows the active account label — the account operations, **Record Transaction**, and benchmark controls all apply to it. Choosing **All Accounts** (or visiting the market research pages) keeps the last-selected account active for those controls.
 
 ### Benchmark Selection
 
@@ -119,9 +120,9 @@ The **Hide Balances** toggle masks the account identity and dollar amounts in th
 
 ---
 
-## 6. Account Portfolio Pages
+## 6. The Portfolio Page
 
-Each account's page (under **Accounts** in the navigation) is the main dashboard. It shows the complete view of that account's portfolio. The first account's page is the landing page after login.
+The **📊 Portfolio** page (under **Accounts** in the navigation) is the main dashboard and the landing page after login. A selector at the top switches the whole page — summary KPIs and every tab — between **All Accounts** (the combined view, the default) and any single account. The sections below describe the single-account view; the [All Accounts view](#all-accounts-view) differences are covered at the end.
 
 ### Market Data Availability Check
 
@@ -293,6 +294,22 @@ A tabbed section showing the raw ledger data for the account:
 
 ---
 
+### All Accounts View
+
+Selecting **All Accounts** in the page selector (the default) combines every account into a single view with the same layout — summary KPIs, market snapshot, and all tabs — computed over your holdings across all accounts:
+
+- **Weights and contributions** are a share of the *combined* total value. A symbol held in several accounts appears once per account with that account's own quantity, book value, and average cost — the Positions tab shows an **Account** column and treemaps grouped by account.
+- **Allocation** adds a **By Account** pie chart showing each account's share of the combined portfolio value (securities + cash) alongside the instrument, currency, and holding breakdowns.
+- **MWRR** pools external cash flows (contributions and withdrawals) from every account — it is a true money-weighted return on all invested capital, not an average of per-account MWRRs.
+- **Correlation** covers all pairs across accounts, including pairs of symbols held in different accounts.
+- **Optimization** runs over the combined symbol list with its own saved result, separate from each account's optimizer runs.
+
+Cash held in USD-denominated accounts is converted to CAD at the current exchange rate. The Records tab shows ledger data only when a single account is selected; the sidebar **Record Transaction** form applies to the active (last-selected) account.
+
+> **Screenshot placeholder — All Accounts view**
+
+---
+
 ## 7. Market Research Pages
 
 ### ETF Research (`🏦 ETF Research`)
@@ -377,7 +394,7 @@ Two manual refresh options are available:
 | **Refresh Data** | Top-right of each page | Re-runs smart sync for the current page's symbols (incremental), in the background — the page stays interactive |
 | **Force Refresh Data** | Sidebar | Re-fetches the full date range for all current page symbols, ignoring sync state (blocks the page while running) |
 
-On account portfolio pages, "the current page's symbols" means the holdings of **all** your accounts plus the benchmark/header symbols — one refresh keeps every account page current. Market research pages refresh only their own symbol lists.
+On the Portfolio page, "the current page's symbols" means the holdings of **all** your accounts plus the benchmark/header symbols — one refresh keeps every account scope current. Market research pages refresh only their own symbol lists.
 
 Use **Force Refresh Data** when quotes appear stale, after changing the date range significantly, or after adding new symbols to `symbols.yml`.
 

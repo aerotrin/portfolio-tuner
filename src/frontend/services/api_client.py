@@ -133,6 +133,18 @@ class APIClient:
             params["end_date"] = end_date
         return self._get(f"/accounts/{account_id}/portfolio", params=params)
 
+    def get_total_portfolio(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ):
+        params = {}
+        if start_date is not None:
+            params["start_date"] = start_date
+        if end_date is not None:
+            params["end_date"] = end_date
+        return self._get("/accounts/portfolio", params=params)
+
     def get_available_symbols(self):
         return self._get("/securities")
 

@@ -36,6 +36,16 @@ def balance_safe_column_order(config: dict, hide_balances: bool) -> list[str]:
     return [c for c in config if c not in BALANCE_COLUMNS]
 
 
+def with_account_column(config: dict, after: str) -> dict:
+    """Return a copy of a table config with an Account column after `after`."""
+    result = {}
+    for key, col in config.items():
+        result[key] = col
+        if key == after:
+            result["account"] = st.column_config.TextColumn("Account")
+    return result
+
+
 QUOTE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
