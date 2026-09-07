@@ -57,27 +57,27 @@ def add_sparkline(
     base_data: pd.DataFrame,
     close_eod: pd.DataFrame,
     add_intraday_close: bool = False,
+    symbol_col: str | None = None,
 ) -> pd.DataFrame:
     """
     Fast sparkline generator with vectorized operations.
+
+    Rows map to close_eod columns by index, or by `symbol_col` when the index
+    is not the quote symbol (e.g. OSI-keyed option holdings).
     """
     base_data = base_data.copy()
     close_eod = close_eod.sort_index().ffill()
 
     # Pre-convert entire DataFrame → dict of {symbol: list_of_closes}
-    series_dict = {
-        symbol: col.dropna().tolist()
-        for symbol, col in close_eod.items()
-        if symbol in base_data.index
-    }
+    series_dict = {symbol: col.dropna().tolist() for symbol, col in close_eod.items()}
 
-    # Assign directly
-    base_data["sparkline"] = base_data.index.map(series_dict.get)
+    keys = base_data[symbol_col] if symbol_col else base_data.index
+    base_data["sparkline"] = keys.map(series_dict.get)
 
     if add_intraday_close and "close" in base_data.columns:
         # Convert to lists with appended intraday close
         base_data["sparkline"] = [
-            series + [close]
+            series + [close] if isinstance(series, list) else series
             for series, close in zip(base_data["sparkline"], base_data["close"])
         ]
 

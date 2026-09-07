@@ -725,9 +725,13 @@ def render_optimizer(
         show_actual = has_holdings and "weight" in holdings_data.columns
         actual_weights: dict[str, float] = {}
         if show_actual:
+            # Sum per quote symbol — holdings may carry several rows per symbol
+            # (stock + OSI-keyed options), and option exposure rolls up to the
+            # underlying.
+            weight_by_symbol = holdings_data.groupby("symbol")["weight"].sum()
             for sym in run_symbols:
-                if sym in holdings_data.index:
-                    actual_weights[sym] = float(holdings_data.loc[sym, "weight"])
+                if sym in weight_by_symbol.index:
+                    actual_weights[sym] = float(weight_by_symbol[sym])
 
         optimal_weights: dict[str, float] = optimal.get("weights", {})
 

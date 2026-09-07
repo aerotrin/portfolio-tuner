@@ -266,9 +266,11 @@ class Portfolio:
                         previous_close=security.quote.previousClose,
                         timestamp=security.quote.timestamp,
                         holding_category=position.category,
-                        security_type=security.profile.type
-                        if security.profile
-                        else SecurityType.UNKNOWN,
+                        security_type=(
+                            security.profile.type
+                            if security.profile
+                            else SecurityType.UNKNOWN
+                        ),
                         fx_rate=fx_rate,
                         option_osi=position.option_osi,
                         open_date=position.open_date,
@@ -294,7 +296,10 @@ class Portfolio:
                         intraday_contribution=0.0,
                         days_held=days_held,
                     )
-                    self.holdings[security.quote.symbol] = holding
+                    # Options are keyed by OSI so a stock and an option (or two
+                    # option contracts) on the same underlying coexist.
+                    key = position.option_osi or security.quote.symbol
+                    self.holdings[key] = holding
         except Exception as e:
             logger.error(f"Error in _build_holdings: {e}", exc_info=True)
             return
@@ -325,10 +330,18 @@ class Portfolio:
 
     def _build_indicators(self) -> None:
         try:
-            weights = [h.weight for h in self.holdings.values()]
+            # Aggregate weights per quote symbol, aligned to self.securities order —
+            # holdings may have several entries per symbol (stock + options), and
+            # options proxy their weight through the underlying's close series.
+            weights = [
+                sum(h.weight for h in self.holdings.values() if h.symbol == sym)
+                for sym in self.securities
+            ]
             self.indicators_df = compute_portfolio_timeseries_indicators(
                 list(self.securities.values()), np.array(weights, dtype=float)
-            )[0]  # always return the first PORTF dataframe
+            )[
+                0
+            ]  # always return the first PORTF dataframe
             idf = self.indicators_df.rename_axis("date").reset_index()
             idf_safe = idf.replace([np.inf, -np.inf], np.nan).fillna(0.0)
             ind_records = idf_safe.to_dict(orient="records")

@@ -178,8 +178,9 @@ def test_portfolio_build_holdings_summary_and_contributions(
 
     equity_usd = portfolio.holdings["EQUSD"]
     equity_cad = portfolio.holdings["EQCAD"]
-    call_usd = portfolio.holdings["CALLUSD"]
-    put_cad = portfolio.holdings["PUTCAD"]
+    # Option holdings are keyed by OSI, not by underlying symbol
+    call_usd = portfolio.holdings["AAPL_CALL_ITM"]
+    put_cad = portfolio.holdings["SHOP_PUT_EXP"]
 
     assert equity_usd.fx_rate == 1.25
     assert equity_usd.market_value == pytest.approx(625.0)
@@ -223,6 +224,101 @@ def test_portfolio_build_holdings_summary_and_contributions(
     assert equity_usd.weight == pytest.approx(625.0 / 2475.0)
     assert equity_usd.pnl_contribution == pytest.approx(125.0 / 2475.0)
     assert equity_usd.intraday_contribution == pytest.approx(25.0 / 2475.0)
+
+
+def test_stock_and_options_on_same_underlying_coexist(monkeypatch: pytest.MonkeyPatch):
+    """Regression: stock + options on one underlying must all appear in holdings
+    (previously last lot won the symbol key), and the PORTF weight vector must
+    aggregate per quote symbol aligned to the securities dict."""
+    _stub_portfolio_analytics(monkeypatch)
+
+    import src.backend.domain.aggregates.portfolio as portfolio_module
+
+    captured: dict = {}
+
+    def fake_indicators(securities, weights):
+        captured["symbols"] = [s.quote.symbol for s in securities]
+        captured["weights"] = [float(w) for w in np.atleast_1d(weights)]
+        return [
+            pd.DataFrame(
+                {"symbol": ["PORTF"], "close": [1.0], "daily_return": [0.0]},
+                index=pd.to_datetime(["2024-01-01"]),
+            )
+        ]
+
+    monkeypatch.setattr(
+        portfolio_module, "compute_portfolio_timeseries_indicators", fake_indicators
+    )
+    monkeypatch.setattr(
+        portfolio_module, "compute_correlation_matrix", lambda _s: pd.DataFrame()
+    )
+
+    securities = {
+        "AAPL": _make_security(
+            "AAPL", "CAD", close=110.0, change=1.0, change_percent=0.01
+        )
+    }
+    positions = [
+        OpenLot(
+            symbol="AAPL",
+            category=Category.EQUITY,
+            open_date=date.today() - timedelta(days=90),
+            open_qty=10,
+            acb_per_sh=100.0,
+            book_value=1000.0,
+        ),
+        OpenLot(
+            symbol="AAPL",
+            category=Category.CALL_OPTION,
+            option_osi="AAPL 250117C00100000",
+            open_date=date.today() - timedelta(days=30),
+            option_expiry=date.today() + timedelta(days=30),
+            option_strike=100.0,
+            open_qty=1,
+            acb_per_sh=500.0,
+            book_value=500.0,
+        ),
+        OpenLot(
+            symbol="AAPL",
+            category=Category.CALL_OPTION,
+            option_osi="AAPL 250117C00105000",
+            open_date=date.today() - timedelta(days=30),
+            option_expiry=date.today() + timedelta(days=30),
+            option_strike=105.0,
+            open_qty=1,
+            acb_per_sh=200.0,
+            book_value=200.0,
+        ),
+    ]
+
+    portfolio = Portfolio(
+        id="acct-mixed",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=positions,
+        securities=securities,
+        rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),
+    )
+
+    assert set(portfolio.holdings) == {
+        "AAPL",
+        "AAPL 250117C00100000",
+        "AAPL 250117C00105000",
+    }
+
+    equity = portfolio.holdings["AAPL"]
+    call_itm = portfolio.holdings["AAPL 250117C00100000"]
+    call_otm = portfolio.holdings["AAPL 250117C00105000"]
+
+    assert equity.market_value == pytest.approx(1100.0)  # 110 × 10
+    assert call_itm.market_value == pytest.approx(1000.0)  # (110-100) × 1 × 100
+    assert call_otm.market_value == pytest.approx(500.0)  # (110-105) × 1 × 100
+    assert portfolio.total_value == pytest.approx(2600.0)
+    assert portfolio.book_value == pytest.approx(1700.0)
+
+    # Weight vector aligned to securities keys, aggregated across the 3 lots
+    assert captured["symbols"] == ["AAPL"]
+    assert captured["weights"] == [pytest.approx(1.0)]
 
 
 def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):

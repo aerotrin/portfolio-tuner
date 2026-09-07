@@ -143,6 +143,8 @@ The `Portfolio` aggregate is the central composite object. It is built on-demand
 
 Options positions (calls and puts) are handled separately from equities. Intrinsic value is used as the current option value (market option pricing data is not yet implemented from the configured providers), and expired options are flagged with a zero value.
 
+Holdings are keyed by quote symbol for equities and by OSI for options, so a stock and one or more option contracts on the same underlying coexist in a portfolio. The portfolio-level weight vector aggregates per quote symbol (option exposure proxies through the underlying's close series).
+
 ---
 
 ## 4. Application Layer
