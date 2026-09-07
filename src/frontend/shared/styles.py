@@ -65,6 +65,7 @@ QUOTE_TABLE_CONFIG = {
     "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
+    "volatility": st.column_config.NumberColumn("Volatility", format="percent"),
     "exchange": st.column_config.TextColumn("Exchange"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
 }
@@ -112,12 +113,12 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
     # "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
-    "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
+    # "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
-    "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "days_held": st.column_config.NumberColumn("Days", format="compact"),
+    "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
@@ -132,9 +133,11 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
 POSITIONS_OPTION_TABLE_CONFIG = {
     "option_osi": st.column_config.TextColumn("OSI"),
     "name": st.column_config.TextColumn("Name", width="medium"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "holding_category": st.column_config.TextColumn("Right"),
     "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
@@ -143,7 +146,6 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     ),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     # "currency": st.column_config.TextColumn("Currency"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),

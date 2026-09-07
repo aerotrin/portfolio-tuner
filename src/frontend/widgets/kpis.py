@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Literal
 
 import pandas as pd
@@ -89,7 +88,7 @@ def render_account_summary(
     """Draw KPIs for the balances of a selected portfolio."""
 
     def _fmt_amount(amount: float) -> str:
-        return MASKED_VALUE if hide_balances else f"${amount:,.2f} CAD"
+        return MASKED_VALUE if hide_balances else f"${amount:,.2f}"
 
     with st.container(border=True, horizontal=True, width="stretch"):
         st.metric(
@@ -101,24 +100,38 @@ def render_account_summary(
             MASKED_VALUE if hide_balances else account_owner,
             border=False,
         )
+        unrealized_gain = portfolio_summary["unrealized_gain"]
+        return_on_cost = portfolio_summary["return_on_cost"]
+        total_value_delta = (
+            f"{return_on_cost:+.2%}"
+            if hide_balances
+            else f"{unrealized_gain:+,.2f}  {return_on_cost:+.2%}"
+        )
+        pnl_intraday = portfolio_summary["pnl_intraday"]
+        prev_securities_value = portfolio_summary["market_value"] - pnl_intraday
+        intraday_pct = (
+            pnl_intraday / prev_securities_value if prev_securities_value else None
+        )
+        if hide_balances:
+            # Dollar amounts are masked; percentages stay visible
+            intraday_delta = (
+                f"{intraday_pct:+.2%}" if intraday_pct is not None else MASKED_VALUE
+            )
+        elif intraday_pct is not None:
+            intraday_delta = f"{pnl_intraday:+,.2f}  {intraday_pct:+.2%}"
+        else:
+            intraday_delta = f"{pnl_intraday:+,.2f}"
         st.metric(
-            "Total Value",
+            "Total Value CAD",
             _fmt_amount(portfolio_summary["total_value"]),
+            intraday_delta,
             border=False,
         )
         st.metric(
-            "Unrealized P/L",
-            _fmt_amount(portfolio_summary["unrealized_gain"]),
-            f"{portfolio_summary['return_on_cost']:+.2%}",
-            border=False,
-        )
-        st.metric(
-            "Total Return",
-            _fmt_amount(
-                portfolio_summary["total_value"] - portfolio_summary["net_investment"]
-            ),
-            f"{portfolio_summary['mwrr']:+.2%}",
-            delta_description="MWRR",
+            "Securities Value CAD",
+            _fmt_amount(portfolio_summary["market_value"]),
+            total_value_delta,
+            delta_arrow="off",
             border=False,
         )
         with st.container(border=False):
@@ -132,33 +145,23 @@ def render_account_summary(
                 config={"displayModeBar": False},
             )
         st.metric(
-            "Cash",
+            "Cash CAD",
             _fmt_amount(portfolio_summary["cash_balance"]),
             f"{portfolio_summary['cash_pct']:.1%}",
-            delta_color="off",
+            delta_color="blue",
             delta_arrow="off",
-            delta_description="of portfolio",
             border=False,
         )
-
-
-def render_status_strip(rates: dict, active_page: str) -> None:
-    """
-    Render the status strip.
-    """
-    with st.container(horizontal=True, border=False):
-        st.caption(datetime.now().strftime("%a %Y-%m-%d %I:%M:%S %p %Z"))
-        st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
-        st.caption(f"T-Bill 6m: {rates['rf_rate']:.2%}")
-        st.container(width="stretch")  # spacer pins what follows to the right
-        render_auto_refresh_toggle()
-        refreshed = st.session_state.get("last_refresh_by_page", {}).get(active_page)
-        if refreshed:
-            natural, color = _humanize_timestamp_or_na(refreshed)
-            st.badge(f"Refreshed {natural}", color=color)
-        else:
-            natural, _ = _humanize_timestamp_or_na(_last_trade_timestamp())
-            st.badge(f"Last trade {natural}", color="gray")
+        st.metric(
+            "Total Return CAD",
+            _fmt_amount(
+                portfolio_summary["total_value"] - portfolio_summary["net_investment"]
+            ),
+            f"{portfolio_summary['mwrr']:+.2%}",
+            delta_description="MWRR",
+            delta_arrow="off",
+            border=False,
+        )
 
 
 def _render_refresh_badge(active_page: str) -> None:
@@ -214,13 +217,7 @@ def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
     delta_kwargs = {"delta_color": "off", "delta_arrow": "off"} if hide_balances else {}
 
     st.metric(
-        "Securities Value",
-        MASKED_VALUE if hide_balances else f"${df['market_value'].sum():,.2f} CAD",
-        _fmt_delta(df["intraday_change"].sum()),
-        **delta_kwargs,
-    )
-    st.metric(
-        "Best Performer",
+        "Best Intraday",
         f"{df['symbol'][df['intraday_change'].idxmax()]}",
         _fmt_delta(df["intraday_change"].max()),
         **delta_kwargs,

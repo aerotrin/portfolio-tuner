@@ -130,16 +130,15 @@ When the page loads, it checks whether all required symbols have cached market d
 
 ---
 
-### Status Strip
+### Header Rows
 
-A compact strip at the top of the page shows global market context:
+The Portfolio page packs its header into two rows. The first row shows a compact page title on the left and, right-aligned, the CAD/USD exchange rate, the risk-free rate (6-month T-Bill), the **Auto Refresh** toggle, and the data recency badge. The second row holds the account selector on the left and the **Refresh Data** button on the right.
 
-- Current date and time
-- CAD/USD exchange rate
-- Risk-free rate (6-month T-Bill)
-- Data recency badge (right-hand side) — **Refreshed …** shows how long ago market data was last refreshed for this page (blue when under an hour old, yellow when staler). Until the first refresh completes for the page in the session, a gray **Last trade …** badge shows the latest quote last-trade time instead.
+The recency badge — **Refreshed …** — shows how long ago market data was last refreshed for this page (blue when under an hour old, yellow when staler); hover for the exact timestamp. Until the first refresh completes for the page in the session, a gray **Last trade …** badge shows the latest quote last-trade time instead.
 
-> **Screenshot placeholder — Status strip**
+The market research pages use the same single-row pattern: page title on the left, with the rates, **Auto Refresh** toggle, recency badge, and **Refresh Data** button clustered on the right.
+
+> **Screenshot placeholder — Portfolio header row**
 
 ---
 
@@ -149,12 +148,13 @@ Key performance indicators for the selected account (dollar amounts and account 
 
 | KPI | Description |
 |---|---|
-| **Total Value** | Market value of all positions plus cash balance |
-| **Cash** | Current cash in the account |
-| **Securities** | Market value of open positions |
-| **Unrealized P/L** | Market value minus book value |
-| **Return** | Unrealized gain as a percentage of book value |
-| **MWRR** | Money Weighted Rate of Return (IRR-based, accounting for timing of deposits/withdrawals) |
+| **Total Value** | Market value of all positions plus cash balance, with today's aggregate intraday change (dollars and percent) as the delta |
+| **Securities Value** | Market value of open positions, with the unrealized P/L (dollars) and return on book value (percent) as the delta |
+| **Cash / Securities donut** | Share of the portfolio held as securities vs. cash |
+| **Cash** | Current cash in the account, with its share of the portfolio as the delta |
+| **Total Return** | Total value minus net investment, with MWRR (IRR-based, accounting for timing of deposits/withdrawals) as the delta |
+
+When Hide Balances is on, the dollar deltas are masked but the percentages stay visible.
 
 > **Screenshot placeholder — Account summary KPI row**
 
@@ -176,7 +176,6 @@ A detailed view of all open positions in the account. A toggle in the section he
 
 | KPI | Description |
 |---|---|
-| **Market Value** | Total market value of all open positions, with today's aggregate intraday change |
 | **Best Intraday** | The holding with the largest intraday gain today |
 | **Worst Intraday** | The holding with the largest intraday loss today |
 | **Total FX Exposure** | Sum of USD-denominated position values converted to CAD |
@@ -317,7 +316,7 @@ Cash held in USD-denominated accounts is converted to CAD at the current exchang
 A standalone research dashboard for the ETF symbols configured in `symbols.yml` under `base_market_etfs`.
 
 **Sections:**
-- **Status strip** — global rates and the last-refreshed indicator
+- **Header row** — page title with global rates, the Auto Refresh toggle, the last-refreshed indicator, and the Refresh Data button
 - **Market snapshot** — header quotes
 - **Market movers** — most active, top gainers and losers for the US or Canadian market. If no data is available for a symbol group, or if market conditions produce no gainers or losers in a category, an informational message is shown in place of the table.
 - **Intraday tab** — a market-map treemap of every configured symbol, nested region → group → symbol, with a health bar and quote table. Click a region tile to zoom into it; optional type and group filters narrow the map

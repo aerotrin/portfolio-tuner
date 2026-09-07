@@ -19,7 +19,7 @@ from frontend.shared.jobs import (
 )
 from frontend.widgets.correlation import render_market_correlation
 from frontend.widgets.intraday import render_market_intraday
-from frontend.widgets.kpis import render_market_snapshot, render_status_strip
+from frontend.widgets.kpis import render_market_snapshot, render_status_inline
 from frontend.widgets.movers import render_market_movers
 from frontend.widgets.optimizer import render_optimizer
 from frontend.widgets.performance import render_performance_view
@@ -51,10 +51,21 @@ except KeyError as exc:
 symbols_config = load_symbols_config()
 
 
-# -- Render header ------------------------------------------------------------
-h = st.columns([6, 1], vertical_alignment="center")
-with h[0]:
-    st.markdown("## 🏦 ETF Market")
+# -- Render header: title + status/refresh cluster in one row -----------------
+with st.container(
+    horizontal=True, vertical_alignment="center", horizontal_alignment="distribute"
+):
+    st.markdown("### 🏦 ETF Market", width="content")
+    # Nested content-width container keeps the cluster tight on the right
+    with st.container(horizontal=True, vertical_alignment="center", width="content"):
+        render_status_inline(rates, active_page)
+        # Click handled below, once page_symbols is computed
+        market_refresh = st.button(
+            "Refresh Data",
+            icon=":material/refresh:",
+            type="secondary",
+            key="market_refresh_button",
+        )
 
 # --- Auto job status checking ------------------------------------------------
 check_job_status()
@@ -77,27 +88,18 @@ auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
 # --- Timed / first-visit background refresh (Auto Refresh toggle) ------------
 maybe_auto_refresh_data()
 
+# --- Handle Refresh Data click (button rendered in the header row) -----------
+if market_refresh:
+    start_refresh_job(
+        symbols=page_symbols,
+        blocking=False,
+        active_page=active_page,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
 # --- Load base + market securities data ---------------------------------------
 securities = load_security_data(page_symbols, start_date, end_date)
-
-# --- Render refresh data button -----------------------------------------------
-with h[1]:
-    market_refresh = st.button(
-        "Refresh Data",
-        icon=":material/refresh:",
-        type="secondary",
-        key="market_refresh_button",
-        width="stretch",
-    )
-    if market_refresh:
-        start_refresh_job(
-            symbols=page_symbols,
-            blocking=False,
-            active_page=active_page,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
 
 # --- Header dataframes ---------------------------------------------------
 header_quotes = combine_header_data(header_symbols, securities)
@@ -107,9 +109,6 @@ st.session_state["last_us_timestamp"] = header_quotes[
 st.session_state["last_ca_timestamp"] = header_quotes[
     header_quotes["currency"] == "CAD"
 ]["timestamp"].max()
-
-# --- Render KPIs --------------------------------------------------------------------
-render_status_strip(rates, active_page)
 
 # --- Market snapshot --------------------------------------------------------------------
 render_market_snapshot(header_quotes)

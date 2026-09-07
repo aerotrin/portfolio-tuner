@@ -44,7 +44,7 @@ def apply_compact_css() -> None:
         """
         <style>
             .block-container {
-                padding-top: 2.25rem;
+                padding-top: 2.75rem;
                 padding-bottom: 2rem;
                 padding-left: 2rem;
                 padding-right: 2rem;

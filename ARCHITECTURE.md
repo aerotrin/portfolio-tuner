@@ -334,7 +334,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 
 | Widget module | Responsibility |
 |---|---|
-| `kpis.py` | Account summary metrics, market snapshot strip, status strip (rates, FX, last data timestamps) |
+| `kpis.py` | Account summary metrics, market snapshot strip, inline header status cluster (rates, auto-refresh toggle, data recency badge) |
 | `positions.py` | Holdings table with sparklines, gain/loss colouring, FX exposure, options info |
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Portfolio allocation chart (treemap or pie) |
