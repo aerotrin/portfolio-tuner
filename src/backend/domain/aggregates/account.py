@@ -55,6 +55,10 @@ class Account:
         self.open_positions, self.closed_positions, self.cash_flows = (
             run_records_parser(transactions_df)
         )
+        self.open_positions = [
+            lot.model_copy(update={"account": self.number})
+            for lot in self.open_positions
+        ]
 
         self.book_value_securities = sum(o.book_value for o in self.open_positions)
 

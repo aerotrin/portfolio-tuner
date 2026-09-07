@@ -321,6 +321,58 @@ def test_stock_and_options_on_same_underlying_coexist(monkeypatch: pytest.Monkey
     assert captured["weights"] == [pytest.approx(1.0)]
 
 
+def test_multi_account_positions_namespace_holdings_keys(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A symbol held in two accounts keeps one holding per account (keys
+    namespaced by account number); single-account keys stay plain."""
+    _stub_portfolio_analytics(monkeypatch)
+
+    securities = {
+        "AAPL": _make_security(
+            "AAPL", "CAD", close=110.0, change=1.0, change_percent=0.01
+        )
+    }
+
+    def lot(account: str, qty: int, book: float) -> OpenLot:
+        return OpenLot(
+            symbol="AAPL",
+            account=account,
+            category=Category.EQUITY,
+            open_date=date.today() - timedelta(days=90),
+            open_qty=qty,
+            acb_per_sh=book / qty,
+            book_value=book,
+        )
+
+    total = Portfolio(
+        id="TOTAL",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot("ACC-A", 10, 1000.0), lot("ACC-B", 5, 600.0)],
+        securities=securities,
+        rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),
+    )
+
+    assert set(total.holdings) == {"ACC-A|AAPL", "ACC-B|AAPL"}
+    assert total.holdings["ACC-A|AAPL"].account == "ACC-A"
+    assert total.holdings["ACC-A|AAPL"].open_qty == 10
+    assert total.holdings["ACC-B|AAPL"].open_qty == 5
+    assert total.market_value == pytest.approx(110.0 * 15)
+
+    single = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot("ACC-A", 10, 1000.0)],
+        securities=securities,
+        rates=GlobalRates(rf_rate=0.0, fx_rate=1.0),
+    )
+
+    assert set(single.holdings) == {"AAPL"}
+    assert single.holdings["AAPL"].account == "ACC-A"
+
+
 def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     _stub_portfolio_analytics(monkeypatch)
 

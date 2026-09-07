@@ -63,6 +63,23 @@ class PortfolioSnapshotDTO(BaseModel):
     securities: dict[str, SecurityAnalyticsResponse] = {}
 
 
+class AccountSliceDTO(BaseModel):
+    """Per-account summary line inside the total (all-accounts) portfolio."""
+
+    id: str
+    label: str
+    name: str
+    total_value: float
+    cash_balance: float
+    unrealized_gain: float
+    mwrr: float
+    weight: float
+
+
+class TotalPortfolioSnapshotDTO(PortfolioSnapshotDTO):
+    accounts: List[AccountSliceDTO] = []
+
+
 class Portfolio:
     """A portfolio is composed of securities for a given set of open positions."""
 
@@ -115,6 +132,10 @@ class Portfolio:
 
     def _build_holdings(self) -> None:
         try:
+            # Keys stay plain (symbol/OSI) for a single account; only a
+            # multi-account portfolio namespaces them so same-symbol positions
+            # from different accounts don't collide.
+            multi_account = len({p.account for p in self.positions}) > 1
             for position in self.positions:
                 security = self.securities[position.symbol]
                 if security:
@@ -253,6 +274,7 @@ class Portfolio:
 
                     holding = Holding(
                         symbol=security.quote.symbol,
+                        account=position.account,
                         name=security.quote.name,
                         exchange=security.quote.exchange,
                         open=security.quote.open,
@@ -299,6 +321,8 @@ class Portfolio:
                     # Options are keyed by OSI so a stock and an option (or two
                     # option contracts) on the same underlying coexist.
                     key = position.option_osi or security.quote.symbol
+                    if multi_account:
+                        key = f"{position.account}|{key}"
                     self.holdings[key] = holding
         except Exception as e:
             logger.error(f"Error in _build_holdings: {e}", exc_info=True)

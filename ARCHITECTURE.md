@@ -178,6 +178,7 @@ Orchestrates `AccountManager` and `MarketDataManager` to produce the full portfo
 
 - **`build_portfolio_from_account`** — fetches account state and rates concurrently (using `asyncio.gather`), then fetches security data for all open positions asynchronously, and assembles a `Portfolio` object.
 - **`get_portfolio`** — wraps the above and serialises the result into `PortfolioSnapshotDTO` for the API response.
+- **`get_total_portfolio`** — builds every account and pools cash, external cash flows, and open lots (each lot carries its account number, stamped by the `Account` aggregate; USD-account cash converts at the current fx rate), then runs the same `Portfolio` pipeline over the union — so combined weights, MWRR, PORTF metrics, and the cross-account correlation matrix come from the standard build. When positions span multiple accounts, `Portfolio` namespaces holdings keys as `"{account}|{symbol-or-OSI}"` so the same symbol keeps one attributed holding per account (single-account snapshots keep plain keys). Also attaches per-account summary slices (built from the already-fetched securities) for the frontend's by-account breakdown.
 - **`run_simulated_portfolio`** — fetches securities for a given symbol list and runs the `PortfolioSimulator`.
 
 ---
@@ -239,6 +240,7 @@ All routes are mounted under the `/api/v1` prefix. There are three routers:
 - `DELETE /accounts/{id}/transactions/{tx_id}` — delete a transaction
 - `GET /accounts/{id}/records` — get transactions, open positions (open lots), closed lots, and cash flows in one call (`AccountRecordsDTO`)
 - `GET /accounts/{id}/portfolio` — get the full portfolio snapshot (summary, holdings, metrics, indicators, correlation matrix, per-security analytics)
+- `GET /accounts/portfolio` — get the combined snapshot across all of the user's accounts (`TotalPortfolioSnapshotDTO`: same shape plus per-account summary slices); declared before the `{id}` routes so the literal path wins
 
 **`/api/v1/securities`** — market data access:
 - `GET /securities` — list all symbols with cached data

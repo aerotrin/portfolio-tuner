@@ -6,7 +6,14 @@ import pytest
 
 from src.backend.application.use_cases.portfolio import PortfolioManager
 from src.backend.domain.aggregates.security import Security
-from src.backend.domain.entities.account import OpenLot
+from src.backend.domain.entities.account import (
+    AccountEntity,
+    CashFlow,
+    Category,
+    Currency,
+    OpenLot,
+    TransactionKind,
+)
 from src.backend.domain.entities.security import (
     GlobalRates,
     PerformanceMetric,
@@ -246,3 +253,182 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
     assert snap.securities["AAPL"].quote.symbol == "AAPL"
 
 
+# ---------------------------------------------------------------------------
+# get_total_portfolio
+# ---------------------------------------------------------------------------
+
+FX = 1.35
+
+
+def _entity(
+    id: str, number: str, currency: Currency = Currency.CAD, type: str = "TFSA"
+) -> AccountEntity:
+    return AccountEntity(
+        id=id,
+        number=number,
+        name=f"Acct {number}",
+        owner="user-1",
+        type=type,
+        currency=currency,
+        tax_status="Registered",
+        benchmark="XIU.TO",
+        last_modified=datetime(2025, 1, 1),
+    )
+
+
+def _equity_lot(symbol: str, qty: int, book: float, account: str) -> OpenLot:
+    """Lot as Account.build() produces it — stamped with its account number."""
+    return OpenLot(
+        symbol=symbol,
+        account=account,
+        category=Category.EQUITY,
+        open_date=date(2025, 1, 2),
+        open_qty=qty,
+        acb_per_sh=book / qty,
+        book_value=book,
+    )
+
+
+def _contribution(amount: float, on: date) -> CashFlow:
+    return CashFlow(
+        transaction_date=on,
+        category=Category.CASH,
+        transaction_type=TransactionKind.CONTRIB,
+        description="contribution",
+        market="CASH",
+        currency=Currency.CAD,
+        amount=amount,
+    )
+
+
+class FakeMultiAccountManager:
+    def __init__(self, entities: list[AccountEntity], accounts_by_number: dict):
+        self.entities = entities
+        self.accounts_by_number = accounts_by_number
+
+    def list_accounts(self):
+        return self.entities
+
+    def build_account(self, account_number: str, account_name: str | None = None):
+        return self.accounts_by_number[account_number]
+
+
+class RealSecurityMarketManager:
+    """Returns real Security aggregates so the total Portfolio fully builds."""
+
+    def __init__(self):
+        self.calls: list[list[str]] = []
+
+    async def build_securities_batch_async(
+        self, symbols, start_date=None, end_date=None, rates=None
+    ):
+        self.calls.append(list(symbols))
+        closes = [100.0 + i * 0.1 for i in range(60)]
+        return {
+            s: Security(
+                quote=build_quote(symbol=s),  # USD, close=110
+                bars=build_bars(s, closes=closes),
+                profile=build_profile(s),
+                rates=build_global_rates(fx_rate=FX),
+            )
+            for s in set(symbols)
+        }
+
+    def read_global_rates(self):
+        return build_global_rates(fx_rate=FX)
+
+
+def test_get_total_portfolio_combines_accounts():
+    """Two accounts (one USD-denominated) combine into a single TOTAL portfolio:
+    shared symbols keep one account-attributed holding per account, cash/flows
+    CAD-normalize, weights use the combined total, and per-account slices are
+    attached."""
+    one_year_ago = date.today().replace(year=date.today().year - 1)
+    acc_a = SimpleNamespace(
+        open_positions=[_equity_lot("AAPL", qty=5, book=500.0, account="ACC-A")],
+        cash_balance=100.0,
+        external_cash_flows=[_contribution(1000.0, one_year_ago)],
+    )
+    acc_b = SimpleNamespace(
+        open_positions=[
+            _equity_lot("AAPL", qty=5, book=600.0, account="ACC-B"),
+            _equity_lot("MSFT", qty=2, book=400.0, account="ACC-B"),
+        ],
+        cash_balance=50.0,
+        external_cash_flows=[],
+    )
+    account_man = FakeMultiAccountManager(
+        entities=[
+            _entity("id-a", "ACC-A", currency=Currency.CAD),
+            _entity("id-b", "ACC-B", currency=Currency.USD, type="RRSP"),
+        ],
+        accounts_by_number={"ACC-A": acc_a, "ACC-B": acc_b},
+    )
+    market_man = RealSecurityMarketManager()
+    manager = PortfolioManager(market_man=market_man, account_man=account_man)
+
+    snap = asyncio.run(manager.get_total_portfolio())
+
+    # One consolidated, deduped securities fetch over the symbol union
+    assert len(market_man.calls) == 1
+    assert sorted(market_man.calls[0]) == ["AAPL", "MSFT"]
+
+    assert snap.summary.id == "TOTAL"
+    # One holding per account and symbol, keyed "account|symbol"
+    assert set(snap.holdings) == {"ACC-A|AAPL", "ACC-B|AAPL", "ACC-B|MSFT"}
+    assert snap.holdings["ACC-A|AAPL"].account == "ACC-A"
+    assert snap.holdings["ACC-B|AAPL"].account == "ACC-B"
+    # Per-account lots stay separate — no blended qty/ACB
+    assert snap.holdings["ACC-A|AAPL"].open_qty == 5
+    assert snap.holdings["ACC-A|AAPL"].book_value == pytest.approx(500.0)
+    assert snap.holdings["ACC-B|AAPL"].open_qty == 5
+    assert snap.holdings["ACC-B|AAPL"].book_value == pytest.approx(600.0)
+    assert snap.summary.open_positions == ["AAPL", "MSFT"]
+
+    # Cash: 100 CAD + 50 USD × fx
+    assert snap.summary.cash_balance == pytest.approx(100.0 + 50.0 * FX)
+
+    # Market values: all quotes USD close=110 → per share 110 × fx
+    aapl_mv = 10 * 110.0 * FX
+    msft_mv = 2 * 110.0 * FX
+    total_value = aapl_mv + msft_mv + 100.0 + 50.0 * FX
+    assert snap.summary.total_value == pytest.approx(total_value)
+    aapl_weight = (
+        snap.holdings["ACC-A|AAPL"].weight + snap.holdings["ACC-B|AAPL"].weight
+    )
+    assert aapl_weight == pytest.approx(aapl_mv / total_value)
+
+    # Pooled MWRR over the union of external flows
+    assert snap.summary.net_investment == pytest.approx(1000.0)
+    assert snap.summary.mwrr > 0.0
+
+    # Per-account slices reconcile to the total
+    assert [s.id for s in snap.accounts] == ["id-a", "id-b"]
+    slice_a, slice_b = snap.accounts
+    assert slice_a.label == "TFSA #ACC-A"
+    assert slice_b.label == "RRSP #ACC-B"
+    assert slice_a.total_value == pytest.approx(5 * 110.0 * FX + 100.0)
+    assert slice_b.total_value == pytest.approx(5 * 110.0 * FX + msft_mv + 50.0 * FX)
+    assert slice_a.total_value + slice_b.total_value == pytest.approx(total_value)
+    assert slice_a.weight + slice_b.weight == pytest.approx(1.0)
+    assert slice_b.cash_balance == pytest.approx(50.0 * FX)
+
+    # PORTF metrics/indicators built over the combined holdings
+    assert snap.metrics.symbol == "PORTF"
+    assert len(snap.indicators) > 0
+    assert snap.correlation_matrix is not None
+
+
+def test_get_total_portfolio_no_accounts_returns_empty_snapshot():
+    manager = PortfolioManager(
+        market_man=RealSecurityMarketManager(),
+        account_man=FakeMultiAccountManager(entities=[], accounts_by_number={}),
+    )
+
+    snap = asyncio.run(manager.get_total_portfolio())
+
+    assert snap.summary.id == "TOTAL"
+    assert snap.summary.total_value == 0.0
+    assert snap.holdings == {}
+    assert snap.accounts == []
+    assert snap.summary.mwrr == 0.0

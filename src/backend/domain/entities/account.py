@@ -162,6 +162,7 @@ class AccountSummaryDTO(BaseModel):
 
 class OpenLot(BaseModel):
     symbol: str
+    account: Optional[str] = None  # owning account number
     option_osi: Optional[str] = None
     category: Category
     open_date: date
@@ -174,6 +175,7 @@ class OpenLot(BaseModel):
 
 class Holding(BaseModel):
     symbol: str
+    account: Optional[str] = None  # owning account number
     name: str
     exchange: Optional[str] = None
     open: float

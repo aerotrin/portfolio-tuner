@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.application.use_cases.portfolio import PortfolioManager
-from backend.domain.aggregates.portfolio import PortfolioSnapshotDTO
+from backend.domain.aggregates.portfolio import (
+    PortfolioSnapshotDTO,
+    TotalPortfolioSnapshotDTO,
+)
 from backend.domain.entities.account import (
     AccountCreateRequest,
     AccountEntity,
@@ -139,6 +142,25 @@ def read_accounts_list(
     """List all brokerage accounts."""
     try:
         return account_man.list_accounts()
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.get(
+    "/accounts/portfolio",
+    response_model=TotalPortfolioSnapshotDTO,
+)
+async def get_total_portfolio(
+    portfolio_man: PortfolioManager = Depends(get_portfolio_manager),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+):
+    """Get the combined portfolio snapshot across all of the user's accounts.
+
+    Declared before /accounts/{account_id} so the literal path wins.
+    """
+    try:
+        return await portfolio_man.get_total_portfolio(start_date, end_date)
     except Exception as e:
         _raise_http_error(e)
 
