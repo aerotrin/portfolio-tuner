@@ -174,6 +174,10 @@ def test_labels_colliding_only_on_slug_raise(tmp_path):
         load_symbols_config(_write(tmp_path, body))
 
 
+@pytest.mark.skipif(
+    not (_ROOT / "symbols.yml").exists(),
+    reason="symbols.yml is user-local (untracked); absent on CI",
+)
 def test_real_config_loads():
     """The working symbols.yml is what the app boots on — it must stay loadable."""
     config = load_symbols_config(_ROOT / "symbols.yml")
