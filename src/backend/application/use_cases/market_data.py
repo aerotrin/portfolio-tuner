@@ -281,9 +281,9 @@ class MarketDataManager:
                         status="ok",
                         last_checked_at=now,
                         last_bar_date=new_last_bar,
-                        last_success_at=now
-                        if bars
-                        else sync_states[symbol].last_success_at,
+                        last_success_at=(
+                            now if bars else sync_states[symbol].last_success_at
+                        ),
                     )
                 )
                 bars_to_insert.extend(bars)

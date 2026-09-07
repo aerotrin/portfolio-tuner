@@ -42,7 +42,11 @@ def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):
 
         def find_optimal_portfolio(self):
             assert self.ran is True
-            return {"id": "PORTF_7", "sharpe": 2.1, "weights": {"AAPL": 0.7, "MSFT": 0.3}}
+            return {
+                "id": "PORTF_7",
+                "sharpe": 2.1,
+                "weights": {"AAPL": 0.7, "MSFT": 0.3},
+            }
 
     monkeypatch.setattr(
         "src.backend.application.use_cases.simulator.SimPortfolios",
@@ -57,7 +61,9 @@ def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):
     assert captured["n_p"] == 200
     assert captured["seed"] == 99
     assert captured["ran"] is True
-    assert portfolios == [{"id": "PORTF_7", "sharpe": 2.1, "weights": {"AAPL": 0.7, "MSFT": 0.3}}]
+    assert portfolios == [
+        {"id": "PORTF_7", "sharpe": 2.1, "weights": {"AAPL": 0.7, "MSFT": 0.3}}
+    ]
     assert run_at == _run_at
 
 

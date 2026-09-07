@@ -67,9 +67,11 @@ def _account_form(
         benchmark = st.selectbox(
             "Benchmark",
             list(benchmark_symbols),
-            index=list(benchmark_symbols).index(d.benchmark)
-            if d.benchmark in benchmark_symbols
-            else 0,
+            index=(
+                list(benchmark_symbols).index(d.benchmark)
+                if d.benchmark in benchmark_symbols
+                else 0
+            ),
             key=f"{key_prefix}_benchmark",
         )
 

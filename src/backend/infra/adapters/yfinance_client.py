@@ -16,7 +16,6 @@ from backend.domain.entities.security import (
     SecurityType,
 )
 
-
 logger = logging.getLogger(__name__)
 
 _QUOTE_TYPE_MAP: dict[str, SecurityType] = {
@@ -78,11 +77,11 @@ class YFinanceClient(MarketDataProvider):
                 change=change,
                 change_percent=change_pct,
                 previousClose=previous_close,
-                timestamp=datetime.fromtimestamp(
-                    info["regularMarketTime"], tz=timezone.utc
-                )
-                if info.get("regularMarketTime")
-                else datetime.now(timezone.utc),
+                timestamp=(
+                    datetime.fromtimestamp(info["regularMarketTime"], tz=timezone.utc)
+                    if info.get("regularMarketTime")
+                    else datetime.now(timezone.utc)
+                ),
             )
         except Exception as e:
             logger.warning("Quote build failed for %s: %s", symbol, e)

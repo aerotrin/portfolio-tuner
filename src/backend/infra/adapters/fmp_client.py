@@ -18,7 +18,6 @@ from backend.domain.entities.security import (
 )
 from backend.infra.adapters.rate_limiter import RateLimiter, RateLimiterConfig
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -194,14 +193,18 @@ class FMPClient(MarketDataProvider):
         params = {
             "symbol": symbol,
             "apikey": self.cfg.api_key,
-            "from": from_date.strftime("%Y-%m-%d")
-            if from_date is not None
-            else (date.today() - timedelta(days=self.cfg.default_days_back)).strftime(
-                "%Y-%m-%d"
+            "from": (
+                from_date.strftime("%Y-%m-%d")
+                if from_date is not None
+                else (
+                    date.today() - timedelta(days=self.cfg.default_days_back)
+                ).strftime("%Y-%m-%d")
             ),
-            "to": to_date.strftime("%Y-%m-%d")
-            if to_date is not None
-            else date.today().strftime("%Y-%m-%d"),
+            "to": (
+                to_date.strftime("%Y-%m-%d")
+                if to_date is not None
+                else date.today().strftime("%Y-%m-%d")
+            ),
         }
 
         try:

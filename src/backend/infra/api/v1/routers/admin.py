@@ -28,7 +28,6 @@ from backend.infra.api.v1.dependencies.db import get_admin_db
 from backend.infra.db.repo import PgAccountDataRepository, PgMarketDataRepository
 from backend.shared.config import config
 
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_token)])

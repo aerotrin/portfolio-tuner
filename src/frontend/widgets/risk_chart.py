@@ -208,9 +208,11 @@ def render_risk_chart(
         ).encode(
             x="volatility_period:Q",
             y=f"{horizon_metric}:Q",
-            size=alt.value(250)
-            if portfolio_plot is not None
-            else alt.Size("sharpe_period:Q", title="Sharpe", legend=None),
+            size=(
+                alt.value(250)
+                if portfolio_plot is not None
+                else alt.Size("sharpe_period:Q", title="Sharpe", legend=None)
+            ),
             tooltip=[
                 alt.Tooltip("symbol:N"),
                 alt.Tooltip("name:N"),
