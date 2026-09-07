@@ -2,23 +2,70 @@ import streamlit as st
 
 from frontend.services.streamlit_data import (
     create_transaction,
+    load_account_records,
+    load_portfolio_snapshot,
     load_single_security_quote,
 )
 from frontend.shared.dto import Currency, TransactionCreate, TransactionKind
 from frontend.shared.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 
 
+def _load_account_form_data(
+    account_id: str,
+) -> tuple[list[str], dict[str, int], float, float]:
+    """Symbols, equity quantities, total value, and cash for one account.
+
+    Backed by the cached loaders, so in-dialog account switches are instant
+    for accounts already visited this session.
+    """
+    records = load_account_records(account_id)
+    snapshot = load_portfolio_snapshot(
+        account_id,
+        st.session_state["start_date"],
+        st.session_state["end_date"],
+    )
+    holdings_qty: dict[str, int] = {}
+    for pos in records.open_positions:
+        if pos.get("category") == "Equity":
+            symbol = str(pos["symbol"])
+            holdings_qty[symbol] = holdings_qty.get(symbol, 0) + int(pos["open_qty"])
+    portfolio_symbols = sorted({p["symbol"] for p in records.open_positions})
+    return (
+        portfolio_symbols,
+        holdings_qty,
+        snapshot.summary.get("total_value", 0.0),
+        snapshot.summary.get("cash_balance", 0.0),
+    )
+
+
 @st.dialog("Record Transaction", width="medium")
 def transaction_form(
-    account_id: str,
-    account_name: str,
-    portfolio_symbols: list[str] | None,
+    account_options: dict[str, str],
+    default_account_id: str,
     fx_rate: float,
-    portfolio_value: float,
-    cash_balance: float,
-    holdings_qty: dict[str, int] | None = None,
 ) -> TransactionCreate | None:
-    st.subheader(f"Add Transaction to {account_name} Account")
+    # Dialogs rerun like fragments: interacting with a widget inside only
+    # reruns this function, so switching account here reloads the form data
+    # (symbol options, SELL caps, cash validation) without closing the modal.
+    if st.session_state.get("tx_account") not in account_options:
+        st.session_state["tx_account"] = default_account_id
+    account_id = st.selectbox(
+        "Account",
+        list(account_options),
+        format_func=lambda v: account_options.get(v, v),
+        key="tx_account",
+    )
+
+    # Reset account-scoped widget state when the target account changes; the
+    # symbol-change block below then re-seeds the quote-driven fields.
+    if st.session_state.get("tx_active_account") != account_id:
+        st.session_state["tx_active_account"] = account_id
+        for stale_key in ("tx_symbol_buy", "tx_symbol_sell", "tx_active_symbol"):
+            st.session_state.pop(stale_key, None)
+
+    portfolio_symbols, holdings_qty, portfolio_value, cash_balance = (
+        _load_account_form_data(account_id)
+    )
 
     transaction_type = st.radio(
         "Transaction Type",
@@ -32,7 +79,7 @@ def transaction_form(
     if transaction_type == TransactionKind.BUY:
         symbol = st.selectbox(
             "Symbol",
-            portfolio_symbols or [],
+            portfolio_symbols,
             index=None,
             accept_new_options=True,
             key="tx_symbol_buy",
@@ -40,7 +87,7 @@ def transaction_form(
     elif transaction_type == TransactionKind.SELL:
         symbol = st.selectbox(
             "Symbol",
-            portfolio_symbols or [],
+            portfolio_symbols,
             key="tx_symbol_sell",
         )
 
@@ -76,12 +123,8 @@ def transaction_form(
             cost_per_share = price_default * exchange_rate_default
             max_qty = int(cash_balance / cost_per_share) if cost_per_share > 0 else None
 
-        if (
-            portfolio_symbols is not None
-            and symbol in portfolio_symbols
-            and transaction_type == TransactionKind.SELL
-        ):
-            quantity_default = (holdings_qty or {}).get(symbol, 0)
+        if symbol in portfolio_symbols and transaction_type == TransactionKind.SELL:
+            quantity_default = holdings_qty.get(symbol, 0)
             max_qty = quantity_default or None
 
         # -----------------------------------------------------------------
@@ -118,7 +161,7 @@ def transaction_form(
                 st.button(
                     f"Max ({max_qty:,})",
                     on_click=lambda: st.session_state.update({"tx_qty": max_qty}),
-                    use_container_width=True,
+                    width="stretch",
                 )
         with c[1]:
             price = st.number_input("Price", min_value=0.0, key="tx_price")

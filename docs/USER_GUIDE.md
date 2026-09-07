@@ -108,7 +108,7 @@ A row of icon buttons provides account management:
 
 ### Record Transaction
 
-The **Record Transaction** button (prominent, full-width) opens the manual transaction entry dialog. See [Section 8](#8-recording-a-transaction-manually).
+The **Record Transaction** button (prominent, full-width) opens the manual transaction entry dialog. The dialog has its own account selector, pre-filled with the active account — you can switch the target account without leaving the form. See [Section 8](#8-recording-a-transaction-manually).
 
 ### Data Refresh
 
@@ -304,7 +304,7 @@ Selecting **All Accounts** in the page selector (the default) combines every acc
 - **Correlation** covers all pairs across accounts, including pairs of symbols held in different accounts.
 - **Optimization** runs over the combined symbol list with its own saved result, separate from each account's optimizer runs.
 
-Cash held in USD-denominated accounts is converted to CAD at the current exchange rate. The Records tab shows ledger data only when a single account is selected; the sidebar **Record Transaction** form applies to the active (last-selected) account.
+Cash held in USD-denominated accounts is converted to CAD at the current exchange rate. The Records tab shows ledger data only when a single account is selected; the sidebar **Record Transaction** form opens on the active (last-selected) account, has its own in-form account selector, and always validates against the chosen account's own cash and holdings.
 
 > **Screenshot placeholder — All Accounts view**
 
@@ -354,7 +354,7 @@ Identical in structure to the ETF page but for the stock symbols configured unde
 Click **Record Transaction** in the sidebar to open the transaction entry form.
 
 **Fields:**
-- **Account** — pre-filled to the selected account
+- **Account** — a selector at the top of the form, pre-filled with the active account each time the form opens. Switching it reloads the form in place for the chosen account: the SELL symbol list, maximum quantities, cash-available figure, and trade-sizing guide all update — no need to close the form and change the page selection first.
 - **Transaction Type** — Buy, Sell, or EFT (other types, such as Return of Capital, arrive via the Excel ledger import)
 - **Symbol** — security ticker (optional for cash transactions)
 - **Date** — transaction date

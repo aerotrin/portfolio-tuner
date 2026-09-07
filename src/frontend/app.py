@@ -494,14 +494,14 @@ with st.sidebar:
         st.rerun()
 
     if st.session_state.get("show_transaction_form_dialog", False):
+        # The form has its own account selector (defaulting to the active
+        # account, re-seeded on every open) and derives its validation data
+        # inside the dialog, so switching accounts reloads it in place.
+        st.session_state["tx_account"] = st.session_state["account_id"]
         transaction_form(
-            account_id=st.session_state["account_id"],
-            account_name=account_display_label,
-            portfolio_symbols=st.session_state.get("portfolio_symbols"),
-            holdings_qty=st.session_state.get("portfolio_holdings_qty"),
+            account_options=dict(zip(account_ids, account_display_labels)),
+            default_account_id=st.session_state["account_id"],
             fx_rate=st.session_state["rates"]["fx_rate"],
-            portfolio_value=st.session_state.get("portfolio_value", 0.0),
-            cash_balance=st.session_state.get("cash_balance", 0.0),
         )
         st.session_state["show_transaction_form_dialog"] = False
 

@@ -302,7 +302,7 @@ Streamlit reruns the entire script on every user interaction. A versioned `boots
 
 Each page reads its required state from `st.session_state` at the top, and fails fast with an informative error if keys are missing (e.g., due to a browser refresh mid-session).
 
-The navigation and sidebar always run before any page renders: `app.py` establishes the active account from the Portfolio page's scope selector (falling back to the last-selected account when the scope is All Accounts or on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on.
+The navigation and sidebar always run before any page renders: `app.py` establishes the active account from the Portfolio page's scope selector (falling back to the last-selected account when the scope is All Accounts or on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on. The transaction form dialog carries its own account selector (re-seeded to the active account on every open) and derives its validation data (symbols, equity quantities, cash, total value) from the cached per-account loaders *inside the dialog body* — `st.dialog` reruns like a fragment on in-dialog widget interaction, so switching the target account reloads the form in place.
 
 ### Symbols Configuration
 
