@@ -196,21 +196,18 @@ class PgMarketDataRepository(MarketDataRepository):
             raise
 
     def check_symbols_availability(self, symbols: list[str]) -> list[str]:
-        """Returns symbols missing from quotes or bars_sync_state."""
+        """Returns symbols with no stored quote.
+
+        Bars are not required: a newly listed security has a quote before its
+        first daily bar exists, and is built from the quote alone until then.
+        """
         quoted = {
             row.symbol
             for row in self.session.query(QuoteDB.symbol)
             .filter(QuoteDB.symbol.in_(symbols))
             .all()
         }
-        synced = {
-            row.symbol
-            for row in self.session.query(BarsSyncStateDB.symbol)
-            .filter(BarsSyncStateDB.symbol.in_(symbols))
-            .all()
-        }
-        available = quoted & synced
-        return [s for s in symbols if s not in available]
+        return [s for s in symbols if s not in quoted]
 
     def read_profile(self, symbol: str) -> Profile | None:
         row = self.session.query(ProfileDB).filter(ProfileDB.symbol == symbol).first()

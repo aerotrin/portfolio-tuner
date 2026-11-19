@@ -240,6 +240,33 @@ def test_calc_portfolio_weighted_close_zero_sum_row_fallback_and_shape_mismatch(
         _calc_portfolio_weighted_close(securities, np.array([1.0, 2.0, 3.0]))
 
 
+def test_calc_portfolio_weighted_close_backfills_short_history() -> None:
+    """A holding with no price before its last date (newly listed) is held flat
+    at its first price, so it does not blank out the portfolio series."""
+    closes = [100.0 + i * 0.5 + (i % 5) * 0.2 for i in range(60)]
+    idx = pd.date_range("2024-01-01", periods=len(closes), freq="D")
+    established = SimpleNamespace(
+        quote=SimpleNamespace(symbol="AAA"),
+        indicators_df=pd.DataFrame({"close": closes}, index=idx),
+    )
+    new_listing = SimpleNamespace(
+        quote=SimpleNamespace(symbol="IPO"),
+        indicators_df=pd.DataFrame({"close": [40.0]}, index=idx[-1:]),
+    )
+    securities = [established, new_listing]
+    weights = np.array([0.8, 0.2])
+
+    close = _calc_portfolio_weighted_close(securities, weights)
+    assert not close["PORTF"].isna().any()
+    assert close["PORTF"].iloc[0] == pytest.approx(0.8 * closes[0] + 0.2 * 40.0)
+
+    portf = compute_portfolio_timeseries_indicators(securities, weights)[0]
+    assert not portf["close_norm"].isna().any()
+    metrics = compute_performance_metrics(portf, RISK_FREE_RATE)
+    assert np.isfinite(metrics["sharpe"].iloc[0])
+    assert np.isfinite(metrics["volatility"].iloc[0])
+
+
 def test_compute_performance_metrics_batch_matches_loop_result() -> None:
     """Batch function output must match serial loop result for every numeric metric."""
     closes_a = [100 + i * 0.3 + (i % 4) * 0.1 for i in range(300)]

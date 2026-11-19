@@ -8,6 +8,22 @@ from frontend.widgets.filters import render_group_facets, resolve_group_facets
 from frontend.widgets.growth_chart import render_growth_chart
 from frontend.widgets.risk_chart import render_risk_chart
 
+MISSING_STAT = "—"
+
+
+def _fmt_stat(value: float | None, spec: str) -> str:
+    """Format a metric, or a dash when it is missing (too little price history)."""
+    return MISSING_STAT if pd.isna(value) else format(value, spec)
+
+
+def _fmt_stat_delta(
+    value: float | None, benchmark: float | None, spec: str
+) -> str | None:
+    """Format a metric's difference to the benchmark; None when either is missing."""
+    if pd.isna(value) or pd.isna(benchmark):
+        return None
+    return format(value - benchmark, spec)
+
 
 def render_performance_view(
     risk_free_rate: float,
@@ -162,39 +178,40 @@ def render_performance_view(
             benchmark_sharpe = bm["sharpe"]
             annual_sortino = pm["sortino"]
             benchmark_sortino = bm["sortino"]
-            max_drawdown_date = pd.to_datetime(pm["max_drawdown_date"]).strftime(
-                "%Y-%m-%d"
+            mdd_date = pd.to_datetime(pm["max_drawdown_date"])
+            max_drawdown_date = (
+                None if pd.isna(mdd_date) else mdd_date.strftime("%Y-%m-%d")
             )
 
             st.metric(
                 "Return (1Y)",
-                f"{annual_return:.1%}",
-                f"{annual_return - benchmark_return:+.1%}",
+                _fmt_stat(annual_return, ".1%"),
+                _fmt_stat_delta(annual_return, benchmark_return, "+.1%"),
                 delta_arrow="off",
             )
             st.metric(
                 "Volatility (1Y)",
-                f"{annual_volatility:.1%}",
-                f"{annual_volatility - benchmark_volatility:+.1%}",
+                _fmt_stat(annual_volatility, ".1%"),
+                _fmt_stat_delta(annual_volatility, benchmark_volatility, "+.1%"),
                 delta_arrow="off",
                 delta_color="inverse",
             )
             st.metric(
                 "Sharpe Ratio (1Y)",
-                f"{annual_sharpe:.3f}",
-                f"{annual_sharpe - benchmark_sharpe:+.3f}",
+                _fmt_stat(annual_sharpe, ".3f"),
+                _fmt_stat_delta(annual_sharpe, benchmark_sharpe, "+.3f"),
                 delta_arrow="off",
             )
             st.metric(
                 "Sortino Ratio (1Y)",
-                f"{annual_sortino:.3f}",
-                f"{annual_sortino - benchmark_sortino:+.3f}",
+                _fmt_stat(annual_sortino, ".3f"),
+                _fmt_stat_delta(annual_sortino, benchmark_sortino, "+.3f"),
                 delta_arrow="off",
             )
             st.metric(
                 "Max Drawdown",
-                f"{max_drawdown:.1%}",
-                f"{max_drawdown_date}",
+                _fmt_stat(max_drawdown, ".1%"),
+                max_drawdown_date,
                 delta_arrow="off",
                 delta_color="blue",
             )

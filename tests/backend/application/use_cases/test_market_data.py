@@ -8,6 +8,7 @@ import pytest
 
 from src.backend.application.use_cases.market_data import MarketDataManager
 from src.backend.domain.entities.security import Bar, BarsSyncState
+from tests.backend.conftest import build_global_rates, build_quote
 
 # ---------------------------------------------------------------------------
 # Fixed reference dates
@@ -507,3 +508,42 @@ class TestFetchSingleMethods:
         backup.fetch_bars.side_effect = RuntimeError("backup down")
         result = self._manager_with(primary, backup).fetch_single_bars("AAPL")
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# TestBuildSecurities — a security needs a quote; daily bars are optional
+# ---------------------------------------------------------------------------
+class TestBuildSecurities:
+    def _manager_with_db(self, quotes, bars_map) -> MarketDataManager:
+        db = MagicMock()
+        db.read_quotes.return_value = quotes
+        db.read_batch_bars.return_value = bars_map
+        db.read_profiles.return_value = []
+        return MarketDataManager(ds_primary=MagicMock(), ds_backup=None, db=db)
+
+    def test_quote_without_bars_builds_from_quote_only(self):
+        """A newly listed security has a quote before its first daily bar."""
+        manager = self._manager_with_db(
+            quotes=[build_quote("ANT", close=42.0)], bars_map={"ANT": []}
+        )
+
+        securities = asyncio.run(
+            manager.build_securities_batch_async(["ANT"], rates=build_global_rates())
+        )
+
+        sec = securities["ANT"]
+        assert len(sec.bars) == 1
+        assert sec.bars[0].close == pytest.approx(42.0)
+        assert len(sec.indicators) == 1
+
+    def test_missing_quote_still_raises(self):
+        manager = self._manager_with_db(
+            quotes=[], bars_map={"ANT": [_bar("ANT", YESTERDAY)]}
+        )
+
+        with pytest.raises(ValueError, match="Security data missing for symbol: ANT"):
+            asyncio.run(
+                manager.build_securities_batch_async(
+                    ["ANT"], rates=build_global_rates()
+                )
+            )

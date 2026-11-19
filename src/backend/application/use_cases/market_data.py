@@ -441,8 +441,10 @@ class MarketDataManager:
         profile = self.read_security_profile(symbol)
         if rates is None:
             rates = self.read_global_rates()
-        if quote is None or not bars or rates is None:
+        if quote is None or rates is None:
             raise ValueError(f"Security data missing for symbol: {symbol}")
+        if not bars:
+            logger.debug("No bars for %s; building from quote only", symbol)
         return Security(quote=quote, bars=bars, profile=profile, rates=rates)
 
     async def build_securities_batch_async(
@@ -468,8 +470,11 @@ class MarketDataManager:
             quote = quotes.get(symbol)
             bars = bars_map.get(symbol, [])
             profile = profiles.get(symbol)
-            if quote is None or not bars:
+            if quote is None:
                 raise ValueError(f"Security data missing for symbol: {symbol}")
+            # A newly listed security has a quote before its first daily bar
+            if not bars:
+                logger.debug("No bars for %s; building from quote only", symbol)
             sec = await asyncio.to_thread(
                 Security, quote=quote, bars=bars, profile=profile, rates=rates
             )

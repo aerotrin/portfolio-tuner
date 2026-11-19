@@ -108,7 +108,9 @@ def _calc_portfolio_weighted_close(
         s.name = sec.quote.symbol
         frames.append(s)
 
-    C = pd.concat(frames, axis=1, join="outer").sort_index().ffill()
+    # bfill holds a security flat at its first price before it listed, so a
+    # short-history holding adds zero return there instead of NaN-ing the row.
+    C = pd.concat(frames, axis=1, join="outer").sort_index().ffill().bfill()
 
     if len(C) > TRADING_DAYS:  # d
         C = C.iloc[-TRADING_DAYS:]

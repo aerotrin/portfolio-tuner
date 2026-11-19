@@ -116,7 +116,7 @@ def check_symbols_availability(
     symbols: list[str] = Body(...),
     market_man: MarketDataManager = Depends(get_market_data_manager),
 ):
-    """Returns the subset of requested symbols not yet available (missing quotes or bars sync state)."""
+    """Returns the subset of requested symbols not yet available (no stored quote)."""
     try:
         return market_man.db.check_symbols_availability(symbols)
     except Exception as e:

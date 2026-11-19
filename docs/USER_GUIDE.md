@@ -379,6 +379,8 @@ Market data (quotes, historical bars, profiles) is cached in the database and mu
 
 The system automatically checks symbol availability on each page load. If any required symbols are missing from the cache, a blocking refresh job starts automatically and the page waits for it to complete before rendering.
 
+A symbol only needs a current quote to be shown. A **newly listed security** (for example on its IPO day) has no daily price history yet, so it appears with its price, market value, and weight straight away, while its performance columns (returns, volatility, Sharpe, correlation) stay blank and fill in as daily history builds up. Until then it counts as flat in the portfolio's own performance figures, and an account holding only such securities shows "—" for its Performance statistics.
+
 On subsequent loads, the smart sync only fetches data newer than the last successful bar date for each symbol — making incremental refreshes fast.
 
 ### Auto Refresh Toggle

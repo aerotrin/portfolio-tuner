@@ -115,7 +115,7 @@ def load_available_securities_list() -> list[str]:
 
 
 def check_missing_symbols(symbols: tuple[str, ...]) -> list[str]:
-    """Returns symbols not yet available (missing quotes or bars sync state)."""
+    """Returns symbols not yet available (no stored quote)."""
     api = get_api_client()
     try:
         return api.check_symbols_availability(list(symbols))

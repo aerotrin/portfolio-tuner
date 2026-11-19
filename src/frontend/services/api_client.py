@@ -149,7 +149,7 @@ class APIClient:
         return self._get("/securities")
 
     def check_symbols_availability(self, symbols: list[str]) -> list[str]:
-        """Returns symbols missing from quotes or bars_sync_state."""
+        """Returns symbols with no stored quote."""
         return self._post("/securities/availability", json=symbols)
 
     def get_security_quote(self, symbol: str):

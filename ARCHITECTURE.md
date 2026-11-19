@@ -244,7 +244,7 @@ All routes are mounted under the `/api/v1` prefix. There are three routers:
 
 **`/api/v1/securities`** — market data access:
 - `GET /securities` — list all symbols with cached data
-- `POST /securities/availability` — check which of a set of symbols are missing from cache
+- `POST /securities/availability` — check which of a set of symbols have no cached quote
 - `GET /securities/{symbol}` — get a live quote
 - `GET /securities/{symbol}/profile` — get a company profile
 - `GET /securities/{symbol}/bars` — get OHLCV bars (with optional date range)
@@ -427,6 +427,8 @@ Refresh operations follow a two-phase pattern:
 2. **Async execution** — `refresh_quotes_async()`, `refresh_bars_async()`, and `refresh_profiles_async()` accept the pending work lists produced above and execute the fetches concurrently, upserting results into the database as each symbol completes.
 
 Each fetch uses a two-tier fallback: the primary provider is attempted first; if it returns no data, the backup provider is tried. Both tiers returning nothing results in a silent skip for that symbol rather than an exception, so a single unavailable symbol does not abort the entire refresh job.
+
+A symbol counts as **available** once it has a cached quote; daily bars are not required. A newly listed security has a quote before its first daily bar exists, so `MarketDataManager` builds its `Security` from the quote alone (one price point, metrics empty) and `pending_bars()` keeps retrying its history on each refresh until bars arrive. When combining holdings into the `PORTF` series, `_calc_portfolio_weighted_close` holds a short-history security flat at its first price for earlier dates, so it contributes zero return there instead of blanking the portfolio series.
 
 ### Data Flow Patterns
 
