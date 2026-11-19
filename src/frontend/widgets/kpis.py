@@ -13,7 +13,7 @@ from frontend.shared.settings import (
     MASKED_VALUE,
     SNAPSHOT_DISPLAY_NAMES,
 )
-from frontend.shared.time import humanize_timestamp
+from frontend.shared.time import format_clock, humanize_timestamp, local_now
 
 
 def _humanize_timestamp_or_na(
@@ -181,13 +181,42 @@ def _render_refresh_badge(active_page: str) -> None:
         st.badge(f"Last trade {natural}", color="gray")
 
 
-def render_status_inline(rates: dict, active_page: str) -> None:
-    """Rates captions, Auto Refresh toggle, and refresh badge, rendered into
-    the caller's horizontal container (for compact page headers)."""
-    st.caption(f"USD/CAD: {rates['fx_rate']:.3f}")
-    st.caption(f"T-Bill 6m: {rates['rf_rate']:.2%}")
-    render_auto_refresh_toggle()
+# The clock and the refresh badge rerun on their own so both stay current.
+@st.fragment(run_every="30s")
+def _render_live_clock() -> None:
+    now = local_now(st.context.timezone)
+    st.caption(f":material/calendar_today: {format_clock(now)}", width="content")
+
+
+@st.fragment(run_every="30s")
+def _render_live_refresh_badge(active_page: str) -> None:
     _render_refresh_badge(active_page)
+
+
+def render_status_inline(rates: dict, active_page: str) -> None:
+    """Clock, rates, refresh badge and Auto Refresh toggle, rendered into the
+    caller's horizontal container (for compact page headers).
+
+    Each fragment's own wrapper block stretches, so in a horizontal row the
+    fragments would split leftover space (wrapping the clock); a content-width
+    parent sizes them to their text.
+    """
+    with st.container(width="content"):
+        _render_live_clock()
+    st.caption(
+        f"FX Rate: {rates['fx_rate']:.3f}",
+        help="USD/CAD exchange rate",
+        width="content",
+    )
+    st.caption(
+        f"Rf Rate: {rates['rf_rate']:.2%}",
+        help="Risk-free rate: US Treasury bill yield",
+        width="content",
+    )
+    with st.container(width="content"):
+        _render_live_refresh_badge(active_page)
+    # Outside the fragments: toggling must rerun the page to trigger a refresh
+    render_auto_refresh_toggle()
 
 
 def render_market_snapshot(header_data: pd.DataFrame) -> None:

@@ -112,7 +112,7 @@ The **Record Transaction** button (prominent, full-width) opens the manual trans
 
 ### Data Refresh
 
-The **Force Refresh Data** button triggers a full re-fetch of all market data for the current page's symbols, bypassing the smart sync state. Use this when data appears stale or after adding new symbols to `symbols.yml`. (For routine background updates, use the **Auto Refresh** toggle at the top-right of each page instead — see [Section 9](#9-refreshing-market-data).)
+The **Force Refresh Data** button triggers a full re-fetch of all market data for the current page's symbols, bypassing the smart sync state. Use this when data appears stale or after adding new symbols to `symbols.yml`. (For routine background updates, use the **Auto** (auto refresh) toggle at the top-right of each page instead — see [Section 9](#9-refreshing-market-data).)
 
 ### Hide Balances
 
@@ -132,11 +132,11 @@ When the page loads, it checks whether all required symbols have cached market d
 
 ### Header Rows
 
-The Portfolio page packs its header into two rows. The first row shows a compact page title on the left and, right-aligned, the CAD/USD exchange rate, the risk-free rate (6-month T-Bill), the **Auto Refresh** toggle, and the data recency badge. The second row holds the account selector on the left and the **Refresh Data** button on the right.
+The Portfolio page packs its header into two rows. The first row shows a compact page title on the left and, right-aligned, today's date and time, the **FX Rate** (USD/CAD), the **Rf Rate** (risk-free US Treasury bill yield; hover either label for a description), the data recency badge, and the **Auto** (auto refresh) toggle. The second row holds the account selector on the left and the **Refresh Data** button on the right.
 
-The recency badge — **Refreshed …** — shows how long ago market data was last refreshed for this page (blue when under an hour old, yellow when staler); hover for the exact timestamp. Until the first refresh completes for the page in the session, a gray **Last trade …** badge shows the latest quote last-trade time instead.
+The recency badge — **Refreshed …** — shows how long ago market data was last refreshed for this page (blue when under an hour old, yellow when staler); hover for the exact timestamp. Until the first refresh completes for the page in the session, a gray **Last trade …** badge shows the latest quote last-trade time instead. The date and time are shown in your browser's timezone. They and the recency badge update every 30 seconds without reloading the page.
 
-The market research pages use the same single-row pattern: page title on the left, with the rates, **Auto Refresh** toggle, recency badge, and **Refresh Data** button clustered on the right.
+The market research pages use the same single-row pattern: page title on the left, with the date and time, rates, recency badge, **Auto** toggle, and **Refresh Data** button clustered on the right.
 
 > **Screenshot placeholder — Portfolio header row**
 
@@ -317,7 +317,7 @@ Cash held in USD-denominated accounts is converted to CAD at the current exchang
 A standalone research dashboard for the ETF symbols configured in `symbols.yml` under `base_market_etfs`.
 
 **Sections:**
-- **Header row** — page title with global rates, the Auto Refresh toggle, the last-refreshed indicator, and the Refresh Data button
+- **Header row** — page title with date and time, global rates, the last-refreshed indicator, the Auto refresh toggle, and the Refresh Data button
 - **Market snapshot** — header quotes
 - **Market movers** — most active, top gainers and losers for the US or Canadian market. If no data is available for a symbol group, or if market conditions produce no gainers or losers in a category, an informational message is shown in place of the table.
 - **Intraday tab** — a market-map treemap of every configured symbol, nested region → group → symbol, with a health bar and quote table. Click a region tile to zoom into it; optional type and group filters narrow the map
@@ -385,7 +385,7 @@ On subsequent loads, the smart sync only fetches data newer than the last succes
 
 ### Auto Refresh Toggle
 
-The **Auto Refresh** toggle — next to the **Refresh Data** button at the top-right of each page — re-runs the incremental smart sync for the current page's symbols on a fixed interval (default 5 minutes, set via `AUTO_REFRESH_DATA_INTERVAL` in milliseconds). The setting carries across pages, and each page scope keeps its own refresh cycle: the two market research pages are tracked separately (they cover many symbols and take longer), while all account portfolio pages share one scope — a portfolio refresh covers the holdings of **every** account plus the benchmark/header symbols, so switching between accounts always shows current data. A refresh fires immediately — without waiting for the next cycle — whenever the toggle is on and the current page's scope hasn't been refreshed yet this session (shown by the gray **Last trade** badge): both when you switch the toggle on and when you first open such a page. Refreshes run in the background — the page stays fully interactive and updates once with fresh data when each job completes.
+The **Auto** toggle — just left of the **Refresh Data** button at the top-right of each page — re-runs the incremental smart sync for the current page's symbols on a fixed interval (default 5 minutes, set via `AUTO_REFRESH_DATA_INTERVAL` in milliseconds). The setting carries across pages, and each page scope keeps its own refresh cycle: the two market research pages are tracked separately (they cover many symbols and take longer), while all account portfolio pages share one scope — a portfolio refresh covers the holdings of **every** account plus the benchmark/header symbols, so switching between accounts always shows current data. A refresh fires immediately — without waiting for the next cycle — whenever the toggle is on and the current page's scope hasn't been refreshed yet this session (shown by the gray **Last trade** badge): both when you switch the toggle on and when you first open such a page. Refreshes run in the background — the page stays fully interactive and updates once with fresh data when each job completes.
 
 ### Manual Refresh
 
@@ -402,7 +402,7 @@ Use **Force Refresh Data** when quotes appear stale, after changing the date ran
 
 ### Refresh Progress
 
-Background refreshes (the **Refresh Data** button and the **Auto Refresh** toggle) show a live progress bar under **Refresh Status** at the bottom of the sidebar; the page reloads with fresh data when the job finishes.
+Background refreshes (the **Refresh Data** button and the **Auto** toggle) show a live progress bar under **Refresh Status** at the bottom of the sidebar; the page reloads with fresh data when the job finishes.
 
 Blocking refreshes (missing-symbol bootstrap and **Force Refresh Data**) show a progress banner at the top of the page and pause rendering until the job completes.
 

@@ -55,7 +55,7 @@ symbols_config = load_symbols_config()
 with st.container(
     horizontal=True, vertical_alignment="center", horizontal_alignment="distribute"
 ):
-    st.markdown("### 🏦 ETF Market", width="content")
+    st.markdown("#### 🏦 ETF Market", width="content")
     # Nested content-width container keeps the cluster tight on the right
     with st.container(horizontal=True, vertical_alignment="center", width="content"):
         render_status_inline(rates, active_page)

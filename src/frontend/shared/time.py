@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Final, Literal
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import humanize
 import pandas as pd
+from tzlocal import get_localzone
 
 UTC = ZoneInfo("UTC")
 M_TO_SEC = 60
@@ -53,3 +54,19 @@ def humanize_timestamp(
         color = COLOR_STALE
 
     return natural_timestamp, stale_mins, color
+
+
+def local_now(tz_name: str | None) -> datetime:
+    """Current time in the given IANA zone (the browser's), else the server's."""
+    if tz_name:
+        try:
+            return datetime.now(ZoneInfo(tz_name))
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    return datetime.now(get_localzone())
+
+
+def format_clock(now: datetime) -> str:
+    """e.g. 'Thu, Nov 19 · 2:35 PM EST' (%-I is not portable to Windows)."""
+    hour = now.strftime("%I").lstrip("0")
+    return f"{now:%a, %b} {now.day} · {hour}:{now:%M %p} {now:%Z}".rstrip()

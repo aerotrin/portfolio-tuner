@@ -121,7 +121,7 @@ def render_auto_refresh_toggle() -> None:
     """Toggle for periodic background data refresh, shown next to Refresh Data."""
     minutes = max(1, round(config.auto_refresh_data_interval / 60_000))
     st.toggle(
-        "Auto Refresh",
+        "Auto",
         key="auto_refresh_toggle",
         help=f"Automatically refresh market data every {minutes} min",
     )

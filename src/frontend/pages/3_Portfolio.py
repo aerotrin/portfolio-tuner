@@ -93,7 +93,7 @@ with st.container(
     horizontal=True, vertical_alignment="bottom", horizontal_alignment="distribute"
 ):
     st.markdown(
-        f"### 📊 {account.type} Portfolio" if single else "### 🧺 Portfolio",
+        f"#### 📊 {account.type} Portfolio" if single else "#### 🧺 Portfolio",
         width="content",
     )
     # Nested content-width container keeps the status cluster tight on the right
