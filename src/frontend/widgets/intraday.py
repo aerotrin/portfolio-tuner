@@ -88,6 +88,7 @@ def render_market_intraday(
     st.dataframe(
         quote_table_styler(flat),
         hide_index=True,
+        height="content",
         column_order=QUOTE_TABLE_CONFIG.keys(),
         column_config=QUOTE_TABLE_CONFIG,
         key=f"{key_prefix}-table-intraday-viewer-quote",
@@ -125,6 +126,7 @@ def render_portfolio_intraday(
             st.dataframe(
                 quote_table_styler(equity_df),
                 hide_index=True,
+                height="content",
                 column_order=QUOTE_TABLE_CONFIG.keys(),
                 column_config=QUOTE_TABLE_CONFIG,
                 key="table-holdings-intraday-quote-stocks",
@@ -134,6 +136,7 @@ def render_portfolio_intraday(
             st.dataframe(
                 quote_table_styler(option_df),
                 hide_index=True,
+                height="content",
                 column_order=QUOTE_TABLE_CONFIG.keys(),
                 column_config=QUOTE_TABLE_CONFIG,
                 key="table-holdings-intraday-quote-options",

@@ -54,10 +54,10 @@ QUOTE_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "change": st.column_config.NumberColumn("Chg $", format="%+.2f"),
     "currency": st.column_config.TextColumn("Currency"),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "change_percent": st.column_config.NumberColumn("Chg 1D", format="percent"),
     "return5D": st.column_config.NumberColumn("Chg 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Chg 1M", format="percent"),
@@ -109,11 +109,11 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
-    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
     "currency": st.column_config.TextColumn("Currency"),
+    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     # "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
     # "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
@@ -138,8 +138,8 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    # "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "holding_category": st.column_config.TextColumn("Right"),
     "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
@@ -248,10 +248,10 @@ def positions_table_styler(df: pd.DataFrame) -> Styler:
 PERFORMANCE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "weight": st.column_config.NumberColumn("Weight", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "weight": st.column_config.NumberColumn("Weight", format="percent"),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     # "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "close": st.column_config.NumberColumn("Last Price", format="accounting"),

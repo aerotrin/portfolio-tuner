@@ -1,6 +1,6 @@
 from typing import Any, cast
 
-from frontend.shared.settings import MASKED_VALUE
+from frontend.shared.settings import HEIGHT_POSITIONS_TREEMAP_ROW, MASKED_VALUE
 from frontend.shared.styles import (
     POSITIONS_CASH_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
@@ -22,7 +22,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-HEIGHT_CASH_DONUT = 260
+HEIGHT_CASH_DONUT = 160
 
 
 def _cash_by_account_donut(df: pd.DataFrame, hide_balances: bool) -> go.Figure:
@@ -47,8 +47,8 @@ def _cash_by_account_donut(df: pd.DataFrame, hide_balances: bool) -> go.Figure:
     )
     fig.update_layout(
         showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.05, x=0.5, xanchor="center"),
-        margin=dict(t=10, b=10, l=10, r=10),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, x=1.02, xanchor="left"),
+        margin=dict(t=0, b=0, l=0, r=0),
         height=HEIGHT_CASH_DONUT,
         annotations=[
             dict(
@@ -88,7 +88,7 @@ def _render_cash_section(
 
     st.markdown("###### Cash")
     table_col, donut_col = (
-        st.columns([3, 1], vertical_alignment="center")
+        st.columns([2, 1], vertical_alignment="top")
         if show_donut
         else (st.container(), None)
     )
@@ -96,6 +96,7 @@ def _render_cash_section(
         st.dataframe(
             cash_table_styler(df),
             hide_index=True,
+            height="content",
             column_order=balance_safe_column_order(
                 POSITIONS_CASH_TABLE_CONFIG, hide_balances
             ),
@@ -172,7 +173,10 @@ def render_portfolio_positions(
         )
         if view == "Total Return":
             fig = render_treemap_positions(
-                df, row_px=120, hide_balances=hide_balances, group_cols=group_cols
+                df,
+                row_px=HEIGHT_POSITIONS_TREEMAP_ROW,
+                hide_balances=hide_balances,
+                group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-open")
             render_positions_health_bar(df)
@@ -181,7 +185,7 @@ def render_portfolio_positions(
                 df,
                 top_label="Intraday",
                 has_weight=True,
-                row_px=120,
+                row_px=HEIGHT_POSITIONS_TREEMAP_ROW,
                 hide_balances=hide_balances,
                 group_cols=group_cols,
             )
@@ -198,6 +202,7 @@ def render_portfolio_positions(
                 hide_index=True,
                 column_order=balance_safe_column_order(equity_config, hide_balances),
                 column_config=equity_config,
+                height="content",
                 key="table-holdings-open-stocks",
             )
         if not option_df.empty:
@@ -205,6 +210,7 @@ def render_portfolio_positions(
             st.dataframe(
                 positions_table_styler(option_df),
                 hide_index=True,
+                height="content",
                 column_order=balance_safe_column_order(option_config, hide_balances),
                 column_config=option_config,
                 key="table-holdings-open-options",
@@ -225,6 +231,7 @@ def render_portfolio_positions(
                 st.dataframe(
                     quote_table_styler(intraday_equity_df),
                     hide_index=True,
+                    height="content",
                     column_order=quote_config.keys(),
                     column_config=quote_config,
                     key="table-holdings-intraday-quote-stocks",
@@ -234,6 +241,7 @@ def render_portfolio_positions(
                 st.dataframe(
                     quote_table_styler(intraday_option_df),
                     hide_index=True,
+                    height="content",
                     column_order=quote_config.keys(),
                     column_config=quote_config,
                     key="table-holdings-intraday-quote-options",

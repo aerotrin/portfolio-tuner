@@ -39,6 +39,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
         st.dataframe(
             quote_table_styler(volume_df),
             hide_index=True,
+            height="content",
             column_order=QUOTE_TABLE_CONFIG.keys(),
             column_config=QUOTE_TABLE_CONFIG,
         )
@@ -56,6 +57,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
             st.dataframe(
                 quote_table_styler(up_df),
                 hide_index=True,
+                height="content",
                 column_order=QUOTE_TABLE_CONFIG.keys(),
                 column_config=QUOTE_TABLE_CONFIG,
             )
@@ -75,6 +77,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
             st.dataframe(
                 quote_table_styler(down_df),
                 hide_index=True,
+                height="content",
                 column_order=QUOTE_TABLE_CONFIG.keys(),
                 column_config=QUOTE_TABLE_CONFIG,
             )

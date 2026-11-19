@@ -61,12 +61,14 @@ def render_correlation_matrix(matrix: pd.DataFrame | None = None) -> None:
         st.dataframe(
             highest,
             hide_index=True,
+            height="content",
         )
 
         st.markdown("##### Weakest Correlation Pairs")
         st.dataframe(
             lowest,
             hide_index=True,
+            height="content",
         )
 
         with st.container(border=True, horizontal=True):

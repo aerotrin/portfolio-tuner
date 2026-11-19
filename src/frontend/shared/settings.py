@@ -51,6 +51,8 @@ TRADE_SIZING_GUIDE = {
 
 # [Market/Portfolio] Treemap and Chart height defaults
 HEIGHT_TREEMAP = 120
+# [Portfolio] Positions treemaps only: px per row of 12 holdings
+HEIGHT_POSITIONS_TREEMAP_ROW = 150
 HEIGHT_RISK_RETURN_CHART = 450
 HEIGHT_EFFICIENT_FRONTIER_CHART = 400
 HEIGHT_MARKET_SNAPSHOT = 140

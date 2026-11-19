@@ -751,6 +751,7 @@ def render_optimizer(
         st.dataframe(
             alloc_df,
             hide_index=True,
+            height="content",
             column_order=(
                 ["Symbol", "Actual", "Optimal", "Delta"]
                 if show_actual

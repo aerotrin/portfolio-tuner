@@ -16,6 +16,16 @@ def _size_treemap(
     return base_px + rows * row_px
 
 
+def _treemap_height(df: pd.DataFrame, row_px: int, group_cols: list[str] | None) -> int:
+    """Grouped treemaps add a 24px header per parent and clamp to 3–6 rows so
+    tiles shrink instead of the page growing."""
+    if not group_cols:
+        return _size_treemap(df.shape[0], row_px=row_px)
+    n_parents = df.groupby(group_cols, sort=False).ngroups
+    height = _size_treemap(df.index.nunique(), row_px=row_px) + 24 * n_parents
+    return min(max(height, 3 * row_px), 6 * row_px)
+
+
 def _leaf_labels(df: pd.DataFrame) -> "pd.Series | pd.Index":
     """Tile label per row: OSI for options, else quote symbol.
 
@@ -36,7 +46,7 @@ def render_treemap_intraday(
     top_label: str = "",
     size_by: str | None = None,
     has_weight: bool = False,
-    row_px=None,
+    row_px: int = HEIGHT_TREEMAP,
     hide_balances: bool = False,
     group_cols: list[str] | None = None,
 ) -> go.Figure:
@@ -44,17 +54,7 @@ def render_treemap_intraday(
     (e.g. region -> group). A symbol appearing in several groups renders once
     per parent. Height is capped when grouped — tiles shrink, not the page."""
     df = df.copy()
-
-    if group_cols:
-        n_parents = df.groupby(group_cols, sort=False).ngroups
-        height = _size_treemap(df.index.nunique()) + 24 * n_parents
-        height = min(max(height, 3 * HEIGHT_TREEMAP), 6 * HEIGHT_TREEMAP)
-    else:
-        height = (
-            _size_treemap(df.shape[0], row_px=row_px)
-            if row_px is not None
-            else _size_treemap(df.shape[0])
-        )
+    height = _treemap_height(df, row_px, group_cols)
 
     df["display_text"] = (
         df["close"].map("{:,.2f}".format)
@@ -119,22 +119,12 @@ def render_treemap_intraday(
 
 def render_treemap_positions(
     df: pd.DataFrame,
-    row_px=None,
+    row_px: int = HEIGHT_TREEMAP,
     hide_balances: bool = False,
     group_cols: list[str] | None = None,
 ) -> go.Figure:
     df = df.copy()
-
-    if group_cols:
-        n_parents = df.groupby(group_cols, sort=False).ngroups
-        height = _size_treemap(df.index.nunique()) + 24 * n_parents
-        height = min(max(height, 3 * HEIGHT_TREEMAP), 6 * HEIGHT_TREEMAP)
-    else:
-        height = (
-            _size_treemap(df.shape[0], row_px=row_px)
-            if row_px is not None
-            else _size_treemap(df.shape[0])
-        )
+    height = _treemap_height(df, row_px, group_cols)
 
     option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
     stocks_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]

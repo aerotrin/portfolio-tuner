@@ -227,6 +227,7 @@ def render_performance_view(
         hide_index=True,
         column_order=PERFORMANCE_TABLE_CONFIG.keys(),
         column_config=PERFORMANCE_TABLE_CONFIG,
+        height="content",
         key=table_key,
         on_select="rerun",
         selection_mode="multi-row",
@@ -243,6 +244,7 @@ def render_performance_view(
         st.dataframe(
             performance_table_styler(portfolio_metrics),
             hide_index=True,
+            height="content",
             column_order=PERFORMANCE_TABLE_CONFIG.keys(),
             column_config=PERFORMANCE_TABLE_CONFIG,
             key=f"table-{key_prefix}-portfolio-performance",
@@ -252,6 +254,7 @@ def render_performance_view(
     st.dataframe(
         performance_table_styler(benchmark_metrics),
         hide_index=True,
+        height="content",
         column_order=PERFORMANCE_TABLE_CONFIG.keys(),
         column_config=PERFORMANCE_TABLE_CONFIG,
         key=f"table-{key_prefix}-benchmark-performance",
