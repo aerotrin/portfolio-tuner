@@ -266,7 +266,12 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    render_portfolio_positions(holdings_data, hide_balances)
+    render_portfolio_positions(
+        holdings_data,
+        hide_balances,
+        cash_accounts=portfolio.accounts,
+        portfolio_total_value=portfolio.summary.get("total_value") or 0.0,
+    )
 
 with tabs[1]:
     render_performance_view(

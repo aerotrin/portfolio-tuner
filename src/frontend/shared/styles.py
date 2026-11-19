@@ -27,6 +27,8 @@ BALANCE_COLUMNS = (
     "book_value",
     "fx_exposure",
     "option_value",
+    "cash_balance",
+    "cash_balance_native",
 )
 
 
@@ -160,6 +162,27 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
     "last_updated": st.column_config.DatetimeColumn("Last Updated", format="localized"),
 }
+
+
+POSITIONS_CASH_TABLE_CONFIG = {
+    "label": st.column_config.TextColumn("Account"),
+    "currency": st.column_config.TextColumn("Currency"),
+    "cash_balance_native": st.column_config.NumberColumn("Cash", format="accounting"),
+    "cash_balance": st.column_config.NumberColumn("Cash CAD", format="dollar"),
+    "account_cash_pct": st.column_config.NumberColumn("% of Account", format="percent"),
+    "weight": st.column_config.NumberColumn(
+        "Weight %", format="percent", help="Share of the portfolio's total value"
+    ),
+}
+
+
+def cash_table_styler(df: pd.DataFrame) -> Styler:
+    """Negative cash (margin / overdraft) in red."""
+    cash_cols = [c for c in ("cash_balance_native", "cash_balance") if c in df]
+    return df.style.map(
+        lambda v: f"color: {RED}" if pd.notna(v) and v < 0 else "",
+        subset=cash_cols,
+    )
 
 
 def positions_table_styler(df: pd.DataFrame) -> Styler:

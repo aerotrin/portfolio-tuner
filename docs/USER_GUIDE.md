@@ -116,7 +116,7 @@ The **Force Refresh Data** button triggers a full re-fetch of all market data fo
 
 ### Hide Balances
 
-The **Hide Balances** toggle masks the account identity and dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value) from the positions tables. Percentage figures (returns, MWRR, cash %, weights) remain visible.
+The **Hide Balances** toggle masks the account identity and dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. Percentage figures (returns, MWRR, cash %, weights) remain visible.
 
 ---
 
@@ -192,6 +192,7 @@ A detailed view of all open positions in the account. A toggle in the section he
 
 - **Treemap** — tiles sized by portfolio weight and coloured by total unrealised gain/loss percentage. Each tile shows market value (CAD), total P/L, share count (or contract count for options), and days held (or DTE for options).
 - **Health bar** — green/red squares showing how many positions are in profit vs. loss on a total-return basis.
+- **Cash table** — one row per account, listed above the securities tables (shown even when the account holds no positions). Columns: Account, Currency, Cash (in the account's own currency), Cash CAD, % of Account (cash as a share of that account's total value), Weight % (share of the portfolio's total value). Negative cash is shown in red. In **All Accounts** scope a caption totals the cash across accounts, and when more than one account holds cash a **Cash by Account** donut shows each account's share.
 - **Stocks & ETFs table** — Columns: Symbol, Name, 1Y sparkline, Quantity, Price, Currency, Day Change, Day P/L (CAD), Market Value (CAD), Total P/L (CAD), Total P/L %, Days Held, Weight %, Break-even Price, Book Value (CAD), FX Exposure, Type, Open Date, Last Trade.
 - **Options table** (if options are held) — Columns: OSI, Name, 1Y sparkline, Quantity, Right, DTE, Intrinsic Value ⚠️, Break-even Price, Weight %, Total P/L (CAD), Total P/L %, Market Value (CAD), Book Value (CAD), Expiry, Strike, Last Price, FX Exposure, Days Held, Type, Open Date, Last Trade.
 
@@ -303,7 +304,7 @@ Selecting **All Accounts** in the page selector (the default) combines every acc
 - **Correlation** covers all pairs across accounts, including pairs of symbols held in different accounts.
 - **Optimization** runs over the combined symbol list with its own saved result, separate from each account's optimizer runs.
 
-Cash held in USD-denominated accounts is converted to CAD at the current exchange rate. The Records tab shows ledger data only when a single account is selected; the sidebar **Record Transaction** form opens on the active (last-selected) account, has its own in-form account selector, and always validates against the chosen account's own cash and holdings.
+Cash held in USD-denominated accounts is converted to CAD at the current exchange rate (in both All Accounts and single-account scope; the Positions tab's Cash table also shows the original USD amount). The Records tab shows ledger data only when a single account is selected; the sidebar **Record Transaction** form opens on the active (last-selected) account, has its own in-form account selector, and always validates against the chosen account's own cash and holdings.
 
 > **Screenshot placeholder — All Accounts view**
 

@@ -95,9 +95,9 @@ def test_build_portfolio_from_account_wires_positions_and_market_data(monkeypatc
     )
 
     manager = PortfolioManager(market_man=fake_market, account_man=fake_account)
-    asyncio.run(manager._build_portfolio_from_account("ACC-1", account_name="Main"))
+    asyncio.run(manager._build_portfolio_from_account(_entity("id-1", "ACC-1")))
 
-    assert fake_account.calls == [("ACC-1", "Main")]
+    assert fake_account.calls == [("ACC-1", "Acct ACC-1")]
     assert fake_market.build_securities_batch_calls == [
         {"symbols": ["AAPL", "MSFT"], "start_date": None, "end_date": None}
     ]
@@ -124,7 +124,9 @@ def test_build_portfolio_from_account_forwards_date_filter(monkeypatch):
     start = date(2024, 1, 1)
     end = date(2024, 12, 31)
     asyncio.run(
-        manager._build_portfolio_from_account("ACC-1", start_date=start, end_date=end)
+        manager._build_portfolio_from_account(
+            _entity("id-1", "ACC-1"), start_date=start, end_date=end
+        )
     )
 
     assert fake_market.build_securities_batch_calls == [
@@ -184,11 +186,11 @@ def test_portfolio_read_methods_pass_through(monkeypatch):
     )
 
     async def fake_build(*_args, **_kwargs):
-        return stub_portfolio
+        return stub_portfolio, 100.0
 
     monkeypatch.setattr(manager, "_build_portfolio_from_account", fake_build)
 
-    snap = asyncio.run(manager.get_portfolio("ACC-1"))
+    snap = asyncio.run(manager.get_portfolio(_entity("id-1", "ACC-1")))
     assert snap.summary.id == "ACC-1"
     assert snap.summary.open_positions == []
     assert snap.holdings == {}
@@ -231,11 +233,9 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
 
     build_calls: list[dict] = []
 
-    async def fake_build(
-        account_number, account_name=None, start_date=None, end_date=None
-    ):
+    async def fake_build(entity, start_date=None, end_date=None):
         build_calls.append({"start_date": start_date, "end_date": end_date})
-        return stub_portfolio
+        return stub_portfolio, 100.0
 
     manager = PortfolioManager(
         market_man=FakeMarketDataManager(), account_man=FakeAccountManager([])
@@ -244,7 +244,9 @@ def test_get_portfolio_includes_per_security_analytics(monkeypatch):
 
     start = date(2024, 1, 1)
     end = date(2024, 12, 31)
-    snap = asyncio.run(manager.get_portfolio("ACC-1", start_date=start, end_date=end))
+    snap = asyncio.run(
+        manager.get_portfolio(_entity("id-1", "ACC-1"), start_date=start, end_date=end)
+    )
 
     assert build_calls == [{"start_date": start, "end_date": end}]
     assert snap.summary.id == "ACC-1"
@@ -412,6 +414,9 @@ def test_get_total_portfolio_combines_accounts():
     assert slice_a.total_value + slice_b.total_value == pytest.approx(total_value)
     assert slice_a.weight + slice_b.weight == pytest.approx(1.0)
     assert slice_b.cash_balance == pytest.approx(50.0 * FX)
+    assert (slice_a.currency, slice_b.currency) == ("CAD", "USD")
+    assert slice_a.cash_balance_native == pytest.approx(100.0)
+    assert slice_b.cash_balance_native == pytest.approx(50.0)
 
     # PORTF metrics/indicators built over the combined holdings
     assert snap.metrics.symbol == "PORTF"
@@ -432,3 +437,34 @@ def test_get_total_portfolio_no_accounts_returns_empty_snapshot():
     assert snap.holdings == {}
     assert snap.accounts == []
     assert snap.summary.mwrr == 0.0
+
+
+def test_get_portfolio_normalizes_usd_cash_and_returns_account_slice():
+    """A single USD account converts its ledger cash to CAD and reports one
+    slice carrying both the CAD and native balances."""
+    acc = SimpleNamespace(
+        open_positions=[_equity_lot("AAPL", qty=5, book=500.0, account="ACC-B")],
+        cash_balance=50.0,
+        external_cash_flows=[],
+    )
+    entity = _entity("id-b", "ACC-B", currency=Currency.USD, type="RRSP")
+    manager = PortfolioManager(
+        market_man=RealSecurityMarketManager(),
+        account_man=FakeMultiAccountManager(
+            entities=[entity], accounts_by_number={"ACC-B": acc}
+        ),
+    )
+
+    snap = asyncio.run(manager.get_portfolio(entity))
+
+    mv = 5 * 110.0 * FX
+    assert snap.summary.cash_balance == pytest.approx(50.0 * FX)
+    assert snap.summary.total_value == pytest.approx(mv + 50.0 * FX)
+    assert len(snap.accounts) == 1
+    slice_b = snap.accounts[0]
+    assert slice_b.id == "id-b"
+    assert slice_b.label == "RRSP #ACC-B"
+    assert slice_b.currency == "USD"
+    assert slice_b.cash_balance == pytest.approx(50.0 * FX)
+    assert slice_b.cash_balance_native == pytest.approx(50.0)
+    assert slice_b.weight == pytest.approx(1.0)

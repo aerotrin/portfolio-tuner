@@ -1,10 +1,13 @@
-from typing import cast
+from typing import Any, cast
 
+from frontend.shared.settings import MASKED_VALUE
 from frontend.shared.styles import (
+    POSITIONS_CASH_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
     QUOTE_TABLE_CONFIG,
     balance_safe_column_order,
+    cash_table_styler,
     positions_table_styler,
     quote_table_styler,
     with_account_column,
@@ -16,18 +19,119 @@ from frontend.widgets.kpis import (
 )
 from frontend.widgets.treemaps import render_treemap_intraday, render_treemap_positions
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
+
+HEIGHT_CASH_DONUT = 260
+
+
+def _cash_by_account_donut(df: pd.DataFrame, hide_balances: bool) -> go.Figure:
+    """Donut of each account's share of total (positive) cash."""
+    hovertemplate = (
+        "%{label}: %{percent}<extra></extra>"
+        if hide_balances
+        else "%{label}: $%{value:,.2f} CAD (%{percent})<extra></extra>"
+    )
+    total = df["cash_balance"].sum()
+    fig = go.Figure(
+        go.Pie(
+            labels=df["label"],
+            values=df["cash_balance"],
+            hole=0.6,
+            sort=False,
+            direction="clockwise",
+            textinfo="percent",
+            textposition="inside",
+            hovertemplate=hovertemplate,
+        )
+    )
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=-0.05, x=0.5, xanchor="center"),
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=HEIGHT_CASH_DONUT,
+        annotations=[
+            dict(
+                text="Cash<br>" + (MASKED_VALUE if hide_balances else f"${total:,.0f}"),
+                x=0.5,
+                y=0.5,
+                font=dict(size=13),
+                showarrow=False,
+            )
+        ],
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def _render_cash_section(
+    cash_accounts: list[dict[str, Any]],
+    portfolio_total_value: float,
+    hide_balances: bool,
+) -> None:
+    """Per-account cash table, plus a Cash by Account donut when cash is
+    spread across several accounts."""
+    if not cash_accounts:
+        return
+
+    df = pd.DataFrame.from_records(cash_accounts)
+    total_values = df["total_value"].where(df["total_value"] != 0)
+    df["account_cash_pct"] = (df["cash_balance"] / total_values).fillna(0.0)
+    df["weight"] = (
+        df["cash_balance"] / portfolio_total_value if portfolio_total_value else 0.0
+    )
+    df = df.sort_values(by="cash_balance", ascending=False)
+
+    positive = cast(pd.DataFrame, df[df["cash_balance"] > 0])
+    show_donut = len(positive) > 1
+
+    st.markdown("###### Cash")
+    table_col, donut_col = (
+        st.columns([3, 1], vertical_alignment="center")
+        if show_donut
+        else (st.container(), None)
+    )
+    with table_col:
+        st.dataframe(
+            cash_table_styler(df),
+            hide_index=True,
+            column_order=balance_safe_column_order(
+                POSITIONS_CASH_TABLE_CONFIG, hide_balances
+            ),
+            column_config=POSITIONS_CASH_TABLE_CONFIG,
+            key="table-holdings-cash",
+        )
+        if len(df) > 1:
+            total_cash = df["cash_balance"].sum()
+            total_pct = (
+                total_cash / portfolio_total_value if portfolio_total_value else 0.0
+            )
+            amount = MASKED_VALUE if hide_balances else f"${total_cash:,.2f} CAD"
+            st.caption(f"Total cash {amount} · {total_pct:.1%} of portfolio")
+    if donut_col is not None:
+        with donut_col:
+            st.plotly_chart(
+                _cash_by_account_donut(positive, hide_balances),
+                config={"displayModeBar": False},
+                key="chart-holdings-cash-by-account",
+            )
 
 
 def render_portfolio_positions(
     holdings: pd.DataFrame | None,
     hide_balances: bool,
+    cash_accounts: list[dict[str, Any]] | None = None,
+    portfolio_total_value: float = 0.0,
 ) -> None:
     """Intraday view for current account holdings."""
 
     st.markdown("#### :material/table_rows: Positions")
 
     if holdings is None:
+        if cash_accounts:
+            st.markdown("##### Holdings")
+            _render_cash_section(cash_accounts, portfolio_total_value, hide_balances)
         st.info("No holdings found")
     else:
         df = holdings.copy()
@@ -86,6 +190,7 @@ def render_portfolio_positions(
 
         # Positions Table
         st.markdown("##### Holdings")
+        _render_cash_section(cash_accounts or [], portfolio_total_value, hide_balances)
         if not equity_df.empty:
             st.markdown("###### Stocks & ETFs")
             st.dataframe(

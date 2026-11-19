@@ -31,29 +31,57 @@ class PortfolioManager:
 
     async def _build_portfolio_from_account(
         self,
-        account_number: str,
-        account_name: str | None = None,
+        entity: AccountEntity,
         start_date: date | None = None,
         end_date: date | None = None,
-    ) -> Portfolio:
+    ) -> tuple[Portfolio, float]:
+        """Build one account's Portfolio with CAD-normalized cash.
+
+        Returns the portfolio and the account's cash in its ledger currency.
+        """
         account, rates = await asyncio.gather(
             asyncio.to_thread(
-                self.account_man.build_account, account_number, account_name
+                self.account_man.build_account, entity.number, entity.name
             ),
             asyncio.to_thread(self.market_man.read_global_rates),
         )
-        positions = account.open_positions
-        symbols = [p.symbol for p in positions]
+        cash, flows = self._normalize_account_cash(entity, account, rates)
+        symbols = [p.symbol for p in account.open_positions]
         securities = await self.market_man.build_securities_batch_async(
             symbols, start_date=start_date, end_date=end_date, rates=rates
         )
-        return Portfolio(
-            id=account_number,
-            cash=account.cash_balance,
-            external_cash_flows=account.external_cash_flows,
+        portfolio = Portfolio(
+            id=entity.number,
+            cash=cash,
+            external_cash_flows=flows,
             positions=account.open_positions,
             securities=securities,
             rates=rates,
+        )
+        return portfolio, account.cash_balance
+
+    @staticmethod
+    def _account_slice(
+        entity: AccountEntity,
+        portfolio: Portfolio,
+        native_cash: float,
+        combined_total_value: float,
+    ) -> AccountSliceDTO:
+        return AccountSliceDTO(
+            id=entity.id,
+            label=f"{entity.type} #{entity.number}",
+            name=entity.name,
+            currency=entity.currency,
+            total_value=portfolio.total_value,
+            cash_balance=portfolio.cash_balance,
+            cash_balance_native=native_cash,
+            unrealized_gain=portfolio.unrealized_gain,
+            mwrr=portfolio.mwrr,
+            weight=(
+                portfolio.total_value / combined_total_value
+                if combined_total_value > 0
+                else 0.0
+            ),
         )
 
     @staticmethod
@@ -93,15 +121,21 @@ class PortfolioManager:
 
     async def get_portfolio(
         self,
-        account_number: str,
-        account_name: str | None = None,
+        entity: AccountEntity,
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> PortfolioSnapshotDTO:
-        portfolio = await self._build_portfolio_from_account(
-            account_number, account_name, start_date, end_date
+        portfolio, native_cash = await self._build_portfolio_from_account(
+            entity, start_date, end_date
         )
-        return PortfolioSnapshotDTO(**self._to_snapshot_fields(portfolio))
+        return PortfolioSnapshotDTO(
+            **self._to_snapshot_fields(portfolio),
+            accounts=[
+                self._account_slice(
+                    entity, portfolio, native_cash, portfolio.total_value
+                )
+            ],
+        )
 
     @staticmethod
     def _normalize_account_cash(
@@ -182,19 +216,8 @@ class PortfolioManager:
                 rates=rates,
             )
             slices.append(
-                AccountSliceDTO(
-                    id=entity.id,
-                    label=f"{entity.type} #{entity.number}",
-                    name=entity.name,
-                    total_value=acc_portfolio.total_value,
-                    cash_balance=acc_portfolio.cash_balance,
-                    unrealized_gain=acc_portfolio.unrealized_gain,
-                    mwrr=acc_portfolio.mwrr,
-                    weight=(
-                        acc_portfolio.total_value / total.total_value
-                        if total.total_value > 0
-                        else 0.0
-                    ),
+                self._account_slice(
+                    entity, acc_portfolio, account.cash_balance, total.total_value
                 )
             )
 

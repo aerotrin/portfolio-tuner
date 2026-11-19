@@ -54,6 +54,25 @@ class PortfolioSummaryDTO(BaseModel):
     open_positions: List[str]
 
 
+class AccountSliceDTO(BaseModel):
+    """Per-account summary line inside a portfolio snapshot.
+
+    `cash_balance` is CAD-normalized; `cash_balance_native` is in the
+    account's ledger `currency`.
+    """
+
+    id: str
+    label: str
+    name: str
+    currency: str
+    total_value: float
+    cash_balance: float
+    cash_balance_native: float
+    unrealized_gain: float
+    mwrr: float
+    weight: float
+
+
 class PortfolioSnapshotDTO(BaseModel):
     summary: PortfolioSummaryDTO
     holdings: dict[str, Holding]
@@ -61,23 +80,11 @@ class PortfolioSnapshotDTO(BaseModel):
     indicators: List[TimeseriesIndicator]
     correlation_matrix: Optional[CorrelationMatrixDTO]
     securities: dict[str, SecurityAnalyticsResponse] = {}
-
-
-class AccountSliceDTO(BaseModel):
-    """Per-account summary line inside the total (all-accounts) portfolio."""
-
-    id: str
-    label: str
-    name: str
-    total_value: float
-    cash_balance: float
-    unrealized_gain: float
-    mwrr: float
-    weight: float
+    accounts: List[AccountSliceDTO] = []
 
 
 class TotalPortfolioSnapshotDTO(PortfolioSnapshotDTO):
-    accounts: List[AccountSliceDTO] = []
+    pass
 
 
 class Portfolio:

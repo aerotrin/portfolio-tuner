@@ -290,8 +290,6 @@ async def get_portfolio(
 ):
     """Get full portfolio snapshot (summary, holdings, metrics, indicators, correlation) in a single request."""
     try:
-        return await portfolio_man.get_portfolio(
-            account.number, None, start_date, end_date
-        )
+        return await portfolio_man.get_portfolio(account, start_date, end_date)
     except Exception as e:
         _raise_http_error(e)

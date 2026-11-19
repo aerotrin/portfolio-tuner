@@ -37,7 +37,7 @@ class PortfolioData:
     indicators: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     correlation_matrix: dict[str, dict[str, Any]] = field(default_factory=dict)
     securities: SecurityData = field(default_factory=SecurityData)
-    accounts: list[dict[str, Any]] = field(default_factory=list)  # total view only
+    accounts: list[dict[str, Any]] = field(default_factory=list)  # per-account slices
 
 
 @dataclass
@@ -196,6 +196,7 @@ def load_portfolio_snapshot(
         portfolio.metrics = snap.get("metrics", {})
         portfolio.indicators["PORTF"] = snap.get("indicators", [])
         portfolio.correlation_matrix = snap.get("correlation_matrix", {})
+        portfolio.accounts = snap.get("accounts", [])
         for sym, analytics in snap.get("securities", {}).items():
             portfolio.securities.quote[sym] = analytics.get("quote") or {}
             portfolio.securities.profile[sym] = analytics.get("profile") or {}
