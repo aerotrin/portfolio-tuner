@@ -14,6 +14,7 @@ from backend.domain.entities.security import (
     Profile,
     Quote,
     SecurityType,
+    finite_or_zero,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,9 +56,14 @@ class YFinanceClient(MarketDataProvider):
             fi = ticker.fast_info
             info = ticker.info
 
-            previous_close: float = fi.regular_market_previous_close or 0.0
-            last_price: float = fi.last_price or 0.0
-            change = last_price - previous_close
+            # fast_info yields None or NaN for fields the market has not
+            # published yet (premarket last price, previous close); NaN is
+            # truthy, so `or 0.0` alone would let it through.
+            previous_close: float = finite_or_zero(fi.regular_market_previous_close)
+            last_price: float = finite_or_zero(fi.last_price)
+            change = (
+                last_price - previous_close if previous_close and last_price else 0.0
+            )
             change_pct = (change / previous_close) if previous_close else 0.0
         except Exception as e:
             logger.warning("Quote fetch failed for %s: %s", symbol, e)
@@ -68,12 +74,12 @@ class YFinanceClient(MarketDataProvider):
                 symbol=symbol,
                 name=info.get("longName") or info.get("shortName") or "",
                 exchange=fi.exchange or "",
-                open=fi.open or 0.0,
-                high=fi.day_high or 0.0,
-                low=fi.day_low or 0.0,
+                open=finite_or_zero(fi.open),
+                high=finite_or_zero(fi.day_high),
+                low=finite_or_zero(fi.day_low),
                 close=last_price,
                 currency=fi.currency or ("CAD" if symbol.endswith(".TO") else "USD"),
-                volume=fi.last_volume or 0.0,
+                volume=finite_or_zero(fi.last_volume),
                 change=change,
                 change_percent=change_pct,
                 previousClose=previous_close,

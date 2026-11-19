@@ -77,6 +77,7 @@ except KeyError as exc:
 accounts_list = load_accounts_list(user_id)
 scope_labels = {a.id: f"{a.type} #{a.number}" for a in accounts_list}
 number_labels = {a.number: f"{a.type} #{a.number}" for a in accounts_list}
+number_types = {a.number: a.type for a in accounts_list}
 
 if st.session_state.get("portfolio_account_scope") not in (
     ALL_ACCOUNTS,
@@ -217,6 +218,9 @@ if portfolio_symbols:
     portfolio_correlation_matrix = view.correlation_matrix
     # All-accounts holdings carry the raw account number — show the label
     if not single and "account" in holdings_data.columns:
+        holdings_data["account_type"] = holdings_data["account"].map(
+            lambda n: number_types.get(n, n)
+        )
         holdings_data["account"] = holdings_data["account"].map(
             lambda n: number_labels.get(n, n)
         )

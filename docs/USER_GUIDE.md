@@ -148,7 +148,7 @@ Key performance indicators for the selected account (dollar amounts and account 
 
 | KPI | Description |
 |---|---|
-| **Total Value** | Market value of all positions plus cash balance, with today's aggregate intraday change (dollars and percent) as the delta |
+| **Total Value** | Market value of all positions plus cash balance, with today's aggregate intraday change (dollars and percent) as the delta. Positions whose quote has no published day change yet (e.g. premarket) contribute zero to that delta |
 | **Securities Value** | Market value of open positions, with the unrealized P/L (dollars) and return on book value (percent) as the delta |
 | **Cash / Securities donut** | Share of the portfolio held as securities vs. cash |
 | **Cash** | Current cash in the account, with its share of the portfolio as the delta |

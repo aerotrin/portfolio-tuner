@@ -332,7 +332,9 @@ class Portfolio:
         self.book_value = sum(h.book_value for h in self.holdings.values())
         self.market_value = sum(h.market_value for h in self.holdings.values())
         self.total_value = self.market_value + self.cash_balance
-        self.cash_pct = self.cash_balance / self.total_value
+        self.cash_pct = (
+            self.cash_balance / self.total_value if self.total_value else 0.0
+        )
 
         self.unrealized_gain = self.market_value - self.book_value
         self.return_on_cost = (

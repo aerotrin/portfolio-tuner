@@ -1,8 +1,27 @@
 from datetime import date as dt_date, datetime
 from enum import StrEnum
-from typing import List, Optional
+import math
+from typing import Annotated, Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+
+def finite_or_zero(value: Any) -> Any:
+    """Coerce missing or non-finite numbers to 0.0.
+
+    Providers hand back None or NaN for fields that are not published yet
+    (premarket last price, previous close, day range). NaN survives float
+    validation and Postgres storage, but pydantic serializes it as JSON null,
+    so it reaches the frontend as None and breaks arithmetic there.
+    """
+    if value is None:
+        return 0.0
+    if isinstance(value, float) and not math.isfinite(value):
+        return 0.0
+    return value
+
+
+FiniteFloat = Annotated[float, BeforeValidator(finite_or_zero)]
 
 
 class SecurityType(StrEnum):
@@ -53,15 +72,15 @@ class Quote(BaseModel):
     symbol: str = Field()
     name: str = Field()
     exchange: str = Field()
-    open: float = Field()
-    high: float = Field()
-    low: float = Field()
-    close: float = Field()
+    open: FiniteFloat = Field()
+    high: FiniteFloat = Field()
+    low: FiniteFloat = Field()
+    close: FiniteFloat = Field()
     currency: str = Field()
-    volume: float = Field()
-    change: float = Field()
-    change_percent: float = Field()
-    previousClose: float = Field()
+    volume: FiniteFloat = Field()
+    change: FiniteFloat = Field()
+    change_percent: FiniteFloat = Field()
+    previousClose: FiniteFloat = Field()
     timestamp: datetime = Field()
 
 

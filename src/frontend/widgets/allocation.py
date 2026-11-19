@@ -40,6 +40,10 @@ def render_portfolio_allocation(
     cash_df = pd.DataFrame([cash_row])
     cash_df.index = ["CASH"]
     df = pd.concat([df, cash_df])
+    # All-accounts frames tag each slice with its account; cash is combined
+    by_account = "account_type" in df.columns
+    if by_account:
+        df["account_type"] = df["account_type"].fillna("")
 
     cols = st.columns(2)
     with cols[0]:
@@ -72,11 +76,15 @@ def render_portfolio_allocation(
             names="symbol",
             values="market_value",
             color="symbol",
+            custom_data=["account_type"] if by_account else None,
             hover_data=["name"],
             height=450,
             hole=0.3,
         )
-        fig.update_traces(textposition="inside", textinfo="percent+label")
+        slice_label = "%{label}<br>%{customdata[0]}" if by_account else "%{label}"
+        fig.update_traces(
+            textposition="inside", texttemplate=f"{slice_label}<br>%{{percent}}"
+        )
         st.plotly_chart(fig)
 
         # Total Portfolio only: each account's slice of the combined value

@@ -90,6 +90,12 @@ def render_account_summary(
     def _fmt_amount(amount: float) -> str:
         return MASKED_VALUE if hide_balances else f"${amount:,.2f}"
 
+    def _num(key: str) -> float:
+        # Non-finite backend floats serialize to JSON null, so a summary field
+        # can arrive as None (e.g. premarket quotes with no previous close).
+        value = portfolio_summary.get(key)
+        return 0.0 if value is None else float(value)
+
     with st.container(border=True, horizontal=True, width="stretch"):
         st.metric(
             (
@@ -100,36 +106,40 @@ def render_account_summary(
             MASKED_VALUE if hide_balances else account_owner,
             border=False,
         )
-        unrealized_gain = portfolio_summary["unrealized_gain"]
-        return_on_cost = portfolio_summary["return_on_cost"]
+        unrealized_gain = _num("unrealized_gain")
+        return_on_cost = _num("return_on_cost")
         total_value_delta = (
             f"{return_on_cost:+.2%}"
             if hide_balances
             else f"{unrealized_gain:+,.2f}  {return_on_cost:+.2%}"
         )
-        pnl_intraday = portfolio_summary["pnl_intraday"]
-        prev_securities_value = portfolio_summary["market_value"] - pnl_intraday
-        intraday_pct = (
-            pnl_intraday / prev_securities_value if prev_securities_value else None
-        )
-        if hide_balances:
-            # Dollar amounts are masked; percentages stay visible
-            intraday_delta = (
-                f"{intraday_pct:+.2%}" if intraday_pct is not None else MASKED_VALUE
-            )
-        elif intraday_pct is not None:
-            intraday_delta = f"{pnl_intraday:+,.2f}  {intraday_pct:+.2%}"
+        intraday_delta: str | None
+        if portfolio_summary.get("pnl_intraday") is None:
+            intraday_delta = None
         else:
-            intraday_delta = f"{pnl_intraday:+,.2f}"
+            pnl_intraday = _num("pnl_intraday")
+            prev_securities_value = _num("market_value") - pnl_intraday
+            intraday_pct = (
+                pnl_intraday / prev_securities_value if prev_securities_value else None
+            )
+            if hide_balances:
+                # Dollar amounts are masked; percentages stay visible
+                intraday_delta = (
+                    f"{intraday_pct:+.2%}" if intraday_pct is not None else MASKED_VALUE
+                )
+            elif intraday_pct is not None:
+                intraday_delta = f"{pnl_intraday:+,.2f}  {intraday_pct:+.2%}"
+            else:
+                intraday_delta = f"{pnl_intraday:+,.2f}"
         st.metric(
             "Total Value CAD",
-            _fmt_amount(portfolio_summary["total_value"]),
+            _fmt_amount(_num("total_value")),
             intraday_delta,
             border=False,
         )
         st.metric(
             "Securities Value CAD",
-            _fmt_amount(portfolio_summary["market_value"]),
+            _fmt_amount(_num("market_value")),
             total_value_delta,
             delta_arrow="off",
             border=False,
@@ -137,27 +147,24 @@ def render_account_summary(
         with st.container(border=False):
             st.plotly_chart(
                 _render_cash_securities_donut(
-                    portfolio_summary["cash_balance"],
-                    portfolio_summary["total_value"]
-                    - portfolio_summary["cash_balance"],
+                    _num("cash_balance"),
+                    _num("total_value") - _num("cash_balance"),
                     hide_balances,
                 ),
                 config={"displayModeBar": False},
             )
         st.metric(
             "Cash CAD",
-            _fmt_amount(portfolio_summary["cash_balance"]),
-            f"{portfolio_summary['cash_pct']:.1%}",
+            _fmt_amount(_num("cash_balance")),
+            f"{_num('cash_pct'):.1%}",
             delta_color="blue",
             delta_arrow="off",
             border=False,
         )
         st.metric(
             "Total Return CAD",
-            _fmt_amount(
-                portfolio_summary["total_value"] - portfolio_summary["net_investment"]
-            ),
-            f"{portfolio_summary['mwrr']:+.2%}",
+            _fmt_amount(_num("total_value") - _num("net_investment")),
+            f"{_num('mwrr'):+.2%}",
             delta_description="MWRR",
             delta_arrow="off",
             border=False,
