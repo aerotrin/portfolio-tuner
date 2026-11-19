@@ -117,13 +117,29 @@ def auto_refresh_if_missing(
     )
 
 
+AUTO_REFRESH_ON = "auto_refresh_on"
+
+
+def _sync_auto_refresh_on() -> None:
+    st.session_state[AUTO_REFRESH_ON] = st.session_state["auto_refresh_toggle"]
+
+
 def render_auto_refresh_toggle() -> None:
-    """Toggle for periodic background data refresh, shown next to Refresh Data."""
+    """Toggle for periodic background data refresh, shown next to Refresh Data.
+
+    Each page renders its own toggle (element ids include the page), and a
+    widget's value is dropped on a page switch. The setting therefore lives in
+    ``AUTO_REFRESH_ON``: it seeds every page's toggle and is updated by the
+    change callback, which runs before the script, so it is current for all
+    readers in a run.
+    """
     minutes = max(1, round(config.auto_refresh_data_interval / 60_000))
     st.toggle(
         "Auto",
+        value=st.session_state.get(AUTO_REFRESH_ON, False),
         key="auto_refresh_toggle",
         help=f"Automatically refresh market data every {minutes} min",
+        on_change=_sync_auto_refresh_on,
     )
 
 
@@ -141,7 +157,7 @@ def maybe_auto_refresh_data() -> None:
     starting the job so a skipped or failed attempt waits a full interval
     before retrying.
     """
-    if not st.session_state.get("auto_refresh_toggle"):
+    if not st.session_state.get(AUTO_REFRESH_ON):
         return
     if st.session_state.get("job_id"):
         return
