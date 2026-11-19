@@ -67,6 +67,6 @@ def local_now(tz_name: str | None) -> datetime:
 
 
 def format_clock(now: datetime) -> str:
-    """e.g. 'Thu, Nov 19 · 2:35 PM EST' (%-I is not portable to Windows)."""
+    """e.g. 'Thu, Nov 19, 2026 · 2:35 PM EST' (%-I is not portable to Windows)."""
     hour = now.strftime("%I").lstrip("0")
-    return f"{now:%a, %b} {now.day} · {hour}:{now:%M %p} {now:%Z}".rstrip()
+    return f"{now:%a, %b} {now.day}, {now.year} · {hour}:{now:%M %p} {now:%Z}".rstrip()

@@ -8,12 +8,12 @@ TORONTO = ZoneInfo("America/Toronto")
 
 def test_format_clock_strips_hour_leading_zero():
     now = datetime(2026, 11, 19, 14, 5, tzinfo=TORONTO)
-    assert format_clock(now) == "Thu, Nov 19 · 2:05 PM EST"
+    assert format_clock(now) == "Thu, Nov 19, 2026 · 2:05 PM EST"
 
 
 def test_format_clock_morning_and_two_digit_hour():
     now = datetime(2026, 7, 3, 11, 30, tzinfo=TORONTO)
-    assert format_clock(now) == "Fri, Jul 3 · 11:30 AM EDT"
+    assert format_clock(now) == "Fri, Jul 3, 2026 · 11:30 AM EDT"
 
 
 def test_local_now_uses_given_zone():
