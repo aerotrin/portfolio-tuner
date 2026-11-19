@@ -12,6 +12,7 @@ from frontend.services.streamlit_data import (
     load_accounts_list,
     load_rates,
 )
+from frontend.shared.accounts import account_labels
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
 from frontend.shared.jobs import AUTO_REFRESH_ON, start_refresh_job
@@ -170,6 +171,7 @@ def bootstrap_once() -> None:
 
     # --- Stable UI defaults ---
     st.session_state.setdefault("hide_balances_toggle", False)
+    st.session_state.setdefault("hide_account_numbers_toggle", False)
     st.session_state.setdefault("show_session_state_toggle", False)
 
     # --- Date range defaults (only if missing) ---
@@ -276,8 +278,12 @@ if not accounts:
     ).run()
     st.stop()
 
-account_display_labels = [f"{account.type} #{account.number}" for account in accounts]
+# The sidebar toggle renders later; its committed value is readable here
+_labels_by_id = account_labels(
+    accounts, st.session_state.get("hide_account_numbers_toggle", False)
+)
 account_ids = [account.id for account in accounts]
+account_display_labels = [_labels_by_id[account_id] for account_id in account_ids]
 
 # -----------------------------------------------------------------------------
 # Navigation — a single Portfolio page; the account scope (All Accounts or a
@@ -308,12 +314,11 @@ pg = st.navigation(
 _scope = st.session_state.get("portfolio_account_scope")
 if _scope in account_ids:
     st.session_state["account_id"] = _scope
-    st.session_state["account_display_label"] = account_display_labels[
-        account_ids.index(_scope)
-    ]
 elif st.session_state.get("account_id") not in account_ids:
     st.session_state["account_id"] = account_ids[0]
-    st.session_state["account_display_label"] = account_display_labels[0]
+st.session_state["account_display_label"] = _labels_by_id[
+    st.session_state["account_id"]
+]
 
 
 # -----------------------------------------------------------------------------
@@ -369,6 +374,7 @@ with st.sidebar:
     st.subheader("Portfolio Options")
 
     st.toggle("Hide Balances", key="hide_balances_toggle")
+    st.toggle("Hide Account Numbers", key="hide_account_numbers_toggle")
 
     # Active account is driven by the Portfolio page's scope selector
     account_display_label = st.session_state["account_display_label"]

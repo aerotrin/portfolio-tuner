@@ -12,6 +12,7 @@ from frontend.services.streamlit_data import (
     load_security_data,
     load_total_portfolio_snapshot,
 )
+from frontend.shared.accounts import account_labels
 from frontend.shared.dataframe import (
     build_holdings_view,
     build_security_analytics,
@@ -24,6 +25,7 @@ from frontend.shared.jobs import (
     render_refresh_job_ui,
     start_refresh_job,
 )
+from frontend.shared.settings import MASKED_VALUE
 from frontend.widgets.allocation import render_portfolio_allocation
 from frontend.widgets.correlation import render_correlation_matrix
 from frontend.widgets.kpis import (
@@ -52,6 +54,7 @@ ALL_ACCOUNTS = "ALL"
 try:
     user_id = st.session_state["user_id"]
     hide_balances = st.session_state["hide_balances_toggle"]
+    hide_account_numbers = st.session_state["hide_account_numbers_toggle"]
 
     start_date = st.session_state["start_date"]
     end_date = st.session_state["end_date"]
@@ -75,8 +78,8 @@ except KeyError as exc:
 # account, derived in app.py before this script runs). Sanitize before the
 # widget is instantiated so deselection or a deleted account snaps to "ALL".
 accounts_list = load_accounts_list(user_id)
-scope_labels = {a.id: f"{a.type} #{a.number}" for a in accounts_list}
-number_labels = {a.number: f"{a.type} #{a.number}" for a in accounts_list}
+scope_labels = account_labels(accounts_list, hide_account_numbers)
+number_labels = {a.number: scope_labels[a.id] for a in accounts_list}
 number_types = {a.number: a.type for a in accounts_list}
 
 if st.session_state.get("portfolio_account_scope") not in (
@@ -179,12 +182,25 @@ st.session_state["last_ca_timestamp"] = header_quotes[
 # Render KPIs --------------------------------------------------------------------
 if single:
     render_account_summary(
-        account.number, account.type, account.name, portfolio.summary, hide_balances
+        scope_labels[scope],
+        MASKED_VALUE if hide_account_numbers else account.name,
+        portfolio.summary,
+        hide_balances,
     )
 else:
     render_account_summary(
-        "ALL", "Combined", "All Accounts", portfolio.summary, hide_balances
+        "Combined #ALL", "All Accounts", portfolio.summary, hide_balances
     )
+
+# Per-account slices carry the backend's full label and the owner name
+account_slices = [
+    {
+        **s,
+        "label": scope_labels.get(s["id"], s["label"]),
+        "name": MASKED_VALUE if hide_account_numbers else s["name"],
+    }
+    for s in portfolio.accounts
+]
 
 # --- Market snapshot --------------------------------------------------------------------
 render_market_snapshot(header_quotes)
@@ -269,7 +285,7 @@ with tabs[0]:
     render_portfolio_positions(
         holdings_data,
         hide_balances,
-        cash_accounts=portfolio.accounts,
+        cash_accounts=account_slices,
         portfolio_total_value=portfolio.summary.get("total_value") or 0.0,
     )
 
@@ -288,7 +304,7 @@ with tabs[1]:
 
 with tabs[2]:
     render_portfolio_allocation(
-        portfolio.summary, holdings_data, accounts=portfolio.accounts
+        portfolio.summary, holdings_data, accounts=account_slices
     )
 
 with tabs[3]:
@@ -300,9 +316,7 @@ with tabs[4]:
         holdings_data=holdings_data,
         portfolio_metrics=portfolio_metrics,
         context_id=scope if single else "total-portfolio",
-        context_label=(
-            f"{account.type}-{account.number}" if single else "All Accounts"
-        ),
+        context_label=scope_labels[scope] if single else "All Accounts",
         benchmark_data=benchmark_data,
         risk_free_rate=rates["rf_rate"],
     )

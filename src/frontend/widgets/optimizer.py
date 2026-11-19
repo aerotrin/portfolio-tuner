@@ -531,7 +531,7 @@ def render_optimizer(
                     "market-stock"). Results only render in the context they
                     were run for.
         context_label: Human-readable run context stamped on results
-                       (e.g. "TFSA-12345" or "Research").
+                       (e.g. "TFSA #12345" or "Research").
         benchmark_data: Optional benchmark metrics DataFrame (has 'volatility',
                         'return1Y', 'symbol' columns) for frontier chart overlay.
         risk_free_rate: Annual risk-free rate as a decimal fraction (e.g. 0.038 = 3.8%).

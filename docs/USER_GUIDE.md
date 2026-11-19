@@ -116,7 +116,11 @@ The **Force Refresh Data** button triggers a full re-fetch of all market data fo
 
 ### Hide Balances
 
-The **Hide Balances** toggle masks the account identity and dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. Percentage figures (returns, MWRR, cash %, weights) remain visible.
+The **Hide Balances** toggle masks the dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. Percentage figures (returns, MWRR, cash %, weights) remain visible.
+
+### Hide Account Numbers
+
+The **Hide Account Numbers** toggle is independent of Hide Balances. When on, every account label keeps only the last two digits of the number (`TFSA #12345` becomes `TFSA ••45`) and the owner name is masked. This applies to the account selector, the Account Summary, the Account column and treemap groups on the Positions tab, the Cash table and Cash by Account donut, the By Account allocation chart, the sidebar, and the account picker in the Record Transaction dialog. If two accounts of the same type share their last two digits, more digits are shown for those accounts so they stay distinct.
 
 ---
 
@@ -144,7 +148,7 @@ The market research pages use the same single-row pattern: page title on the lef
 
 ### Account Summary
 
-Key performance indicators for the selected account (dollar amounts and account identity masked when Hide Balances is active):
+Key performance indicators for the selected account (dollar amounts are masked when Hide Balances is active; the account number and owner when Hide Account Numbers is active):
 
 | KPI | Description |
 |---|---|
@@ -433,7 +437,8 @@ Click the **Logout** button at the bottom of the sidebar. Your session is termin
 ## Tips
 
 - **Date range controls** — the start and end date selectors (visible on each page) control the historical window for charts and performance metrics. Changes take effect on the next page interaction.
-- **Hide Balances** — use the sidebar toggle to mask monetary values, quantities, and account identity during screen-sharing; percentage figures stay visible.
+- **Hide Balances** — use the sidebar toggle to mask monetary values and quantities during screen-sharing; percentage figures stay visible.
+- **Hide Account Numbers** — use the sidebar toggle to shorten account numbers to their last two digits and mask the owner name; it works independently of Hide Balances.
 - **Multiple accounts** — each account has its own page link in the navigation; click to jump directly between accounts. Each account is independently tracked.
 - **Benchmark** — changing the benchmark in the sidebar updates the comparison series on growth charts and performance metrics in real time.
 - **symbols.yml** — to add or remove symbols from the market research pages, edit `symbols.yml` in the project root and restart the frontend. No code changes are required. Each group takes a `label` plus an optional `type` (Equity, Fixed Income, Multi-Asset, Commodity, Crypto, Forex, Index) and `region` (US, Canada, World, N/A); these drive the Region and Type filters on the market pages. The label names a concept and is meant to repeat across regions — "Core" can exist under US, Canada and World. Only the region + type + label combination must be unique. The group filter lists each label once: selecting "Sectors" with no region chosen gives you every region's sectors, and you narrow to one by picking a region. Both are optional — groups without them fall back to `Other` and `N/A` — and any other value is accepted, sorting after the suggested ones. They are labels for filtering only and are never checked against a symbol's exchange or actual holdings.

@@ -79,13 +79,16 @@ def _render_cash_securities_donut(
 
 
 def render_account_summary(
-    account_number: str,
-    account_type: str,
+    account_label: str,
     account_owner: str,
     portfolio_summary: dict,
     hide_balances: bool,
 ) -> None:
-    """Draw KPIs for the balances of a selected portfolio."""
+    """Draw KPIs for the balances of a selected portfolio.
+
+    The label and owner arrive display-ready (already masked by the caller
+    when account numbers are hidden).
+    """
 
     def _fmt_amount(amount: float) -> str:
         return MASKED_VALUE if hide_balances else f"${amount:,.2f}"
@@ -97,15 +100,7 @@ def render_account_summary(
         return 0.0 if value is None else float(value)
 
     with st.container(border=True, horizontal=True, width="stretch"):
-        st.metric(
-            (
-                f"{account_type} {MASKED_VALUE}"
-                if hide_balances
-                else f"{account_type} #{account_number}"
-            ),
-            MASKED_VALUE if hide_balances else account_owner,
-            border=False,
-        )
+        st.metric(account_label, account_owner, border=False)
         unrealized_gain = _num("unrealized_gain")
         return_on_cost = _num("return_on_cost")
         total_value_delta = (

@@ -106,10 +106,10 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
 POSITIONS_EQUITY_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
@@ -135,10 +135,10 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
 POSITIONS_OPTION_TABLE_CONFIG = {
     "option_osi": st.column_config.TextColumn("OSI"),
     "name": st.column_config.TextColumn("Name", width="medium"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     "holding_category": st.column_config.TextColumn("Right"),
