@@ -6,6 +6,21 @@ import plotly.graph_objects as go
 from frontend.shared.settings import HEIGHT_TREEMAP, MASKED_VALUE
 from frontend.shared.time import humanize_timestamp
 
+COLOR_CHANGE = "change_percent"
+COLOR_REL_VOLUME = "relative_volume"
+REL_VOLUME_COLOR_MAX = 3.0
+
+
+def compact_number(value: float) -> str:
+    """1234 -> "1.2K", 2_627_000 -> "2.6M"; below 1,000 stays whole."""
+    if pd.isna(value):
+        return "N/A"
+    for threshold, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+        # Compare the rounded value so 999,950 reads 1.0M, not 1000.0K
+        if round(abs(value) / threshold, 1) >= 1:
+            return f"{value / threshold:.1f}{suffix}"
+    return f"{value:,.0f}"
+
 
 def _size_treemap(
     elements: int, per_row: int = 12, row_px: int = HEIGHT_TREEMAP, base_px: int = 0
@@ -49,12 +64,21 @@ def render_treemap_intraday(
     row_px: int = HEIGHT_TREEMAP,
     hide_balances: bool = False,
     group_cols: list[str] | None = None,
+    color_by: str = COLOR_CHANGE,
 ) -> go.Figure:
     """Intraday treemap; `group_cols` nests symbols under those columns
     (e.g. region -> group). A symbol appearing in several groups renders once
-    per parent. Height is capped when grouped — tiles shrink, not the page."""
+    per parent. Height is capped when grouped — tiles shrink, not the page.
+
+    `color_by` is the change % (diverging red/green) or the relative volume
+    (one hue, saturating at REL_VOLUME_COLOR_MAX)."""
     df = df.copy()
     height = _treemap_height(df, row_px, group_cols)
+    rel_volume = (
+        df["relative_volume"].astype(float)
+        if "relative_volume" in df.columns
+        else pd.Series(np.nan, index=df.index)
+    )
 
     df["display_text"] = (
         df["close"].map("{:,.2f}".format)
@@ -65,7 +89,8 @@ def render_treemap_intraday(
         + " "
         + df["change_percent"].map("{:.2%}".format)
         + "<br>"
-        + df["volume"].map("Vol. {:,.0f}".format)
+        + df["volume"].map(lambda v: f"Vol. {compact_number(v)}")
+        + rel_volume.map(lambda x: "" if pd.isna(x) else f" · {x:.1f}×")
         + "<br>"
         + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
     )
@@ -82,12 +107,20 @@ def render_treemap_intraday(
     base_config = {
         "data_frame": df,
         "path": path,
-        "color": "change_percent",
-        "color_continuous_scale": "RdYlGn",
-        "color_continuous_midpoint": 0,
         "custom_data": ["display_text"],
         "hover_data": ["name", "timestamp"],
     }
+
+    if color_by == COLOR_REL_VOLUME:
+        # No traded volume (indices, FX) sits at the quiet end of the scale
+        df["_color"] = rel_volume.fillna(0.0).clip(upper=REL_VOLUME_COLOR_MAX)
+        base_config["color"] = "_color"
+        base_config["color_continuous_scale"] = "Blues"
+        base_config["range_color"] = (0, REL_VOLUME_COLOR_MAX)
+    else:
+        base_config["color"] = "change_percent"
+        base_config["color_continuous_scale"] = "RdYlGn"
+        base_config["color_continuous_midpoint"] = 0
 
     if has_weight:
         base_config["values"] = "weight"

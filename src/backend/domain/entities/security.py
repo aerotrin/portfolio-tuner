@@ -155,6 +155,8 @@ class PerformanceMetric(BaseModel):
     rsi_slope: float = Field(default=0.0)
     near_52wk_hi: bool = Field(default=False)
     near_52wk_lo: bool = Field(default=False)
+    avg_volume: Optional[float] = Field(default=None)
+    relative_volume: Optional[float] = Field(default=None)
     last_calculated: datetime = Field(default_factory=datetime.now)
 
 

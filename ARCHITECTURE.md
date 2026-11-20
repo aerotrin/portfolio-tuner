@@ -534,6 +534,8 @@ Before computing indicators and metrics, the current live quote is appended to t
 - **RSI slope** — recent directional momentum of RSI
 - **52-week proximity flags** — `near_52wk_hi` and `near_52wk_lo` boolean signals
 
+`compute_volume_metrics(volume)` adds `avg_volume` (mean of the previous 20 sessions, today excluded) and `relative_volume` (today's volume over that average) to the same `PerformanceMetric`; both are `None` with fewer than 5 prior sessions or no traded volume. The Market Intraday treemap can colour by `relative_volume`.
+
 `compute_portfolio_timeseries_indicators(securities, weights)` combines the bar series of multiple securities using a weight vector to produce a weighted portfolio timeseries. It handles a weight *matrix* (used in simulation) and returns one `DataFrame` per row of the weight matrix.
 
 `compute_return_statistics(securities)` extracts the daily returns from each security's bar series, aligns them on a shared date index, and returns the Pearson correlation matrix, the covariance matrix, and the per-symbol observation counts from that one returns frame. The `Portfolio` aggregate calls it once: the correlation matrix is serialised as a flat list of `(row, col, value)` entries for efficient JSON transport, and the covariance and counts feed the allocation risk contribution.

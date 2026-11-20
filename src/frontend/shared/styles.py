@@ -63,6 +63,9 @@ QUOTE_TABLE_CONFIG = {
     "return1M": st.column_config.NumberColumn("Chg 1M", format="percent"),
     "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
+    "relative_volume": st.column_config.NumberColumn(
+        "Rel Vol", format="%.1f×", help="Today's volume ÷ 20-day average volume"
+    ),
     # "open": st.column_config.NumberColumn("Open", format="accounting"),
     "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),

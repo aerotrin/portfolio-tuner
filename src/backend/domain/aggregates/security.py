@@ -7,6 +7,7 @@ import pandas as pd
 from backend.domain.analytics.security import (
     compute_performance_metrics,
     compute_timeseries_indicators,
+    compute_volume_metrics,
 )
 from backend.domain.entities.security import (
     Bar,
@@ -88,6 +89,7 @@ class Security:
                 exchange=self.quote.exchange,
                 currency=self.quote.currency,
                 **met_records[0],
+                **compute_volume_metrics(bars_df["volume"]),
             )
         except Exception as e:
             logger.error(

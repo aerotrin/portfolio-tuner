@@ -7,9 +7,16 @@ import streamlit as st
 from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
 from frontend.shared.symbols_loader import TYPE_ORDER, SymbolGroup, facet_sort_key
 from frontend.widgets.kpis import render_intraday_health_bar
-from frontend.widgets.treemaps import leaf_labels, render_treemap_intraday
+from frontend.widgets.treemaps import (
+    COLOR_CHANGE,
+    COLOR_REL_VOLUME,
+    REL_VOLUME_COLOR_MAX,
+    leaf_labels,
+    render_treemap_intraday,
+)
 
 DRILL_COLS = ["region", "group_label"]
+COLOR_LABELS = {COLOR_CHANGE: "Change %", COLOR_REL_VOLUME: "Rel. volume"}
 
 
 def _tile_ids(sub: pd.DataFrame, top_label: str) -> tuple[list, list]:
@@ -115,18 +122,33 @@ def render_market_intraday(
         {g.type for g in groups}, key=lambda v: facet_sort_key(v, TYPE_ORDER)
     )
     sel_types = []
-    if len(type_options) > 1:  # Stocks page is all-Equity — hide a one-chip row
-        sel_types = (
-            st.pills(
-                ":material/category: Type",
-                type_options,
-                selection_mode="multi",
-                key=f"{key_prefix}-intraday-type",
-                on_change=_reset_drill,
-                args=(chart_key,),
+    color_by = COLOR_CHANGE
+    with st.container(horizontal=True, horizontal_alignment="distribute"):
+        if len(type_options) > 1:  # Stocks page is all-Equity — hide a one-chip row
+            sel_types = (
+                st.pills(
+                    ":material/category: Type",
+                    type_options,
+                    selection_mode="multi",
+                    key=f"{key_prefix}-intraday-type",
+                    on_change=_reset_drill,
+                    args=(chart_key,),
+                )
+                or []
             )
-            or []
-        )
+        # Snapshots cached before the metric existed carry no relative volume
+        if "relative_volume" in df.columns:
+            color_by = (
+                st.segmented_control(
+                    ":material/palette: Colour",
+                    list(COLOR_LABELS),
+                    format_func=COLOR_LABELS.get,
+                    default=COLOR_CHANGE,
+                    key=f"{key_prefix}-intraday-color",
+                    width="content",
+                )
+                or COLOR_CHANGE
+            )
     typed_groups = [g for g in groups if g.type in set(sel_types or type_options)]
 
     # One row per (group, symbol): the treemap shows a symbol once per group it
@@ -159,6 +181,7 @@ def render_market_intraday(
         size_by=None,
         has_weight=False,
         group_cols=DRILL_COLS,
+        color_by=color_by,
     )
     # Drawn at the tracked level, so the zoom survives a chart remount.
     fig.update_traces(level=level)
@@ -174,6 +197,11 @@ def render_market_intraday(
     # Health bar and table count each security once, however many groups it is in.
     flat = sub[~sub.index.duplicated(keep="first")]
     render_intraday_health_bar(flat, show_squares=False)
+    if color_by == COLOR_REL_VOLUME:
+        st.caption(
+            "Colour: today's volume ÷ 20-day average, darkest at "
+            f"{REL_VOLUME_COLOR_MAX:.0f}× or more. Reads low early in the session."
+        )
 
     heading = _quotes_heading(f"{t_str} Quotes", sel_types, drill_path)
     st.markdown(f"###### {heading}")

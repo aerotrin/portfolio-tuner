@@ -19,6 +19,7 @@ from src.backend.domain.analytics.security import (
     compute_portfolio_timeseries_indicators,
     compute_return_statistics,
     compute_timeseries_indicators,
+    compute_volume_metrics,
 )
 from src.backend.domain.constants import (
     RISK_FREE_RATE,
@@ -266,6 +267,23 @@ def test_calc_portfolio_weighted_close_backfills_short_history() -> None:
     metrics = compute_performance_metrics(portf, RISK_FREE_RATE)
     assert np.isfinite(metrics["sharpe"].iloc[0])
     assert np.isfinite(metrics["volatility"].iloc[0])
+
+
+def test_volume_metrics_compare_today_with_prior_average() -> None:
+    # 30 prior sessions: only the last 20 (all 1,000) count; today is excluded
+    volume = pd.Series([9_000.0] * 10 + [1_000.0] * 20 + [2_500.0])
+
+    out = compute_volume_metrics(volume)
+
+    assert out["avg_volume"] == pytest.approx(1_000.0)
+    assert out["relative_volume"] == pytest.approx(2.5)
+
+
+def test_volume_metrics_none_without_history_or_volume() -> None:
+    none = {"avg_volume": None, "relative_volume": None}
+    assert compute_volume_metrics(pd.Series([1_000.0] * 4 + [2_000.0])) == none
+    assert compute_volume_metrics(pd.Series([0.0] * 20 + [0.0])) == none
+    assert compute_volume_metrics(pd.Series([], dtype=float)) == none
 
 
 def test_compute_return_statistics_shares_one_returns_frame() -> None:

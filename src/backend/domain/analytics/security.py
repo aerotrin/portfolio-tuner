@@ -7,6 +7,8 @@ import pandas as pd
 from backend.domain.constants import (
     HYP_GROWTH_START,
     NEAR_HIGH_LOW_PCT,
+    REL_VOLUME_MIN_OBS,
+    REL_VOLUME_WINDOW,
     RISK_FREE_RATE,
     RSI_WINDOW,
     SHORT_TERM_WINDOWS,
@@ -174,6 +176,26 @@ def compute_return_statistics(securities: List["Security"]) -> ReturnStatistics:
     return ReturnStatistics(
         correlation=R.corr(), covariance=covariance, observations=R.count()
     )
+
+
+def compute_volume_metrics(volume: pd.Series) -> Dict[str, Optional[float]]:
+    """Today's volume against the security's own recent average.
+
+    `volume` is date-sorted with today as its last row; the average covers the
+    sessions before it. Both values are None without enough history or with
+    no traded volume (indices, FX).
+    """
+    empty: Dict[str, Optional[float]] = {"avg_volume": None, "relative_volume": None}
+    if volume is None or len(volume) < 2:
+        return empty
+    prior = volume.iloc[:-1].tail(REL_VOLUME_WINDOW).dropna()
+    today = volume.iloc[-1]
+    if len(prior) < REL_VOLUME_MIN_OBS or pd.isna(today):
+        return empty
+    avg = float(prior.mean())
+    if not np.isfinite(avg) or avg <= 0:
+        return empty
+    return {"avg_volume": avg, "relative_volume": float(today) / avg}
 
 
 def compute_performance_metrics(

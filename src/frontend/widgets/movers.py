@@ -5,6 +5,25 @@ from frontend.shared.settings import MOVER_SHOW_COUNT
 from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
 from frontend.widgets.treemaps import render_treemap_intraday
 
+MOST_ACTIVE = "Most Active"
+UNUSUAL_VOLUME = "Unusual Volume"
+
+
+def _has_relative_volume(df: pd.DataFrame) -> bool:
+    return "relative_volume" in df.columns and bool(df["relative_volume"].notna().any())
+
+
+def _volume_leaders(df: pd.DataFrame, count: int, mode: str) -> pd.DataFrame:
+    """Top securities by raw volume (Most Active) or by relative volume —
+    today's volume ÷ own average — which surfaces unusual trading instead of
+    the same large names every day."""
+    if mode == UNUSUAL_VOLUME and _has_relative_volume(df):
+        ranked = df.dropna(subset=["relative_volume"]).sort_values(
+            by="relative_volume", ascending=False
+        )
+        return ranked.head(count)
+    return df.sort_values(by="volume", ascending=False).head(count)
+
 
 def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
     """Render market movers for a given market_type of security."""
@@ -30,12 +49,34 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
         st.info("No symbols found for the selected market")
         return
 
-    volume_df = sub_df.sort_values(by="volume", ascending=False).head(MOVER_SHOW_COUNT)
-
-    st.markdown(f"##### :material/swap_horiz: Most Active {t_str}s")
-    fig = render_treemap_intraday(volume_df, top_label="Most Active", has_weight=False)
+    # Data cached before relative volume existed can only rank by raw volume
+    volume_title = MOST_ACTIVE
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center",
+    ):
+        heading = st.empty()
+        if _has_relative_volume(sub_df):
+            volume_title = (
+                st.segmented_control(
+                    "Volume ranking",
+                    [MOST_ACTIVE, UNUSUAL_VOLUME],
+                    default=UNUSUAL_VOLUME,
+                    required=True,
+                    label_visibility="collapsed",
+                    help="Most Active: highest volume. Unusual Volume: highest "
+                    "volume relative to the security's own 20-day average.",
+                    key=f"market-movers-volume-mode-{market_type}",
+                    width="content",
+                )
+                or UNUSUAL_VOLUME
+            )
+        heading.markdown(f"##### :material/swap_horiz: {volume_title} {t_str}s")
+    volume_df = _volume_leaders(sub_df, MOVER_SHOW_COUNT, volume_title)
+    fig = render_treemap_intraday(volume_df, top_label=volume_title, has_weight=False)
     st.plotly_chart(fig)
-    with st.expander(f"Most Active {t_str} Quote Table", icon=":material/table:"):
+    with st.expander(f"{volume_title} {t_str} Quote Table", icon=":material/table:"):
         st.dataframe(
             quote_table_styler(volume_df),
             hide_index=True,
