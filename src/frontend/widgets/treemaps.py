@@ -26,7 +26,7 @@ def _treemap_height(df: pd.DataFrame, row_px: int, group_cols: list[str] | None)
     return min(max(height, 3 * row_px), 6 * row_px)
 
 
-def _leaf_labels(df: pd.DataFrame) -> "pd.Series | pd.Index":
+def leaf_labels(df: pd.DataFrame) -> "pd.Series | pd.Index":
     """Tile label per row: OSI for options, else quote symbol.
 
     Holdings frames may be indexed by a compound key ("account|symbol") in the
@@ -74,7 +74,7 @@ def render_treemap_intraday(
     if group_cols:
         # An explicit leaf column: passing df.index alongside other path columns
         # is ambiguous to plotly when a column shares the index's name ("symbol").
-        df["_leaf"] = _leaf_labels(df)
+        df["_leaf"] = leaf_labels(df)
         path.extend([*group_cols, "_leaf"])
     else:
         path.append(df.index)
@@ -179,7 +179,7 @@ def render_treemap_positions(
 
     path: list = [px.Constant("Holdings")]
     if group_cols:
-        df["_leaf"] = _leaf_labels(df)
+        df["_leaf"] = leaf_labels(df)
         path.extend([*group_cols, "_leaf"])
     else:
         path.append(df.index)
