@@ -1,3 +1,4 @@
+from functools import partial
 from typing import cast
 
 import pandas as pd
@@ -35,8 +36,8 @@ def _next_level(
 
     Plotly zooms into whichever tile is clicked, except that clicking the
     tile already zoomed into walks back up to its parent. The click event
-    carries only the tile, not the direction, so the level is tracked here.
-    None means the root.
+    carries only the tile, not the direction, so the level is tracked in
+    session state and the figure is drawn at it. None means the root.
     """
     if not clicked or clicked == top_label:
         return None
@@ -67,11 +68,20 @@ def _drill_filter(
     return sub, []
 
 
+def _record_click(chart_key: str) -> None:
+    """Keep the clicked tile for the next run. The chart's own selection
+    cannot carry it: live tile text changes the figure, and a changed figure
+    remounts the chart with an empty selection."""
+    points = st.session_state[chart_key]["selection"]["points"]
+    if points:
+        st.session_state[f"{chart_key}-click"] = points[0].get("id")
+
+
 def _reset_drill(chart_key: str) -> None:
     """A filter change redraws the treemap at its root, so drop the stored
-    tile selection — otherwise the table would stay on a level the map left."""
-    st.session_state.pop(chart_key, None)
-    st.session_state.pop(f"{chart_key}-level", None)
+    zoom level — otherwise the table would stay on a level the map left."""
+    for key in (chart_key, f"{chart_key}-level", f"{chart_key}-click"):
+        st.session_state.pop(key, None)
 
 
 def _quotes_heading(base: str, sel_types: list[str], drill_path: str) -> str:
@@ -133,6 +143,16 @@ def render_market_intraday(
     sub = pd.concat(frames)
 
     top_label = f"{t_str} Market"
+    level_key = f"{chart_key}-level"
+    level = st.session_state.get(level_key)
+    clicked = st.session_state.pop(f"{chart_key}-click", None)
+    if clicked:
+        level = _next_level(sub, top_label, level, clicked)
+    drilled, drill_parts = _drill_filter(sub, top_label, level)
+    if not drill_parts:
+        level = None
+    st.session_state[level_key] = level
+
     fig = render_treemap_intraday(
         sub,
         top_label=top_label,
@@ -140,22 +160,15 @@ def render_market_intraday(
         has_weight=False,
         group_cols=DRILL_COLS,
     )
-    event = st.plotly_chart(
+    # Drawn at the tracked level, so the zoom survives a chart remount.
+    fig.update_traces(level=level)
+    st.plotly_chart(
         fig,
-        on_select="rerun",
+        on_select=partial(_record_click, chart_key),
         selection_mode="points",
         key=chart_key,
     )
-    points = event["selection"]["points"]
-    point = points[0] if points else {}
-    # A changed point means a new click; other reruns keep the tracked level.
-    level_key = f"{chart_key}-level"
-    state = st.session_state.get(level_key, {"point": None, "level": None})
-    if point != state["point"]:
-        level = _next_level(sub, top_label, state["level"], point.get("id"))
-        state = {"point": point, "level": level}
-        st.session_state[level_key] = state
-    sub, drill_parts = _drill_filter(sub, top_label, state["level"])
+    sub = drilled
     drill_path = " / ".join(drill_parts)
 
     # Health bar and table count each security once, however many groups it is in.
