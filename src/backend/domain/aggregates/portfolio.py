@@ -8,9 +8,9 @@ from pydantic import BaseModel
 
 from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
-    compute_correlation_matrix,
     compute_performance_metrics,
     compute_portfolio_timeseries_indicators,
+    compute_return_statistics,
 )
 from backend.domain.entities.account import Category, CashFlow, Holding, OpenLot
 from backend.domain.entities.security import (
@@ -73,6 +73,59 @@ class AccountSliceDTO(BaseModel):
     weight: float
 
 
+class AllocationSliceDTO(BaseModel):
+    label: str
+    market_value: float
+    weight: float
+
+
+class SymbolWeightDTO(BaseModel):
+    symbol: str
+    name: str
+    market_value: float
+    weight: float
+    shares_value: float
+    options_value: float
+
+
+class ConcentrationDTO(BaseModel):
+    holdings: int = 0
+    top1: float = 0.0
+    top5: float = 0.0
+    top10: float = 0.0
+    hhi: float = 0.0
+    effective_n: float = 0.0
+
+
+class RiskContributionDTO(BaseModel):
+    symbol: str
+    weight: float
+    risk_share: Optional[float] = None
+
+
+class AccountMixSliceDTO(BaseModel):
+    account: str
+    label: str
+    market_value: float
+    weight: float
+
+
+class AllocationDTO(BaseModel):
+    """Allocation analytics over holdings plus positive cash, in CAD.
+
+    `breakdowns` is keyed by dimension (asset_type, instrument, sector,
+    country, currency, account); `account` labels are account numbers.
+    `margin` is the negative cash left out of the breakdowns.
+    """
+
+    by_symbol: List[SymbolWeightDTO] = []
+    breakdowns: dict[str, List[AllocationSliceDTO]] = {}
+    concentration: ConcentrationDTO = ConcentrationDTO()
+    risk_contribution: List[RiskContributionDTO] = []
+    account_mix: List[AccountMixSliceDTO] = []
+    margin: float = 0.0
+
+
 class PortfolioSnapshotDTO(BaseModel):
     summary: PortfolioSummaryDTO
     holdings: dict[str, Holding]
@@ -81,6 +134,7 @@ class PortfolioSnapshotDTO(BaseModel):
     correlation_matrix: Optional[CorrelationMatrixDTO]
     securities: dict[str, SecurityAnalyticsResponse] = {}
     accounts: List[AccountSliceDTO] = []
+    allocation: AllocationDTO = AllocationDTO()
 
 
 class TotalPortfolioSnapshotDTO(PortfolioSnapshotDTO):
@@ -112,6 +166,8 @@ class Portfolio:
 
         self.correlation_matrix_df: pd.DataFrame = pd.DataFrame()
         self.correlation_matrix: CorrelationMatrixDTO = CorrelationMatrixDTO()
+        self.covariance_matrix_df: pd.DataFrame = pd.DataFrame()
+        self.return_observations: pd.Series = pd.Series(dtype=float)
 
         self.holdings: dict[str, Holding] = {}
 
@@ -459,9 +515,10 @@ class Portfolio:
         if not self.securities:
             return
         try:
-            self.correlation_matrix_df = compute_correlation_matrix(
-                list(self.securities.values())
-            )
+            stats = compute_return_statistics(list(self.securities.values()))
+            self.correlation_matrix_df = stats.correlation
+            self.covariance_matrix_df = stats.covariance
+            self.return_observations = stats.observations
             corr = self.correlation_matrix_df
 
             # Validate matrix is not empty

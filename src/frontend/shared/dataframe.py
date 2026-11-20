@@ -252,7 +252,7 @@ def compute_correlation_matrix(
 ) -> pd.DataFrame:
     """Correlation of daily returns over the trailing TRADING_DAYS_PER_YEAR window.
 
-    Mirrors backend compute_correlation_matrix semantics (ffill, tail, pct_change, corr).
+    Mirrors backend compute_return_statistics semantics (ffill, tail, pct_change, corr).
     """
     sub = closes.filter(items=symbols) if symbols is not None else closes
     C = sub.sort_index().ffill().tail(TRADING_DAYS_PER_YEAR)

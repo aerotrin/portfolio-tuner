@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -149,11 +149,31 @@ def _calc_asset_close_matrix(securities: List["Security"]) -> pd.DataFrame:
     return C
 
 
-def compute_correlation_matrix(securities: List["Security"]) -> pd.DataFrame:
+class ReturnStatistics(NamedTuple):
+    """Pairwise statistics of the securities' daily returns over one window.
+
+    Every matrix comes from the same returns frame, so correlation-based and
+    covariance-based analytics always describe the same data.
+    """
+
+    correlation: pd.DataFrame
+    covariance: pd.DataFrame
+    observations: pd.Series
+
+
+def compute_return_statistics(securities: List["Security"]) -> ReturnStatistics:
     C = _calc_asset_close_matrix(securities)
     R = C.pct_change(fill_method=None)
     R = R.dropna(how="all")
-    return R.corr()
+    # A covariance needs two observations; skip it rather than warn
+    covariance = (
+        R.cov()
+        if len(R) > 1
+        else pd.DataFrame(np.nan, index=R.columns, columns=R.columns)
+    )
+    return ReturnStatistics(
+        correlation=R.corr(), covariance=covariance, observations=R.count()
+    )
 
 
 def compute_performance_metrics(

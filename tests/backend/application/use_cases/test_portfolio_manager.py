@@ -468,3 +468,69 @@ def test_get_portfolio_normalizes_usd_cash_and_returns_account_slice():
     assert slice_b.cash_balance == pytest.approx(50.0 * FX)
     assert slice_b.cash_balance_native == pytest.approx(50.0)
     assert slice_b.weight == pytest.approx(1.0)
+
+    # A USD account's cash is USD exposure, not CAD
+    by_currency = {s.label: s for s in snap.allocation.breakdowns["currency"]}
+    assert set(by_currency) == {"USD"}
+    assert by_currency["USD"].market_value == pytest.approx(mv + 50.0 * FX)
+    assert snap.allocation.account_mix == []
+
+
+def test_get_total_portfolio_allocation_breakdowns():
+    acc_a = SimpleNamespace(
+        open_positions=[_equity_lot("AAPL", qty=5, book=500.0, account="ACC-A")],
+        cash_balance=100.0,
+        external_cash_flows=[],
+    )
+    acc_b = SimpleNamespace(
+        open_positions=[
+            _equity_lot("AAPL", qty=5, book=600.0, account="ACC-B"),
+            _equity_lot("MSFT", qty=2, book=400.0, account="ACC-B"),
+        ],
+        cash_balance=-50.0,
+        external_cash_flows=[],
+    )
+    manager = PortfolioManager(
+        market_man=RealSecurityMarketManager(),
+        account_man=FakeMultiAccountManager(
+            entities=[
+                _entity("id-a", "ACC-A", currency=Currency.CAD),
+                _entity("id-b", "ACC-B", currency=Currency.USD, type="RRSP"),
+            ],
+            accounts_by_number={"ACC-A": acc_a, "ACC-B": acc_b},
+        ),
+    )
+
+    allocation = asyncio.run(manager.get_total_portfolio()).allocation
+
+    aapl_mv = 10 * 110.0 * FX
+    msft_mv = 2 * 110.0 * FX
+    gross = aapl_mv + msft_mv + 100.0
+
+    # Negative cash is reported as margin and kept out of the shares
+    assert allocation.margin == pytest.approx(50.0 * FX)
+
+    # Same symbol in two accounts rolls up to one row
+    assert [s.symbol for s in allocation.by_symbol] == ["AAPL", "MSFT"]
+    assert allocation.by_symbol[0].market_value == pytest.approx(aapl_mv)
+    assert allocation.by_symbol[0].weight == pytest.approx(aapl_mv / gross)
+
+    for dimension, slices in allocation.breakdowns.items():
+        assert sum(s.weight for s in slices) == pytest.approx(1.0), dimension
+
+    currency = {s.label: s.market_value for s in allocation.breakdowns["currency"]}
+    assert currency == pytest.approx({"USD": aapl_mv + msft_mv, "CAD": 100.0})
+    sector = {s.label: s.market_value for s in allocation.breakdowns["sector"]}
+    assert sector == pytest.approx(
+        {"Information Technology": aapl_mv + msft_mv, "Cash": 100.0}
+    )
+    account = {s.label: s.market_value for s in allocation.breakdowns["account"]}
+    assert account == pytest.approx(
+        {"ACC-A": 5 * 110.0 * FX + 100.0, "ACC-B": 5 * 110.0 * FX + msft_mv}
+    )
+
+    assert allocation.concentration.holdings == 2
+    assert allocation.concentration.top1 == pytest.approx(aapl_mv / (aapl_mv + msft_mv))
+
+    assert {m.account for m in allocation.account_mix} == {"ACC-A", "ACC-B"}
+    assert [r.symbol for r in allocation.risk_contribution] == ["AAPL", "MSFT"]

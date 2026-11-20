@@ -1,5 +1,6 @@
 import asyncio
 from datetime import date
+import logging
 from typing import Any
 
 from backend.application.use_cases.account import AccountManager
@@ -7,13 +8,17 @@ from backend.application.use_cases.market_data import MarketDataManager
 from backend.domain.aggregates.account import Account
 from backend.domain.aggregates.portfolio import (
     AccountSliceDTO,
+    AllocationDTO,
     Portfolio,
     PortfolioSnapshotDTO,
     PortfolioSummaryDTO,
     TotalPortfolioSnapshotDTO,
 )
+from backend.domain.analytics.allocation import CashSlice, compute_allocation
 from backend.domain.entities.account import AccountEntity, CashFlow, OpenLot
 from backend.domain.entities.security import GlobalRates, SecurityAnalyticsResponse
+
+logger = logging.getLogger(__name__)
 
 TOTAL_PORTFOLIO_ID = "TOTAL"
 
@@ -85,7 +90,27 @@ class PortfolioManager:
         )
 
     @staticmethod
-    def _to_snapshot_fields(portfolio: Portfolio) -> dict[str, Any]:
+    def _build_allocation(
+        portfolio: Portfolio, cash_slices: list[CashSlice]
+    ) -> AllocationDTO:
+        try:
+            return AllocationDTO(
+                **compute_allocation(
+                    portfolio.holdings.values(),
+                    portfolio.securities,
+                    cash_slices,
+                    portfolio.covariance_matrix_df,
+                    portfolio.return_observations,
+                )
+            )
+        except Exception as e:
+            logger.error(f"Error in building portfolio allocation: {e}", exc_info=True)
+            return AllocationDTO()
+
+    @staticmethod
+    def _to_snapshot_fields(
+        portfolio: Portfolio, cash_slices: list[CashSlice]
+    ) -> dict[str, Any]:
         per_sec = {
             symbol: SecurityAnalyticsResponse(
                 quote=sec.quote,
@@ -117,6 +142,7 @@ class PortfolioManager:
             "indicators": portfolio.indicators,
             "correlation_matrix": portfolio.correlation_matrix,
             "securities": per_sec,
+            "allocation": PortfolioManager._build_allocation(portfolio, cash_slices),
         }
 
     async def get_portfolio(
@@ -129,7 +155,10 @@ class PortfolioManager:
             entity, start_date, end_date
         )
         return PortfolioSnapshotDTO(
-            **self._to_snapshot_fields(portfolio),
+            **self._to_snapshot_fields(
+                portfolio,
+                [CashSlice(entity.number, entity.currency, portfolio.cash_balance)],
+            ),
             accounts=[
                 self._account_slice(
                     entity, portfolio, native_cash, portfolio.total_value
@@ -221,6 +250,10 @@ class PortfolioManager:
                 )
             )
 
+        cash_slices = [
+            CashSlice(entity.number, entity.currency, cash)
+            for entity, _account, cash, _flows in normalized
+        ]
         return TotalPortfolioSnapshotDTO(
-            **self._to_snapshot_fields(total), accounts=slices
+            **self._to_snapshot_fields(total, cash_slices), accounts=slices
         )

@@ -17,6 +17,7 @@ from src.backend.domain.analytics.security import (
     compute_performance_metrics,
     compute_performance_metrics_batch,
     compute_portfolio_timeseries_indicators,
+    compute_return_statistics,
     compute_timeseries_indicators,
 )
 from src.backend.domain.constants import (
@@ -265,6 +266,26 @@ def test_calc_portfolio_weighted_close_backfills_short_history() -> None:
     metrics = compute_performance_metrics(portf, RISK_FREE_RATE)
     assert np.isfinite(metrics["sharpe"].iloc[0])
     assert np.isfinite(metrics["volatility"].iloc[0])
+
+
+def test_compute_return_statistics_shares_one_returns_frame() -> None:
+    closes_a = [100 + i * 0.3 + (i % 4) * 0.9 for i in range(80)]
+    closes_b = [80 + i * 0.2 + (i % 5) * 0.7 for i in range(80)]
+    stats = compute_return_statistics([_sec("AAA", closes_a), _sec("BBB", closes_b)])
+
+    assert stats.observations.to_dict() == {"AAA": 79, "BBB": 79}
+    sd = np.sqrt(np.diag(stats.covariance))
+    assert stats.correlation.to_numpy() == pytest.approx(
+        stats.covariance.to_numpy() / np.outer(sd, sd)
+    )
+
+
+def test_compute_return_statistics_single_row_has_no_covariance() -> None:
+    stats = compute_return_statistics([_sec("AAA", [100.0]), _sec("BBB", [50.0])])
+
+    assert stats.covariance.columns.tolist() == ["AAA", "BBB"]
+    assert stats.covariance.isna().all().all()
+    assert stats.observations.sum() == 0
 
 
 def test_compute_performance_metrics_batch_matches_loop_result() -> None:

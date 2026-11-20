@@ -337,7 +337,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `kpis.py` | Account summary metrics, market snapshot strip, inline header status cluster (browser-timezone clock, rates with hover help, data recency badge, auto-refresh toggle; clock and badge are 30 s fragments) |
 | `positions.py` | Holdings table with sparklines, gain/loss colouring, FX exposure, options info |
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
-| `allocation.py` | Portfolio allocation chart (treemap or pie) |
+| `allocation.py` | Allocation tab: concentration KPIs, breakdown donut, ranked holdings, capital vs risk, asset mix by account (renders the backend `allocation` DTO) |
 | `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes |
 | `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page); derives trailing 1M/3M period Sharpe metrics client-side from simulated window returns and annual volatility — when one is selected, the frontier chart and KPI cards render in that window's period space |
 | `growth_chart.py` | Normalised growth chart |
@@ -536,7 +536,7 @@ Before computing indicators and metrics, the current live quote is appended to t
 
 `compute_portfolio_timeseries_indicators(securities, weights)` combines the bar series of multiple securities using a weight vector to produce a weighted portfolio timeseries. It handles a weight *matrix* (used in simulation) and returns one `DataFrame` per row of the weight matrix.
 
-`compute_correlation_matrix(securities)` extracts the daily returns from each security's bar series, aligns them on a shared date index, and computes the Pearson correlation matrix. The result is serialised as a flat list of `(row, col, value)` entries for efficient JSON transport.
+`compute_return_statistics(securities)` extracts the daily returns from each security's bar series, aligns them on a shared date index, and returns the Pearson correlation matrix, the covariance matrix, and the per-symbol observation counts from that one returns frame. The `Portfolio` aggregate calls it once: the correlation matrix is serialised as a flat list of `(row, col, value)` entries for efficient JSON transport, and the covariance and counts feed the allocation risk contribution.
 
 ### Portfolio-Level Analytics
 
@@ -545,7 +545,17 @@ The `Portfolio.build()` method orchestrates the analytics pipeline in the correc
 1. `_build_holdings()` — compute market values, gains, weights, and contributions per position
 2. `_build_indicators()` — compute the weighted portfolio timeseries
 3. `_build_metrics()` — compute portfolio-level performance metrics from the timeseries
-4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings
+4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings, and keep the matching covariance matrix and observation counts
+
+### Allocation Analytics
+
+`compute_allocation(holdings, securities, cash_slices, covariance, observations)` in `domain/analytics/allocation.py` produces the `allocation` field of the portfolio snapshot; `PortfolioManager` calls it with one CAD-normalized cash slice per account, tagged with the account's ledger currency, plus the `Portfolio` aggregate's return covariance and observation counts. It works over holdings plus positive cash (negative cash is reported separately as `margin`) and returns:
+
+- `breakdowns` — value and share by asset type, instrument, sector, country, currency, and account. Sector and country come from the security profile; ETFs without them are labelled `ETF / unclassified` (no fund look-through).
+- `by_symbol` — one row per symbol across accounts, with options rolled up under the underlying.
+- `concentration` — top 1/5/10 shares, HHI, and effective number of holdings (1 / HHI) over invested value.
+- `risk_contribution` — each symbol's share of portfolio variance, `w_i · (Σw)_i / w'Σw`, using the covariance matrix the `Portfolio` aggregate computes alongside its correlation matrix (same 252-day daily returns). Symbols with fewer than 40 return observations get `None`.
+- `account_mix` — asset-type split inside each account (multi-account snapshots only).
 
 ### MWRR (Money Weighted Rate of Return)
 

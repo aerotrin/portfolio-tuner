@@ -78,6 +78,33 @@ SNAPSHOT_DISPLAY_NAMES = {
 DONUT_SECURITIES_COLOR = "#4C8BF5"
 DONUT_CASH_COLOR = "#9E9E9E"
 
+# [Portfolio] Allocation tab
+HEIGHT_ALLOCATION_CHART = 300
+ALLOCATION_TOP_HOLDINGS = 15  # ranked bars / risk chart; the rest fold into "Other"
+# Categorical series colors in fixed slot order (light / dark theme steps of
+# the same hues). More categories than slots fold into "Other".
+CHART_CATEGORICAL_LIGHT = [
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#008300",
+    "#6250d6",
+    "#e34948",
+]
+CHART_CATEGORICAL_DARK = [
+    "#3987e5",
+    "#d95926",
+    "#199e70",
+    "#c98500",
+    "#d55181",
+    "#0ca30c",
+    "#9085e9",
+    "#e66767",
+]
+CHART_OTHER_COLOR = "#616161"
+
 # General color palette for styling tables and icons
 GREEN = "#4CAF50"  # softer green for dark mode
 RED = "#F44336"  # softer red for dark mode

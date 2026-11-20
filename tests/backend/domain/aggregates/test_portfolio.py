@@ -6,6 +6,7 @@ import pytest
 
 from src.backend.domain.aggregates.portfolio import Portfolio
 from src.backend.domain.aggregates.security import Security
+from src.backend.domain.analytics.security import ReturnStatistics
 from src.backend.domain.entities.account import (
     CashFlow,
     Category,
@@ -62,6 +63,14 @@ def _make_security(
     return security
 
 
+def _return_stats(correlation: pd.DataFrame) -> ReturnStatistics:
+    return ReturnStatistics(
+        correlation=correlation,
+        covariance=correlation * 1e-4,
+        observations=pd.Series(100, index=correlation.columns),
+    )
+
+
 def _stub_portfolio_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.backend.domain.aggregates.portfolio as portfolio_module
 
@@ -107,8 +116,8 @@ def test_portfolio_build_holdings_summary_and_contributions(
 
     monkeypatch.setattr(
         portfolio_module,
-        "compute_correlation_matrix",
-        lambda _securities: pd.DataFrame(),
+        "compute_return_statistics",
+        lambda _securities: _return_stats(pd.DataFrame()),
     )
 
     securities = {
@@ -250,7 +259,9 @@ def test_stock_and_options_on_same_underlying_coexist(monkeypatch: pytest.Monkey
         portfolio_module, "compute_portfolio_timeseries_indicators", fake_indicators
     )
     monkeypatch.setattr(
-        portfolio_module, "compute_correlation_matrix", lambda _s: pd.DataFrame()
+        portfolio_module,
+        "compute_return_statistics",
+        lambda _s: _return_stats(pd.DataFrame()),
     )
 
     securities = {
@@ -380,11 +391,13 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(
         portfolio_module,
-        "compute_correlation_matrix",
-        lambda _securities: pd.DataFrame(
-            [[1.0, 0.35], [0.35, 1.0]],
-            index=["AAPL", "SHOP"],
-            columns=["AAPL", "SHOP"],
+        "compute_return_statistics",
+        lambda _securities: _return_stats(
+            pd.DataFrame(
+                [[1.0, 0.35], [0.35, 1.0]],
+                index=["AAPL", "SHOP"],
+                columns=["AAPL", "SHOP"],
+            )
         ),
     )
 
@@ -431,6 +444,10 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     assert first.row in {"AAPL", "SHOP"}
     assert first.col in {"AAPL", "SHOP"}
     assert isinstance(first.value, float)
+
+    # Covariance and observation counts come from the same statistics call
+    assert portfolio.covariance_matrix_df.loc["AAPL", "SHOP"] == pytest.approx(0.35e-4)
+    assert portfolio.return_observations["SHOP"] == 100
 
 
 def test_build_correlation_matrix_empty_securities_guard():

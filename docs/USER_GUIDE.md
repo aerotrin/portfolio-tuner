@@ -116,11 +116,11 @@ The **Force Refresh Data** button triggers a full re-fetch of all market data fo
 
 ### Hide Balances
 
-The **Hide Balances** toggle masks the dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. Percentage figures (returns, MWRR, cash %, weights) remain visible.
+The **Hide Balances** toggle masks the dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. On the Allocation tab, it removes dollar values from chart tooltips and the Breakdown table and masks the position sizing guide. Percentage figures (returns, MWRR, cash %, weights) remain visible.
 
 ### Hide Account Numbers
 
-The **Hide Account Numbers** toggle is independent of Hide Balances. When on, every account label keeps only the last two digits of the number (`TFSA #12345` becomes `TFSA ••45`) and the owner name is masked. This applies to the account selector, the Account Summary, the Account column and treemap groups on the Positions tab, the Cash table and Cash by Account donut, the By Account allocation chart, the sidebar, and the account picker in the Record Transaction dialog. If two accounts of the same type share their last two digits, more digits are shown for those accounts so they stay distinct.
+The **Hide Account Numbers** toggle is independent of Hide Balances. When on, every account label keeps only the last two digits of the number (`TFSA #12345` becomes `TFSA ••45`) and the owner name is masked. This applies to the account selector, the Account Summary, the Account column and treemap groups on the Positions tab, the Cash table and Cash by Account donut, the Account breakdown and Asset mix by account charts on the Allocation tab, the sidebar, and the account picker in the Record Transaction dialog. If two accounts of the same type share their last two digits, more digits are shown for those accounts so they stay distinct.
 
 ---
 
@@ -222,11 +222,17 @@ A tabbed view with performance analytics:
 
 ### Allocation
 
-A visual breakdown of portfolio allocation by market value:
+Shows how the portfolio is spread, how concentrated it is, and where its risk comes from. All shares are of holdings plus positive cash, in CAD.
 
-- Treemap or pie chart showing each position's weight
+- **Concentration row** — number of holdings, the largest position and top 5 as a share of invested holdings, **Effective holdings** (how many equal-sized positions would be as concentrated as yours; the further below the holdings count, the more a few positions dominate), cash share, and USD exposure (USD-quoted holdings plus cash in USD accounts).
+- **Breakdown** — a donut with a selector for **Asset type**, **Instrument** (equity, call/put option, fixed income, cash), **Sector**, **Country**, or **Currency**, with a table of the same figures underneath. ETFs without sector or country data are grouped as *ETF / unclassified*; the app does not look inside funds.
+- **Holdings by weight** — one bar per symbol, largest first. The top 15 are shown individually and the rest are combined as *Other*; cash has its own bar. Options are counted under their underlying at intrinsic value.
+- **Capital vs risk** — each holding's weight next to its share of the portfolio's volatility over the past year of daily returns. A risk share well above the weight marks a position that drives more of the portfolio's swings than its size suggests. Holdings with too little price history are listed below the chart instead of being plotted.
+- **Position sizing guide** — an expandable table of the dollar amount for a new position at 1% to 20% of the portfolio.
 
-> **Screenshot placeholder — Allocation chart**
+If an account's cash is negative (margin), it is left out of the shares and noted under the concentration row.
+
+> **Screenshot placeholder — Allocation tab**
 
 ---
 
@@ -303,7 +309,7 @@ A tabbed section showing the raw ledger data for the account:
 Selecting **All Accounts** in the page selector (the default) combines every account into a single view with the same layout — summary KPIs, market snapshot, and all tabs — computed over your holdings across all accounts:
 
 - **Weights and contributions** are a share of the *combined* total value. A symbol held in several accounts appears once per account with that account's own quantity, book value, and average cost — the Positions tab shows an **Account** column and treemaps grouped by account.
-- **Allocation** adds a **By Account** pie chart showing each account's share of the combined portfolio value (securities + cash) alongside the instrument, currency, and holding breakdowns.
+- **Allocation** adds **Account** to the Breakdown selector (each account's share of the combined value, securities + cash) and an **Asset mix by account** chart showing what each account holds by asset type. Holdings by weight and Capital vs risk combine a symbol held in several accounts into one bar.
 - **MWRR** pools external cash flows (contributions and withdrawals) from every account — it is a true money-weighted return on all invested capital, not an average of per-account MWRRs.
 - **Correlation** covers all pairs across accounts, including pairs of symbols held in different accounts.
 - **Optimization** runs over the combined symbol list with its own saved result, separate from each account's optimizer runs.

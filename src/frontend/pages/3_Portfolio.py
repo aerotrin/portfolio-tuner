@@ -304,7 +304,11 @@ with tabs[1]:
 
 with tabs[2]:
     render_portfolio_allocation(
-        portfolio.summary, holdings_data, accounts=account_slices
+        portfolio.summary,
+        portfolio.allocation,
+        hide_balances,
+        context_id=scope if single else "total-portfolio",
+        account_labels=number_labels,
     )
 
 with tabs[3]:
