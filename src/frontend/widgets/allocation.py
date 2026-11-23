@@ -442,7 +442,7 @@ def render_portfolio_allocation(
     with left, st.container(border=True):
         _render_breakdown(allocation, account_labels, dark, hide_balances, context_id)
 
-    with right, st.container(border=True):
+    with right, st.container(border=True, height="stretch"):
         st.markdown("##### Holdings by weight")
         cash = next(
             (s for s in breakdowns["instrument"] if s["label"] == CASH_LABEL), None
@@ -451,6 +451,7 @@ def render_portfolio_allocation(
         st.altair_chart(
             _build_ranked_bar(holdings, dark, hide_balances),
             width="stretch",
+            height="stretch",
             key=f"allocation-{context_id}-holdings-chart",
         )
         st.caption(
