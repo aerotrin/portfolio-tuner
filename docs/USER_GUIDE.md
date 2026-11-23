@@ -112,7 +112,7 @@ The **Record Transaction** button (prominent, full-width) opens the manual trans
 
 ### Data Refresh
 
-The **Force Refresh Data** button triggers a full re-fetch of all market data for the current page's symbols, bypassing the smart sync state. Use this when data appears stale or after adding new symbols to `symbols.yml`. (For routine background updates, use the **Auto** (auto refresh) toggle at the top-right of each page instead — see [Section 9](#9-refreshing-market-data).)
+The **Force Data Refresh** button triggers a full re-fetch of all market data for every symbol across all pages (after a confirmation dialog showing the symbol count), bypassing the smart sync state. Use this when data appears stale or after adding new symbols to `symbols.yml`. (For routine background updates, use the **Auto** (auto refresh) toggle at the top-right of each page instead — see [Section 9](#9-refreshing-market-data).)
 
 ### Hide Balances
 
@@ -408,17 +408,17 @@ Two manual refresh options are available:
 | Button | Location | Behaviour |
 |---|---|---|
 | **Refresh Data** | Top-right of each page | Re-runs smart sync for the current page's symbols (incremental), in the background — the page stays interactive |
-| **Force Refresh Data** | Sidebar | Re-fetches the full date range for all current page symbols, ignoring sync state (blocks the page while running) |
+| **Force Data Refresh** | Sidebar | Re-fetches the full date range for **every** symbol the app uses — both market research lists plus the holdings of all accounts — ignoring sync state. A confirmation dialog shows the unique symbol count first; the job can take a few minutes and blocks the page while running |
 
 On the Portfolio page, "the current page's symbols" means the holdings of **all** your accounts plus the benchmark/header symbols — one refresh keeps every account scope current. Market research pages refresh only their own symbol lists.
 
-Use **Force Refresh Data** when quotes appear stale, after changing the date range significantly, or after adding new symbols to `symbols.yml`.
+Use **Force Data Refresh** when quotes appear stale, after changing the date range significantly, or after adding new symbols to `symbols.yml`.
 
 ### Refresh Progress
 
 Background refreshes (the **Refresh Data** button and the **Auto** toggle) show a live progress bar under **Refresh Status** at the bottom of the sidebar; the page reloads with fresh data when the job finishes.
 
-Blocking refreshes (missing-symbol bootstrap and **Force Refresh Data**) show a progress banner at the top of the page and pause rendering until the job completes.
+Blocking refreshes (missing-symbol bootstrap and **Force Data Refresh**) show a progress banner at the top of the page and pause rendering until the job completes. After a Force Data Refresh, every page is marked as refreshed.
 
 > **Screenshot placeholder — Refresh job progress banner**
 

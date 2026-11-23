@@ -63,3 +63,35 @@ def test_unreachable_backend_keeps_polling(api, exc):
     assert st.session_state["job_id"] == "job-1"
     assert st.session_state["_last_missing_attempted"] == {"AAPL"}
     jobs.st.rerun.assert_not_called()
+
+
+def _succeed(api):
+    api.get_refresh_job.return_value = {
+        "status": "success",
+        "finished_at": "2026-11-23T10:00:00",
+    }
+    with pytest.raises(_Rerun):
+        jobs.check_job_status()
+
+
+def test_success_stamps_all_refreshed_pages(api):
+    st.session_state["job_page"] = "portfolio"
+    st.session_state["job_refreshed_pages"] = jobs.ALL_DATA_PAGES
+
+    _succeed(api)
+
+    assert st.session_state["last_refresh_by_page"] == {
+        page: "2026-11-23T10:00:00" for page in jobs.ALL_DATA_PAGES
+    }
+    assert "job_refreshed_pages" not in st.session_state
+    assert "job_id" not in st.session_state
+
+
+def test_success_defaults_to_job_page(api):
+    st.session_state["job_page"] = "market_etf"
+
+    _succeed(api)
+
+    assert st.session_state["last_refresh_by_page"] == {
+        "market_etf": "2026-11-23T10:00:00"
+    }

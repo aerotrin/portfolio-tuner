@@ -9,13 +9,14 @@ from frontend.services.streamlit_data import (
     delete_account,
     get_api_client,
     import_account_records,
+    load_account_records,
     load_accounts_list,
     load_rates,
 )
 from frontend.shared.accounts import account_labels
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
-from frontend.shared.jobs import AUTO_REFRESH_ON, start_refresh_job
+from frontend.shared.jobs import ALL_DATA_PAGES, AUTO_REFRESH_ON, start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
 from frontend.widgets.transaction_form import transaction_form
@@ -363,6 +364,31 @@ def _show_delete_confirm_dialog(account_id: str, account_display_label: str) -> 
             # else: toast already shown by delete_account
 
 
+@st.dialog("Force Data Refresh?", width="small")
+def _show_force_refresh_dialog(symbols: list[str]) -> None:
+    st.warning(
+        f"This re-fetches all market data for **{len(symbols)} unique symbols** "
+        "(ETF research, stock research and holdings across all accounts).\n\n"
+        "It may take a few minutes, and this page is blocked while it runs."
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Cancel", key="force_refresh_cancel"):
+            st.rerun()
+    with col2:
+        if st.button("Refresh", type="primary", key="force_refresh_confirm"):
+            st.session_state["_last_missing_attempted"] = set(symbols)
+            start_refresh_job(
+                symbols=symbols,
+                blocking=True,
+                force=True,
+                active_page=st.session_state.get("active_page"),
+                start_date=st.session_state["start_date"],
+                end_date=st.session_state["end_date"],
+                refreshed_pages=ALL_DATA_PAGES,
+            )
+
+
 # -----------------------------------------------------------------------------
 # Sidebar
 # -----------------------------------------------------------------------------
@@ -508,16 +534,13 @@ with st.sidebar:
         key="full_data_refresh_button",
         width="stretch",
     ):
-        st.session_state["_last_missing_attempted"] = set(
-            st.session_state["page_symbols"]
-        )
-        start_refresh_job(
-            symbols=st.session_state["page_symbols"],
-            blocking=True,
-            force=True,
-            active_page=st.session_state["active_page"],
-            start_date=st.session_state["start_date"],
-            end_date=st.session_state["end_date"],
+        _holdings = {
+            position["symbol"]
+            for account in accounts
+            for position in load_account_records(account.id).open_positions
+        }
+        _show_force_refresh_dialog(
+            sorted({*st.session_state["base_symbols"], *market_symbols, *_holdings})
         )
 
     st.divider()

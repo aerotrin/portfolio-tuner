@@ -10,6 +10,8 @@ from frontend.shared.env_loader import config
 
 logger = logging.getLogger(__name__)
 
+ALL_DATA_PAGES = ["market_etf", "market_stock", "portfolio"]
+
 
 def _clear_job_state() -> None:
     for k in [
@@ -18,6 +20,7 @@ def _clear_job_state() -> None:
         "job_blocking",
         "job_status",
         "job_page",
+        "job_refreshed_pages",
         "job_started_at",
         "job_progress",
         "job_error",
@@ -32,7 +35,11 @@ def start_refresh_job(
     active_page: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    refreshed_pages: list[str] | None = None,
 ) -> None:
+    """Start a refresh job. ``refreshed_pages`` lists the pages whose data the
+    job covers (stamped as refreshed on success); defaults to ``active_page``.
+    """
     job_id = st.session_state.get("job_id")
     if job_id:
         st.toast(
@@ -58,6 +65,7 @@ def start_refresh_job(
             st.session_state["job_blocking"] = blocking
             st.session_state["job_status"] = "pending"
             st.session_state["job_page"] = active_page  # may be None
+            st.session_state["job_refreshed_pages"] = refreshed_pages
             logger.info("%s refresh job accepted: %s", job_type, job_id)
             st.toast("Refresh started", icon="🔄")
             st.rerun()
@@ -103,7 +111,7 @@ def auto_refresh_if_missing(
         st.error(
             f"The following symbols could not be fetched"
             f": **{', '.join(sorted(missing_symbols))}**. Unable to proceed. "
-            f"Use **Force Refresh Data** in the sidebar to retry.",
+            f"Use **Force Data Refresh** in the sidebar to retry.",
             icon="❌",
         )
         st.stop()
@@ -229,9 +237,10 @@ def check_job_status() -> None:
         st.session_state["job_just_completed"] = True
 
         page = st.session_state.get("job_page")
-        if page:
-            st.session_state.setdefault("last_refresh_by_page", {})[page] = job.get(
-                "finished_at"
+        pages = st.session_state.get("job_refreshed_pages") or ([page] if page else [])
+        for refreshed_page in pages:
+            st.session_state.setdefault("last_refresh_by_page", {})[refreshed_page] = (
+                job.get("finished_at")
             )
 
         _clear_job_state()
