@@ -344,15 +344,33 @@ class PgAccountDataRepository(AccountDataRepository):
             raise ValueError(f"Account with number {account_number!r} not found")
         return acc.id
 
+    @staticmethod
+    def _transaction_row(
+        account_id: str, account_number: str, transaction: Transaction
+    ) -> TransactionDB:
+        data = transaction.model_dump()
+        # JSONB needs JSON-safe values; the terms hold dates
+        data["instrument_terms"] = (
+            transaction.instrument_terms.model_dump(mode="json")
+            if transaction.instrument_terms
+            else None
+        )
+        return TransactionDB(
+            account_id=account_id, account_number=account_number, **data
+        )
+
     def create_transaction(self, account_number: str, transaction: Transaction):
+        self.create_transactions(account_number, [transaction])
+
+    def create_transactions(self, account_number: str, transactions: List[Transaction]):
+        """Add several transactions in one commit: all are stored or none."""
         try:
             account_id = self._resolve_account_id(account_number)
-            self.session.add(
-                TransactionDB(
-                    account_id=account_id,
-                    account_number=account_number,
-                    **transaction.model_dump(),
-                )
+            self.session.add_all(
+                [
+                    self._transaction_row(account_id, account_number, transaction)
+                    for transaction in transactions
+                ]
             )
             self.session.commit()
         except Exception:
@@ -365,11 +383,7 @@ class PgAccountDataRepository(AccountDataRepository):
             self.delete_transactions(account_number)
             self.session.add_all(
                 [
-                    TransactionDB(
-                        account_id=account_id,
-                        account_number=account_number,
-                        **transaction.model_dump(),
-                    )
+                    self._transaction_row(account_id, account_number, transaction)
                     for transaction in transactions
                 ]
             )

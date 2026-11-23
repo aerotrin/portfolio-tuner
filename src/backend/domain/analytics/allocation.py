@@ -122,14 +122,18 @@ def calc_symbol_weights(rows: pd.DataFrame) -> list[dict[str, Any]]:
         if value <= 0:
             continue
         options_value = float(group.loc[group["is_option"], "value"].sum())
+        fixed_income_value = float(
+            group.loc[group["instrument"] == str(Category.FIXED_INCOME), "value"].sum()
+        )
         out.append(
             {
                 "symbol": str(symbol),
                 "name": str(group["name"].iloc[0]),
                 "market_value": value,
                 "weight": value / total,
-                "shares_value": value - options_value,
+                "shares_value": value - options_value - fixed_income_value,
                 "options_value": options_value,
+                "fixed_income_value": fixed_income_value,
             }
         )
     return sorted(out, key=lambda r: r["market_value"], reverse=True)
@@ -163,12 +167,14 @@ def calc_risk_contribution(
     weights: Mapping[str, float],
     covariance: pd.DataFrame,
     observations: Mapping[str, float],
+    steady: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Each symbol's share of invested value next to its share of volatility.
 
     Risk share is `w_i · (Σw)_i / w'Σw` over the symbols with enough return
     history; the rest get None rather than a misleading zero. `covariance`
-    and `observations` are the portfolio's daily-return statistics.
+    and `observations` are the portfolio's daily-return statistics. `steady`
+    symbols (fixed income) hold their value and carry a risk share of zero.
     """
     invested = sum(v for v in weights.values() if v > 0)
     if invested <= 0:
@@ -189,6 +195,7 @@ def calc_risk_contribution(
         variance = float(w @ marginal)
         if np.isfinite(variance) and variance > 0:
             risk = dict(zip(measured, (w * marginal / variance).tolist()))
+    risk.update({s: 0.0 for s in steady if s in share})
 
     return [
         {"symbol": s, "weight": share[s], "risk_share": risk.get(s)}
@@ -224,6 +231,7 @@ def compute_allocation(
     """`covariance` / `observations` are the portfolio's return statistics,
     the same ones its correlation matrix is built from."""
     cash_slices = list(cash_slices)
+    holdings = list(holdings)
     rows = build_allocation_rows(holdings, securities, cash_slices)
     by_symbol = calc_symbol_weights(rows)
     symbol_values = {r["symbol"]: r["market_value"] for r in by_symbol}
@@ -233,7 +241,14 @@ def compute_allocation(
         "breakdowns": {d: calc_breakdown(rows, d) for d in DIMENSIONS},
         "concentration": calc_concentration(symbol_values.values()),
         "risk_contribution": calc_risk_contribution(
-            symbol_values, covariance, observations
+            symbol_values,
+            covariance,
+            observations,
+            steady={
+                h.symbol
+                for h in holdings
+                if h.holding_category == Category.FIXED_INCOME
+            },
         ),
         "account_mix": calc_account_mix(rows),
         "margin": -sum(c.value for c in cash_slices if c.value < 0),

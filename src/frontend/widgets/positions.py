@@ -1,9 +1,11 @@
 from typing import Any, cast
 
+from frontend.shared.accounts import FIXED_INCOME
 from frontend.shared.settings import HEIGHT_POSITIONS_TREEMAP_ROW, MASKED_VALUE
 from frontend.shared.styles import (
     POSITIONS_CASH_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
+    POSITIONS_FIXED_INCOME_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
     QUOTE_TABLE_CONFIG,
     balance_safe_column_order,
@@ -119,6 +121,44 @@ def _render_cash_section(
             )
 
 
+def _render_fixed_income_section(
+    df: pd.DataFrame, hide_balances: bool, has_accounts: bool
+) -> None:
+    """GICs and term deposits, valued from their terms instead of a quote."""
+    df = df.sort_values(by="fi_days_to_maturity", na_position="last").copy()
+    for col in ("fi_issue_date", "fi_maturity_date"):
+        df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
+
+    config = POSITIONS_FIXED_INCOME_TABLE_CONFIG
+    if has_accounts:
+        config = with_account_column(config, "name")
+
+    st.markdown("###### Fixed Income")
+    matured = df.loc[df["fi_status"] == "Matured", "name"].tolist()
+    if matured:
+        st.warning(
+            "Matured: "
+            + ", ".join(matured)
+            + ". It stays here at its final value until its redemption is "
+            "recorded with **Manage GIC / Term Deposit** in the sidebar.",
+            icon=":material/event_available:",
+        )
+    st.dataframe(
+        positions_table_styler(df),
+        hide_index=True,
+        height="content",
+        column_order=balance_safe_column_order(config, hide_balances),
+        column_config=config,
+        key="table-holdings-open-fixed-income",
+    )
+    st.caption(
+        "Value is principal plus interest accrued to date. Fixed income has no "
+        "market price: it counts in the portfolio totals and is left out of the "
+        "intraday, correlation and optimization views. To record a redemption "
+        "or an interest payment, use **Manage GIC / Term Deposit** in the sidebar."
+    )
+
+
 def render_portfolio_positions(
     holdings: pd.DataFrame | None,
     hide_balances: bool,
@@ -158,6 +198,8 @@ def render_portfolio_positions(
         option_df = cast(
             pd.DataFrame, df[df["holding_category"].isin(["Call Option", "Put Option"])]
         )
+        fixed_income_df = cast(pd.DataFrame, df[df["holding_category"] == FIXED_INCOME])
+        market_df = cast(pd.DataFrame, df[df["holding_category"] != FIXED_INCOME])
 
         # Metrics
         with st.container(border=False, horizontal=True):
@@ -180,9 +222,11 @@ def render_portfolio_positions(
             )
             st.plotly_chart(fig, key="chart-holdings-open")
             render_positions_health_bar(df)
+        elif market_df.empty:
+            st.info("No market-priced holdings to show intraday.")
         else:
             fig = render_treemap_intraday(
-                df,
+                market_df,
                 top_label="Intraday",
                 has_weight=True,
                 row_px=HEIGHT_POSITIONS_TREEMAP_ROW,
@@ -190,7 +234,7 @@ def render_portfolio_positions(
                 group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")
-            render_intraday_health_bar(df)
+            render_intraday_health_bar(market_df)
 
         # Positions Table
         st.markdown("##### Holdings")
@@ -218,6 +262,8 @@ def render_portfolio_positions(
             st.caption(
                 "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."
             )
+        if not fixed_income_df.empty:
+            _render_fixed_income_section(fixed_income_df, hide_balances, has_accounts)
 
         with st.expander("Intraday Quote Table", icon=":material/table:"):
             intraday_equity_df = equity_df.sort_values(

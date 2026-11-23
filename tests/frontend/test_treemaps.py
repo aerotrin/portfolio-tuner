@@ -8,6 +8,7 @@ from frontend.widgets.treemaps import (
     REL_VOLUME_COLOR_MAX,
     compact_number,
     render_treemap_intraday,
+    render_treemap_positions,
 )
 
 GROUPS = ["region", "group_label"]
@@ -80,3 +81,58 @@ def test_frame_without_relative_volume_still_renders():
     fig = render_treemap_intraday(_frame(), group_cols=GROUPS)
 
     assert "×" not in fig.data[0].customdata[0][0]
+
+
+def _positions_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "symbol": ["AAA", "GIC-5.00-20261107", "GIC-4.00-20250101"],
+            "name": ["A", "Bank GIC", "Old GIC"],
+            "holding_category": ["Equity", "Fixed Income", "Fixed Income"],
+            "market_value": [1000.0, 2050.0, 520.0],
+            "gain": [100.0, 50.0, 20.0],
+            "gain_pct": [0.1, 0.025, 0.04],
+            "open_qty": [10, 2000, 500],
+            "days_held": [30, 180, 400],
+            "weight": [0.3, 0.55, 0.15],
+            "option_dte": [np.nan, np.nan, np.nan],
+            "fi_rate": [np.nan, 0.05, 0.04],
+            "fi_days_to_maturity": [np.nan, 185.0, -35.0],
+            "timestamp": datetime(2026, 1, 5, tzinfo=timezone.utc),
+        },
+        index=pd.Index(["AAA", "GIC-5.00-20261107", "GIC-4.00-20250101"]),
+    )
+
+
+def _leaf_text(fig) -> dict[str, str]:
+    trace = fig.data[0]
+    return {
+        label: data[0]
+        for label, data in zip(trace.labels, trace.customdata)
+        if label != "Holdings"
+    }
+
+
+def test_positions_treemap_describes_fixed_income_by_rate_and_maturity():
+    text = _leaf_text(render_treemap_positions(_positions_frame()))
+
+    assert "10 shares, 30 days" in text["AAA"]
+    assert "5.00%, 185 days to maturity" in text["Bank GIC"]
+    assert "shares" not in text["Bank GIC"]
+    assert "4.00%, matured" in text["Old GIC"]
+
+
+def test_positions_treemap_hides_fixed_income_amounts_with_balances():
+    text = _leaf_text(render_treemap_positions(_positions_frame(), hide_balances=True))
+
+    assert "2,050" not in text["Bank GIC"]
+    assert "5.00%, 185 days to maturity" in text["Bank GIC"]
+
+
+def test_positions_treemap_keeps_keys_for_fixed_income_sharing_a_name():
+    df = _positions_frame()
+    df["name"] = ["A", "Bank GIC", "Bank GIC"]
+
+    text = _leaf_text(render_treemap_positions(df))
+
+    assert set(text) == {"AAA", "GIC-5.00-20261107", "GIC-4.00-20250101"}

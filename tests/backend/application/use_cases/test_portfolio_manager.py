@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -534,3 +534,110 @@ def test_get_total_portfolio_allocation_breakdowns():
 
     assert {m.account for m in allocation.account_mix} == {"ACC-A", "ACC-B"}
     assert [r.symbol for r in allocation.risk_contribution] == ["AAPL", "MSFT"]
+
+
+def _gic_lot(account: str, principal: float = 10_000.0) -> OpenLot:
+    today = date.today()
+    return OpenLot(
+        symbol="GIC-5.00-20991231",
+        account=account,
+        category=Category.FIXED_INCOME,
+        open_date=today - timedelta(days=72),
+        open_qty=int(principal),
+        acb_per_sh=1.0,
+        book_value=principal,
+        currency=Currency.CAD,
+        terms=dict(
+            name="Example Bank",
+            issue_date=today - timedelta(days=72),
+            maturity_date=today + timedelta(days=293),
+            annual_rate=0.05,
+        ),
+        principal=principal,
+    )
+
+
+def test_get_portfolio_with_a_gic_never_asks_for_its_market_data():
+    """A GIC has no stored quote; it must not reach the market-data layer and
+    still counts in the totals."""
+    acc = SimpleNamespace(
+        open_positions=[
+            _equity_lot("AAPL", qty=5, book=500.0, account="ACC-A"),
+            _gic_lot("ACC-A"),
+        ],
+        cash_balance=0.0,
+        external_cash_flows=[],
+    )
+    entity = _entity("id-a", "ACC-A")
+    market = RealSecurityMarketManager()
+    manager = PortfolioManager(
+        market_man=market,
+        account_man=FakeMultiAccountManager(
+            entities=[entity], accounts_by_number={"ACC-A": acc}
+        ),
+    )
+
+    snap = asyncio.run(manager.get_portfolio(entity))
+
+    assert market.calls == [["AAPL"]]
+    gic_value = 10_000.0 + 10_000.0 * 0.05 * 73 / 365
+    assert snap.summary.total_value == pytest.approx(5 * 110.0 * FX + gic_value)
+    assert set(snap.holdings) == {"AAPL", "GIC-5.00-20991231"}
+    assert set(snap.securities) == {"AAPL"}
+    assert snap.summary.open_positions == ["AAPL", "GIC-5.00-20991231"]
+
+    by_type = {s.label: s for s in snap.allocation.breakdowns["asset_type"]}
+    assert by_type["Fixed Income"].market_value == pytest.approx(gic_value)
+    risk = {r.symbol: r.risk_share for r in snap.allocation.risk_contribution}
+    assert risk["GIC-5.00-20991231"] == 0.0
+
+
+def test_get_portfolio_for_a_gic_only_account():
+    acc = SimpleNamespace(
+        open_positions=[_gic_lot("ACC-A")],
+        cash_balance=100.0,
+        external_cash_flows=[],
+    )
+    entity = _entity("id-a", "ACC-A")
+    market = RealSecurityMarketManager()
+    manager = PortfolioManager(
+        market_man=market,
+        account_man=FakeMultiAccountManager(
+            entities=[entity], accounts_by_number={"ACC-A": acc}
+        ),
+    )
+
+    snap = asyncio.run(manager.get_portfolio(entity))
+
+    assert market.calls == [[]]
+    assert snap.securities == {}
+    assert snap.summary.total_value == pytest.approx(10_100.0 + 100.0)
+    assert len(snap.indicators) > 0
+
+
+def test_get_total_portfolio_keeps_gics_out_of_the_symbol_request():
+    acc_a = SimpleNamespace(
+        open_positions=[_equity_lot("AAPL", qty=5, book=500.0, account="ACC-A")],
+        cash_balance=0.0,
+        external_cash_flows=[],
+    )
+    acc_b = SimpleNamespace(
+        open_positions=[_gic_lot("ACC-B")],
+        cash_balance=0.0,
+        external_cash_flows=[],
+    )
+    entities = [_entity("id-a", "ACC-A"), _entity("id-b", "ACC-B")]
+    market = RealSecurityMarketManager()
+    manager = PortfolioManager(
+        market_man=market,
+        account_man=FakeMultiAccountManager(
+            entities=entities, accounts_by_number={"ACC-A": acc_a, "ACC-B": acc_b}
+        ),
+    )
+
+    snap = asyncio.run(manager.get_total_portfolio())
+
+    assert market.calls == [["AAPL"]]
+    assert set(snap.holdings) == {"ACC-A|AAPL", "ACC-B|GIC-5.00-20991231"}
+    slice_b = next(s for s in snap.accounts if s.id == "id-b")
+    assert slice_b.total_value == pytest.approx(10_100.0)

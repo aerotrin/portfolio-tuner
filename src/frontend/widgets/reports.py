@@ -165,11 +165,21 @@ def render_cash_flows_table(
         ]
 
         if not sub_df.empty:
+            # Interest tied to an instrument (GIC, term deposit) carries its key
+            # as the symbol; cash interest has none
+            symbols = (
+                sub_df["symbol"].fillna("")
+                if "symbol" in sub_df.columns
+                else pd.Series("", index=sub_df.index)
+            )
+            fixed_income_interest = (sub_df["transaction_type"] == "Interest") & (
+                symbols != ""
+            )
             summary = st.container(horizontal=True, border=True)
             with summary:
                 st.metric(
                     "Gross Foreign Income (US)",
-                    f"${sub_df[(sub_df['category'] == 'Income') & (sub_df['market'] != 'CDN')]['amount'].sum():,.2f}",
+                    f"${sub_df[(sub_df['category'] == 'Income') & (sub_df['market'] != 'CDN') & ~fixed_income_interest]['amount'].sum():,.2f}",
                 )
                 st.metric(
                     "Foreign Tax Paid (US)",
@@ -182,6 +192,12 @@ def render_cash_flows_table(
                 st.metric(
                     "Interest Income",
                     f"${sub_df[(sub_df['transaction_type'] == 'Interest')]['amount'].sum():,.2f}",
+                    help="All interest, including fixed income",
+                )
+                st.metric(
+                    "Fixed Income Interest",
+                    f"${sub_df[fixed_income_interest]['amount'].sum():,.2f}",
+                    help="Interest paid by GICs and term deposits",
                 )
                 st.metric(
                     "Other Expenses",

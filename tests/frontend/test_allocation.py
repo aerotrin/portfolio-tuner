@@ -17,6 +17,7 @@ from frontend.widgets.allocation import (
     _build_ranked_bar,
     _build_risk_bar,
     _color_scale,
+    _holding_labels,
     _holdings_frame,
     _risk_frame,
 )
@@ -70,6 +71,42 @@ def test_holdings_frame_top_n_other_and_cash():
     assert df["kind"].tolist() == ["Holding"] * 3 + ["Other", "Cash"]
     assert df.loc[3, "market_value"] == pytest.approx(97.0 + 96.0)
     assert df.loc[3, "name"] == "2 smaller holdings"
+
+
+def _fixed_income(symbol: str, name: str, value: float) -> dict:
+    return {
+        **_symbol(symbol, value),
+        "name": name,
+        "shares_value": 0.0,
+        "fixed_income_value": value,
+    }
+
+
+def test_fixed_income_is_labelled_by_name_not_key():
+    by_symbol = [
+        _fixed_income("GIC-2.45-20261209-ac3b", "GIC 2.45% Dec 09 2026", 500.0),
+        _symbol("AAA", 300.0),
+    ]
+    risk = [
+        {"symbol": "GIC-2.45-20261209-ac3b", "weight": 0.6, "risk_share": 0.0},
+        {"symbol": "AAA", "weight": 0.4, "risk_share": 1.0},
+    ]
+
+    labels = _holding_labels(by_symbol)
+    holdings = _holdings_frame(by_symbol, None)
+    risk_df, _ = _risk_frame(risk, labels=labels)
+
+    assert holdings["label"].tolist() == ["GIC 2.45% Dec 09 2026", "AAA"]
+    assert risk_df["symbol"].unique().tolist() == ["GIC 2.45% Dec 09 2026", "AAA"]
+
+
+def test_fixed_income_sharing_a_name_keeps_its_key():
+    by_symbol = [
+        _fixed_income("GIC-2.45-20261209-ac3b", "GIC 2.45% Dec 09 2026", 500.0),
+        _fixed_income("GIC-2.45-20261209-9f10", "GIC 2.45% Dec 09 2026", 300.0),
+    ]
+
+    assert _holding_labels(by_symbol) == {}
 
 
 def test_holdings_frame_cash_only():

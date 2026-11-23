@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from frontend.shared.accounts import FIXED_INCOME
 from frontend.shared.settings import HEIGHT_TREEMAP, MASKED_VALUE
 from frontend.shared.time import humanize_timestamp
 
@@ -150,6 +151,21 @@ def render_treemap_intraday(
     return fig
 
 
+def _maturity_text(days: float) -> str:
+    if pd.isna(days):
+        return ""
+    return "matured" if days <= 0 else f"{days:,.0f} days to maturity"
+
+
+def _name_fixed_income(
+    labels: pd.Series, names: pd.Series, is_fixed_income: pd.Series
+) -> pd.Series:
+    """A fixed-income key is an internal id, so those tiles show the holding
+    name; a name shared by several holdings keeps the key so tiles stay apart."""
+    shared = names.where(is_fixed_income).duplicated(keep=False)
+    return labels.mask(is_fixed_income & ~shared, names)
+
+
 def render_treemap_positions(
     df: pd.DataFrame,
     row_px: int = HEIGHT_TREEMAP,
@@ -159,8 +175,10 @@ def render_treemap_positions(
     df = df.copy()
     height = _treemap_height(df, row_px, group_cols)
 
-    option_df = df[df["holding_category"].isin(["Call Option", "Put Option"])]
-    stocks_df = df[~df["holding_category"].isin(["Call Option", "Put Option"])]
+    is_option = df["holding_category"].isin(["Call Option", "Put Option"])
+    is_fixed_income = df["holding_category"] == FIXED_INCOME
+    option_df = df[is_option]
+    stocks_df = df[~is_option & ~is_fixed_income]
 
     if hide_balances:
         common_text = (
@@ -204,18 +222,24 @@ def render_treemap_positions(
     else:
         option_text = ""
 
-    df["display_text"] = np.where(
-        df["holding_category"].isin(["Call Option", "Put Option"]),
-        option_text,
-        stocks_text,
+    if is_fixed_income.any():
+        fixed_income_text = (
+            common_text
+            + df["fi_rate"].map(lambda r: "" if pd.isna(r) else f"{r:.2%}, ")
+            + df["fi_days_to_maturity"].map(_maturity_text)
+        )
+    else:
+        fixed_income_text = ""
+
+    df["display_text"] = np.select(
+        [is_option, is_fixed_income],
+        [option_text, fixed_income_text],
+        default=stocks_text,
     )
 
-    path: list = [px.Constant("Holdings")]
-    if group_cols:
-        df["_leaf"] = leaf_labels(df)
-        path.extend([*group_cols, "_leaf"])
-    else:
-        path.append(df.index)
+    leaves = pd.Series(leaf_labels(df) if group_cols else df.index, index=df.index)
+    df["_leaf"] = _name_fixed_income(leaves, df["name"], is_fixed_income)
+    path: list = [px.Constant("Holdings"), *(group_cols or []), "_leaf"]
 
     fig = px.treemap(
         data_frame=df,

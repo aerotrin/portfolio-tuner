@@ -12,7 +12,7 @@ from frontend.services.streamlit_data import (
     load_security_data,
     load_total_portfolio_snapshot,
 )
-from frontend.shared.accounts import account_labels
+from frontend.shared.accounts import account_labels, market_priced_symbols
 from frontend.shared.dataframe import (
     build_holdings_view,
     build_security_analytics,
@@ -132,11 +132,11 @@ render_refresh_job_ui(active_page)
 all_holdings: set[str] = set()
 for acc in accounts_list:
     recs = load_account_records(acc.id)
-    all_holdings.update(p["symbol"] for p in recs.open_positions)
+    all_holdings.update(market_priced_symbols(recs.open_positions))
 
 records = load_account_records(scope) if single else None
 portfolio_symbols = (
-    sorted({p["symbol"] for p in records.open_positions})
+    sorted(market_priced_symbols(records.open_positions))
     if single
     else sorted(all_holdings)
 )
@@ -224,9 +224,12 @@ portfolio_metrics = None
 portfolio_close_norm = None
 portfolio_correlation_matrix = None
 portfolio_correlation_excluded: list[str] = []
+fixed_income_names: list[str] = []
 
-if portfolio_symbols:
+# Tested on holdings, not symbols: a fixed-income-only scope has no market symbols
+if portfolio.holdings:
     view = build_holdings_view(portfolio, portfolio_symbols)
+    fixed_income_names = view.fixed_income
     holdings_data = view.holdings_data
     performance_data = view.performance_data
     holdings_close_norm = view.close_norm
@@ -302,6 +305,7 @@ with tabs[1]:
         portfolio_metrics=portfolio_metrics,
         portfolio_close_norm_eod=portfolio_close_norm,
         use_group_filter=False,
+        fixed_income=fixed_income_names,
     )
 
 with tabs[2]:
@@ -315,7 +319,9 @@ with tabs[2]:
 
 with tabs[3]:
     render_correlation_matrix(
-        portfolio_correlation_matrix, portfolio_correlation_excluded
+        portfolio_correlation_matrix,
+        portfolio_correlation_excluded,
+        fixed_income=fixed_income_names,
     )
 
 with tabs[4]:
@@ -327,6 +333,7 @@ with tabs[4]:
         context_label=scope_labels[scope] if single else "All Accounts",
         benchmark_data=benchmark_data,
         risk_free_rate=rates["rf_rate"],
+        fixed_income=fixed_income_names,
     )
 
 with tabs[5]:

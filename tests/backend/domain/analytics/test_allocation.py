@@ -201,3 +201,42 @@ def test_account_mix_is_normalized_per_account():
 
 def test_account_mix_empty_for_single_account():
     assert calc_account_mix(_rows(_row("AAPL", 300.0), _cash(100.0))) == []
+
+
+def test_symbol_weights_report_fixed_income_separately_from_shares():
+    rows = _rows(
+        _row("AAPL", 600.0),
+        _row(
+            "GIC-5.00-20241107",
+            400.0,
+            asset_type="Fixed Income",
+            instrument="Fixed Income",
+            sector="Fixed Income",
+            country="Fixed Income",
+            currency="CAD",
+        ),
+    )
+
+    by_symbol = {r["symbol"]: r for r in calc_symbol_weights(rows)}
+
+    gic = by_symbol["GIC-5.00-20241107"]
+    assert gic["fixed_income_value"] == pytest.approx(400.0)
+    assert gic["shares_value"] == pytest.approx(0.0)
+    assert by_symbol["AAPL"]["fixed_income_value"] == 0.0
+    assert by_symbol["AAPL"]["shares_value"] == pytest.approx(600.0)
+
+
+def test_risk_contribution_steady_holding_has_zero_risk_not_none():
+    stats = compute_return_statistics(_securities(5, {"STOCK": 0.02}))
+
+    result = calc_risk_contribution(
+        {"STOCK": 600.0, "GIC-5.00-20241107": 400.0},
+        stats.covariance,
+        stats.observations,
+        steady={"GIC-5.00-20241107"},
+    )
+
+    by_symbol = {r["symbol"]: r for r in result}
+    assert by_symbol["GIC-5.00-20241107"]["weight"] == pytest.approx(0.4)
+    assert by_symbol["GIC-5.00-20241107"]["risk_share"] == 0.0
+    assert by_symbol["STOCK"]["risk_share"] == pytest.approx(1.0)

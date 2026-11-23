@@ -19,6 +19,11 @@ from backend.domain.entities.account import (
     AccountEntity,
     AccountPatchRequest,
     AccountRecordsDTO,
+    FixedIncomeCreateRequest,
+    FixedIncomeInterestRequest,
+    FixedIncomePreview,
+    FixedIncomePreviewRequest,
+    FixedIncomeRedemptionRequest,
     Transaction,
     TransactionCreateDTO,
 )
@@ -259,6 +264,63 @@ def delete_transaction(
     try:
         account_man.delete_transaction(account.number, transaction_id)
         return  # 204 No Content
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post("/fixed-income/preview", response_model=FixedIncomePreview)
+def preview_fixed_income(payload: FixedIncomePreviewRequest):
+    """Maturity and accrued figures for a set of terms; nothing is stored."""
+    return AccountManager.preview_fixed_income(payload)
+
+
+@router.post(
+    "/accounts/{account_id}/fixed-income",
+    response_model=List[Transaction],
+    status_code=status.HTTP_201_CREATED,
+)
+def add_fixed_income(
+    payload: FixedIncomeCreateRequest,
+    account: AccountEntity = Depends(get_account_entity),
+    account_man: AccountManager = Depends(get_account_manager),
+):
+    """Add a GIC or term deposit to an account from its terms."""
+    try:
+        return account_man.add_fixed_income(account, payload)
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post(
+    "/accounts/{account_id}/fixed-income/redemptions",
+    response_model=List[Transaction],
+    status_code=status.HTTP_201_CREATED,
+)
+def redeem_fixed_income(
+    payload: FixedIncomeRedemptionRequest,
+    account: AccountEntity = Depends(get_account_entity),
+    account_man: AccountManager = Depends(get_account_manager),
+):
+    """Record the redemption of an open fixed-income holding."""
+    try:
+        return account_man.redeem_fixed_income(account, payload)
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.post(
+    "/accounts/{account_id}/fixed-income/interest",
+    response_model=Transaction,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_fixed_income_interest(
+    payload: FixedIncomeInterestRequest,
+    account: AccountEntity = Depends(get_account_entity),
+    account_man: AccountManager = Depends(get_account_manager),
+):
+    """Record an interest payment on an open fixed-income holding."""
+    try:
+        return account_man.record_fixed_income_interest(account, payload)
     except Exception as e:
         _raise_http_error(e)
 

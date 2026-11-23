@@ -740,3 +740,255 @@ class TestComputeMwrr:
 
         assert p.net_investment == pytest.approx(1000.0)
         assert p.mwrr == pytest.approx(0.10, abs=1e-4)
+
+
+def _gic_lot(
+    issue: date,
+    maturity: date,
+    rate: float = 0.05,
+    principal: float = 10_000.0,
+    currency: Currency = Currency.CAD,
+    interest_received: float = 0.0,
+    with_terms: bool = True,
+    account: str | None = None,
+) -> OpenLot:
+    terms = (
+        dict(
+            name="Example Bank",
+            issue_date=issue,
+            maturity_date=maturity,
+            annual_rate=rate,
+        )
+        if with_terms
+        else None
+    )
+    symbol = f"GIC-{rate * 100:.2f}-{maturity:%Y%m%d}" if with_terms else "FIXED-INCOME"
+    return OpenLot(
+        symbol=symbol,
+        account=account,
+        category=Category.FIXED_INCOME,
+        open_date=issue,
+        open_qty=int(principal),
+        acb_per_sh=1.0,
+        book_value=principal,
+        currency=currency,
+        terms=terms,
+        principal=principal,
+        interest_received=interest_received,
+    )
+
+
+def _rates(fx_rate: float = 1.25) -> GlobalRates:
+    return GlobalRates(rf_rate=0.0, fx_rate=fx_rate)
+
+
+def test_gic_is_valued_at_accrued_value_without_any_market_data():
+    today = date.today()
+    lot = _gic_lot(
+        issue=today - timedelta(days=72), maturity=today + timedelta(days=293)
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot],
+        securities={},
+        rates=_rates(),
+    )
+
+    holding = portfolio.holdings[lot.symbol]
+    accrued = 10_000.0 * 0.05 * 73 / 365
+    assert holding.holding_category == Category.FIXED_INCOME
+    assert holding.security_type == SecurityType.GIC
+    assert holding.market_value == pytest.approx(10_000.0 + accrued)
+    assert holding.gain == pytest.approx(accrued)
+    assert holding.fi_accrued_interest == pytest.approx(accrued)
+    assert holding.fi_principal == pytest.approx(10_000.0)
+    assert holding.fi_status == "Active"
+    assert holding.fi_days_to_maturity == 293
+    assert holding.fi_maturity_value == pytest.approx(10_500.0)
+    assert holding.intraday_change == 0.0
+    assert holding.weight == pytest.approx(1.0)
+    assert portfolio.total_value == pytest.approx(10_000.0 + accrued)
+    # A GIC-only portfolio still has a portfolio series
+    assert len(portfolio.indicators) > 0
+    assert portfolio.correlation_matrix.symbols is None
+
+
+def test_matured_gic_stays_at_its_final_value_until_redeemed():
+    today = date.today()
+    lot = _gic_lot(
+        issue=today - timedelta(days=400),
+        maturity=_one_year_after(today - timedelta(days=400)),
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=250.0,
+        external_cash_flows=[],
+        positions=[lot],
+        securities={},
+        rates=_rates(),
+    )
+
+    holding = portfolio.holdings[lot.symbol]
+    assert holding.fi_status == "Matured"
+    assert holding.fi_days_to_maturity < 0
+    assert holding.market_value == pytest.approx(10_500.0)
+    assert portfolio.total_value == pytest.approx(10_750.0)
+
+
+def _one_year_after(start: date) -> date:
+    try:
+        return start.replace(year=start.year + 1)
+    except ValueError:
+        return start.replace(year=start.year + 1, day=28)
+
+
+def test_interest_already_received_is_not_part_of_a_gic_value():
+    today = date.today()
+    lot = _gic_lot(
+        issue=today - timedelta(days=72),
+        maturity=today + timedelta(days=293),
+        interest_received=40.0,
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot],
+        securities={},
+        rates=_rates(),
+    )
+
+    holding = portfolio.holdings[lot.symbol]
+    assert holding.fi_interest_received == pytest.approx(40.0)
+    assert holding.market_value == pytest.approx(10_000.0 + 100.0 - 40.0)
+
+
+def test_usd_gic_is_converted_to_cad():
+    today = date.today()
+    lot = _gic_lot(
+        issue=today - timedelta(days=72),
+        maturity=today + timedelta(days=293),
+        currency=Currency.USD,
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot],
+        securities={},
+        rates=_rates(fx_rate=1.25),
+    )
+
+    holding = portfolio.holdings[lot.symbol]
+    assert holding.currency == "USD"
+    assert holding.market_value == pytest.approx(10_100.0 * 1.25)
+    assert holding.fi_principal == pytest.approx(10_000.0)
+    assert holding.fx_exposure == pytest.approx(10_100.0 * 0.25)
+
+
+def test_fixed_income_without_terms_stays_at_book_value():
+    today = date.today()
+    lot = _gic_lot(
+        issue=today - timedelta(days=72),
+        maturity=today + timedelta(days=293),
+        with_terms=False,
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[lot],
+        securities={},
+        rates=_rates(),
+    )
+
+    holding = portfolio.holdings["FIXED-INCOME"]
+    assert holding.market_value == pytest.approx(10_000.0)
+    assert holding.gain == 0.0
+    assert holding.fi_status is None
+
+
+def test_gic_beside_a_stock_shares_the_portfolio_and_feeds_the_series(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import src.backend.domain.aggregates.portfolio as portfolio_module
+
+    captured: dict = {}
+
+    def fake_indicators(securities, weights, steady=()):
+        captured["weights"] = list(weights)
+        captured["steady"] = list(steady)
+        return [pd.DataFrame()]
+
+    monkeypatch.setattr(
+        portfolio_module, "compute_portfolio_timeseries_indicators", fake_indicators
+    )
+    monkeypatch.setattr(
+        portfolio_module,
+        "compute_return_statistics",
+        lambda _securities: _return_stats(pd.DataFrame()),
+    )
+
+    today = date.today()
+    issue = today - timedelta(days=72)
+    gic = _gic_lot(issue=issue, maturity=today + timedelta(days=293))
+    stock = OpenLot(
+        symbol="EQCAD",
+        category=Category.EQUITY,
+        open_date=today - timedelta(days=60),
+        open_qty=101,
+        acb_per_sh=100.0,
+        book_value=10_100.0,
+    )
+
+    portfolio = Portfolio(
+        id="acct-1",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[stock, gic],
+        securities={
+            "EQCAD": _make_security(
+                "EQCAD", "CAD", close=100.0, change=0.0, change_percent=0.0
+            )
+        },
+        rates=_rates(),
+    )
+
+    assert set(portfolio.holdings) == {"EQCAD", gic.symbol}
+    assert portfolio.holdings[gic.symbol].weight == pytest.approx(0.5)
+    # Only the stock is a market security; the GIC enters as a steady asset
+    assert captured["weights"] == pytest.approx([0.5])
+    (steady,) = captured["steady"]
+    assert steady.weight == pytest.approx(0.5)
+    growth = steady.growth([issue - timedelta(days=1), today])
+    assert growth[0] == pytest.approx(1.0)
+    assert growth[1] == pytest.approx(1.01)
+
+
+def test_fixed_income_keys_are_namespaced_per_account():
+    today = date.today()
+    kwargs = dict(
+        issue=today - timedelta(days=10), maturity=today + timedelta(days=355)
+    )
+    lots = [_gic_lot(account="ACC-A", **kwargs), _gic_lot(account="ACC-B", **kwargs)]
+
+    portfolio = Portfolio(
+        id="TOTAL",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=lots,
+        securities={},
+        rates=_rates(),
+    )
+
+    assert set(portfolio.holdings) == {
+        f"ACC-A|{lots[0].symbol}",
+        f"ACC-B|{lots[1].symbol}",
+    }

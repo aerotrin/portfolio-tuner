@@ -6,6 +6,11 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from backend.domain.analytics.fixed_income import (
+    UNKNOWN_TERMS_SYMBOL,
+    instrument_key,
+    parse_ledger_terms,
+)
 from backend.domain.entities.account import (
     CASH_TRANSACTIONS,
     CashFlow,
@@ -17,6 +22,7 @@ from backend.domain.entities.account import (
     QTY_EFFECT,
     ROC_TRANSACTIONS,
 )
+from backend.domain.entities.fixed_income import InstrumentTerms
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +47,12 @@ def _prep_transactions(transactions: pd.DataFrame) -> pd.DataFrame:
     tx = transactions.copy()
 
     # Derived columns
+    fi_terms, fi_keys = _resolve_fixed_income(tx)
+    tx["fi_terms"] = pd.Series(fi_terms, index=tx.index, dtype=object)
+    tx["fi_key"] = pd.Series(fi_keys, index=tx.index, dtype=object)
     tx["symbol"] = tx.apply(_update_symbols, axis=1)
     tx["category"] = tx.apply(_identify_category, axis=1)
+    tx["symbol"] = tx.apply(_fixed_income_symbol, axis=1)
     tx["qty_effect"] = tx["transaction_type"].map(lambda t: QTY_EFFECT[t])
     tx["option_expiry"] = tx.apply(_get_option_expiry, axis=1)
     tx["option_strike"] = tx.apply(_get_option_strike, axis=1)
@@ -81,6 +91,52 @@ def _to_python_date(value):
     return value
 
 
+def _resolve_fixed_income(
+    tx: pd.DataFrame,
+) -> tuple[list[Optional[InstrumentTerms]], list[Optional[str]]]:
+    """Terms and holding key per row; None where the row is not an instrument.
+
+    Manually entered instruments carry their terms on the opening row and
+    their key in the symbol; ledger rows have neither, so both come from the
+    description and the symbol column is ignored.
+    """
+    explicit: dict[str, InstrumentTerms] = {}
+    if "instrument_terms" in tx.columns:
+        for sym, raw in zip(tx["symbol"], tx["instrument_terms"]):
+            if isinstance(raw, (dict, InstrumentTerms)) and _none_if_na(sym):
+                explicit[str(sym)] = InstrumentTerms.model_validate(raw)
+
+    terms: list[Optional[InstrumentTerms]] = []
+    keys: list[Optional[str]] = []
+    for _, r in tx.iterrows():
+        sym = _none_if_na(r["symbol"])
+        if sym is not None and str(sym) in explicit:
+            terms.append(explicit[str(sym)])
+            keys.append(str(sym))
+            continue
+        settlement = _to_python_date(_none_if_na(r.get("settlement_date")))
+        parsed = parse_ledger_terms(
+            str(r["description"]), settlement if isinstance(settlement, date) else None
+        )
+        terms.append(parsed)
+        keys.append(instrument_key(parsed) if parsed else None)
+    return terms, keys
+
+
+def _fixed_income_symbol(row: pd.Series) -> str:
+    if row["fi_key"]:
+        return row["fi_key"]
+    if row["category"] == Category.FIXED_INCOME and not row["symbol"]:
+        return UNKNOWN_TERMS_SYMBOL
+    return row["symbol"]
+
+
+def _native_amount(row: pd.Series) -> float:
+    """Row amount in the instrument's own currency."""
+    rate = _none_if_na(row.get("exchange_rate"))
+    return float(row["amount"] or 0.0) / (float(rate) if rate else 1.0)
+
+
 def _update_symbols(row: pd.Series) -> str:
     sym = str(row["symbol"])
     mkt = str(row["market"])
@@ -104,6 +160,8 @@ def _identify_category(row: pd.Series) -> Category:
         return Category.EXPENSE
     if ttype in ROC_TRANSACTIONS:
         return Category.RETURN_OF_CAPITAL
+    if row["fi_key"]:
+        return Category.FIXED_INCOME
     if desc.startswith("call "):
         return Category.CALL_OPTION
     if desc.startswith("put "):
@@ -180,6 +238,8 @@ def _parse_positions(
     open_lots: list[OpenLot] = []
     closed_lots: list[ClosedLot] = []
     cash_flows: list[CashFlow] = []
+    # Summed over the whole ledger, so it doesn't depend on row order
+    interest_received: dict[str, float] = {}
 
     for _, r in tx.iterrows():
         qty_effect = int(r["qty_effect"] or 0)
@@ -193,12 +253,17 @@ def _parse_positions(
             Category.EXPENSE,
             Category.RETURN_OF_CAPITAL,
         ]:
+            if cat == Category.INCOME and r["fi_key"]:
+                interest_received[r["fi_key"]] = interest_received.get(
+                    r["fi_key"], 0.0
+                ) + _native_amount(r)
             cash_flows.append(
                 CashFlow(
                     transaction_date=_to_python_date(r["transaction_date"]),
                     settlement_date=_none_if_na(_to_python_date(r["settlement_date"])),
                     category=r["category"],
                     transaction_type=r["transaction_type"],
+                    symbol=_none_if_na(sym) or "",
                     description=r["description"],
                     market=r["market"],
                     quantity=_none_if_na(quantity),
@@ -222,6 +287,8 @@ def _parse_positions(
                 currency=r["currency"],
                 option_expiry=r["option_expiry"],
                 option_strike=r["option_strike"],
+                terms=r["fi_terms"],
+                principal=0.0,
             )
         lot = lots[key]
 
@@ -229,11 +296,16 @@ def _parse_positions(
             cash_out = -float(r["amount"] or 0.0)
             lot["qty_total"] += row_qty
             lot["acb_total"] += cash_out
+            lot["principal"] -= _native_amount(r)
             lot["acb_per_sh"] = (
                 lot["acb_total"] / lot["qty_total"] if lot["qty_total"] else np.nan
             )
             if lot["first_date"] is None:
                 lot["first_date"] = r["transaction_date"]
+            continue
+
+        if lot["qty_total"] <= 0:
+            logger.warning("Closing row for %s has no open position; skipped", sym)
             continue
 
         qty_sell = -row_qty
@@ -275,15 +347,17 @@ def _parse_positions(
                 gain=proceeds - cost_basis,
                 gain_pct=(proceeds - cost_basis) / cost_basis if cost_basis else 0.0,
                 last_open_date=_to_python_date(first_dt),
-                days_held=int(days_held) if days_held else None,
+                days_held=int(days_held) if days_held is not None else 0,
                 is_expired=is_expired,
             )
         )
 
+        lot["principal"] -= lot["principal"] * qty_sell / lot["qty_total"]
         lot["qty_total"] -= qty_sell
         lot["acb_total"] -= cost_basis
         if lot["qty_total"] == 0:
             lot["acb_total"] = 0.0
+            lot["principal"] = 0.0
             lot["acb_per_sh"] = np.nan
             lot["first_date"] = None
 
@@ -300,6 +374,14 @@ def _parse_positions(
                     open_qty=lot["qty_total"],
                     acb_per_sh=lot["acb_per_sh"],
                     book_value=lot["acb_total"],
+                    currency=lot["currency"],
+                    terms=lot["terms"],
+                    principal=(
+                        lot["principal"]
+                        if lot["category"] == Category.FIXED_INCOME
+                        else None
+                    ),
+                    interest_received=interest_received.get(sym, 0.0),
                 )
             )
 

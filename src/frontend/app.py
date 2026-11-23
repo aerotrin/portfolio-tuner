@@ -13,12 +13,16 @@ from frontend.services.streamlit_data import (
     load_accounts_list,
     load_rates,
 )
-from frontend.shared.accounts import account_labels
+from frontend.shared.accounts import account_labels, market_priced_symbols
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
 from frontend.shared.jobs import ALL_DATA_PAGES, AUTO_REFRESH_ON, start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
+from frontend.widgets.fixed_income_form import (
+    manage_fixed_income,
+    reset_manage_state,
+)
 from frontend.widgets.transaction_form import transaction_form
 
 # -----------------------------------------------------------------------------
@@ -225,6 +229,7 @@ def bootstrap_once() -> None:
     st.session_state.setdefault("show_import_records_dialog", False)
     st.session_state.setdefault("show_delete_account_confirm", False)
     st.session_state.setdefault("show_transaction_form_dialog", False)
+    st.session_state.setdefault("show_fixed_income_form_dialog", False)
 
     # Mark boot complete
     st.session_state["_boot_version"] = BOOT_VERSION
@@ -327,6 +332,21 @@ st.session_state["account_display_label"] = _labels_by_id[
 # -----------------------------------------------------------------------------
 @st.dialog("Import Records")
 def _show_import_records_dialog(account_id: str) -> None:
+    # An import replaces every transaction in the account, including the
+    # instruments entered by hand, which no ledger file can bring back
+    manual = [
+        tx["instrument_terms"].get("name") or tx["symbol"]
+        for tx in load_account_records(account_id).transactions
+        if tx.get("instrument_terms")
+    ]
+    if manual:
+        st.warning(
+            "Importing replaces all of this account's transactions. These "
+            "manually entered GICs / term deposits will be removed: "
+            + ", ".join(manual)
+            + ".",
+            icon=":material/warning:",
+        )
     with st.form("import_records_form", clear_on_submit=False):
         xlsx_file = st.file_uploader(
             "Import account records from file",
@@ -526,6 +546,25 @@ with st.sidebar:
         )
         st.session_state["show_transaction_form_dialog"] = False
 
+    if st.button(
+        "Manage GIC / Term Deposit",
+        icon=":material/savings:",
+        type="secondary",
+        key="manage_fixed_income_button",
+        width="stretch",
+    ):
+        st.session_state["show_fixed_income_form_dialog"] = True
+        st.rerun()
+
+    if st.session_state.get("show_fixed_income_form_dialog", False):
+        reset_manage_state(st.session_state["account_id"])
+        manage_fixed_income(
+            account_options=dict(zip(account_ids, account_display_labels)),
+            default_account_id=st.session_state["account_id"],
+            fx_rate=st.session_state["rates"]["fx_rate"],
+        )
+        st.session_state["show_fixed_income_form_dialog"] = False
+
     # --- Force Data refresh ---
     if st.button(
         "Force Data Refresh",
@@ -535,9 +574,11 @@ with st.sidebar:
         width="stretch",
     ):
         _holdings = {
-            position["symbol"]
+            symbol
             for account in accounts
-            for position in load_account_records(account.id).open_positions
+            for symbol in market_priced_symbols(
+                load_account_records(account.id).open_positions
+            )
         }
         _show_force_refresh_dialog(
             sorted({*st.session_state["base_symbols"], *market_symbols, *_holdings})

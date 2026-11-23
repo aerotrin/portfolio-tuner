@@ -5,6 +5,11 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.domain.entities.fixed_income import (
+    FixedIncomeStatus,
+    FixedIncomeType,
+    InstrumentTerms,
+)
 from backend.domain.entities.security import SecurityType
 
 QTY_EFFECT: dict[str, int] = {
@@ -134,6 +139,8 @@ class Transaction(BaseModel):
     exchange_rate: float = 0.0
     fees_paid: float = 0.0
     amount: float = 0.0
+    # Set on the opening Buy of a manually entered fixed-income instrument
+    instrument_terms: Optional[InstrumentTerms] = None
 
 
 class TransactionCreateDTO(BaseModel):
@@ -149,6 +156,53 @@ class TransactionCreateDTO(BaseModel):
     exchange_rate: float
     fees_paid: float
     amount: float
+
+
+class FixedIncomeCreateRequest(BaseModel):
+    """A manually entered GIC or term deposit.
+
+    `principal` is in `currency`; `fx_rate` is CAD per USD, used only when the
+    instrument and the account are in different currencies.
+    """
+
+    terms: InstrumentTerms
+    principal: float = Field(gt=0)
+    currency: Currency = Currency.CAD
+    fx_rate: float = Field(default=1.0, gt=0)
+    # Record a matching deposit so the purchase leaves the account's cash unchanged
+    funded_by_deposit: bool = False
+
+
+class FixedIncomePreviewRequest(BaseModel):
+    terms: InstrumentTerms
+    principal: float = Field(gt=0)
+
+
+class FixedIncomePreview(BaseModel):
+    term_days: int
+    interest_at_maturity: float
+    maturity_value: float
+    accrued_interest: float
+    value_today: float
+    status: FixedIncomeStatus
+    days_to_maturity: int
+
+
+class FixedIncomeRedemptionRequest(BaseModel):
+    """Redemption of an open instrument; amounts are in its own currency."""
+
+    symbol: str
+    transaction_date: date
+    principal: float = Field(gt=0)
+    interest: float = Field(default=0.0, ge=0)
+    fx_rate: float = Field(default=1.0, gt=0)
+
+
+class FixedIncomeInterestRequest(BaseModel):
+    symbol: str
+    transaction_date: date
+    amount: float = Field(gt=0)
+    fx_rate: float = Field(default=1.0, gt=0)
 
 
 class AccountSummaryDTO(BaseModel):
@@ -171,6 +225,11 @@ class OpenLot(BaseModel):
     open_qty: int
     acb_per_sh: float
     book_value: float
+    currency: Optional[Currency] = None
+    # Fixed income only; principal and interest are in the instrument's currency
+    terms: Optional[InstrumentTerms] = None
+    principal: Optional[float] = None
+    interest_received: float = 0.0
 
 
 class Holding(BaseModel):
@@ -200,6 +259,17 @@ class Holding(BaseModel):
     option_change_pct: Optional[float] = None
     option_dte: Optional[int] = None
     option_expired: Optional[bool] = None
+    fi_type: Optional[FixedIncomeType] = None
+    fi_rate: Optional[float] = None
+    fi_issue_date: Optional[date] = None
+    fi_maturity_date: Optional[date] = None
+    fi_days_to_maturity: Optional[int] = None
+    fi_status: Optional[FixedIncomeStatus] = None
+    fi_payment_frequency: Optional[str] = None
+    fi_principal: Optional[float] = None
+    fi_accrued_interest: Optional[float] = None
+    fi_interest_received: Optional[float] = None
+    fi_maturity_value: Optional[float] = None
     open_qty: int
     breakeven_price: float
     book_value: float = 0.0
@@ -241,6 +311,7 @@ class CashFlow(BaseModel):
     settlement_date: Optional[date] = None
     category: Category
     transaction_type: TransactionKind
+    symbol: str = ""
     description: str
     market: str
     quantity: Optional[int] = None

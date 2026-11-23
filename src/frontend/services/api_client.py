@@ -3,6 +3,10 @@ import requests
 from frontend.shared.dto import (
     AccountCreateRequest,
     AccountPatchRequest,
+    FixedIncomeCreate,
+    FixedIncomeInterest,
+    FixedIncomeRedemption,
+    InstrumentTerms,
     TransactionCreate,
 )
 from frontend.shared.env_loader import config
@@ -116,6 +120,32 @@ class APIClient:
 
     def delete_transaction(self, account_id: str, transaction_id: str):
         return self._delete(f"/accounts/{account_id}/transactions/{transaction_id}")
+
+    def preview_fixed_income(self, terms: InstrumentTerms, principal: float):
+        return self._post(
+            "/fixed-income/preview",
+            json={"terms": terms.model_dump(mode="json"), "principal": principal},
+        )
+
+    def add_fixed_income(self, account_id: str, payload: FixedIncomeCreate):
+        return self._post(
+            f"/accounts/{account_id}/fixed-income",
+            json=payload.model_dump(mode="json"),
+        )
+
+    def redeem_fixed_income(self, account_id: str, payload: FixedIncomeRedemption):
+        return self._post(
+            f"/accounts/{account_id}/fixed-income/redemptions",
+            json=payload.model_dump(mode="json"),
+        )
+
+    def record_fixed_income_interest(
+        self, account_id: str, payload: FixedIncomeInterest
+    ):
+        return self._post(
+            f"/accounts/{account_id}/fixed-income/interest",
+            json=payload.model_dump(mode="json"),
+        )
 
     def get_account_records(self, account_id: str):
         return self._get(f"/accounts/{account_id}/records")

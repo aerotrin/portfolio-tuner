@@ -29,6 +29,10 @@ BALANCE_COLUMNS = (
     "option_value",
     "cash_balance",
     "cash_balance_native",
+    "fi_principal",
+    "fi_accrued_interest",
+    "fi_interest_received",
+    "fi_maturity_value",
 )
 
 
@@ -113,8 +117,8 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "close": st.column_config.NumberColumn("Price", format="accounting"),
-    "currency": st.column_config.TextColumn("Currency"),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
+    "currency": st.column_config.TextColumn("Currency"),
     "weight": st.column_config.NumberColumn("Weight %", format="percent"),
     "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
     # "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
@@ -164,6 +168,45 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     "open_date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
     "last_updated": st.column_config.DatetimeColumn("Last Updated", format="localized"),
+}
+
+
+POSITIONS_FIXED_INCOME_TABLE_CONFIG = {
+    "name": st.column_config.TextColumn("Name", width="medium"),
+    "fi_status": st.column_config.TextColumn("Status"),
+    "fi_rate": st.column_config.NumberColumn("Rate", format="percent"),
+    "fi_payment_frequency": st.column_config.TextColumn("Interest Paid"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "fi_principal": st.column_config.NumberColumn("Principal", format="accounting"),
+    "currency": st.column_config.TextColumn("Currency"),
+    "fi_maturity_date": st.column_config.DateColumn("Maturity", format="YYYY-MM-DD"),
+    "fi_days_to_maturity": st.column_config.NumberColumn(
+        "Days to Maturity", format="compact"
+    ),
+    "fi_accrued_interest": st.column_config.NumberColumn(
+        "Accrued Interest",
+        format="accounting",
+        help="Interest earned to date that has not been paid out yet",
+    ),
+    "fi_interest_received": st.column_config.NumberColumn(
+        "Interest Received", format="accounting"
+    ),
+    "market_value": st.column_config.NumberColumn(
+        "Value CAD", format="dollar", help="Principal plus accrued interest"
+    ),
+    "fi_maturity_value": st.column_config.NumberColumn(
+        "Maturity Value",
+        format="accounting",
+        help="Principal plus all interest over the term",
+    ),
+    "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
+    "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
+    "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
+    "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
+    "fi_issue_date": st.column_config.DateColumn("Issue Date", format="YYYY-MM-DD"),
+    "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
+    "security_type": st.column_config.TextColumn("Type"),
+    "symbol": st.column_config.TextColumn("Key"),
 }
 
 
@@ -255,9 +298,9 @@ PERFORMANCE_TABLE_CONFIG = {
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "weight": st.column_config.NumberColumn("Weight", format="percent"),
+    "close": st.column_config.NumberColumn("Last Price", format="accounting"),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     # "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
-    "close": st.column_config.NumberColumn("Last Price", format="accounting"),
     "currency": st.column_config.TextColumn("CUR"),
     "change_percent": st.column_config.NumberColumn("Intraday", format="percent"),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
@@ -419,6 +462,7 @@ CASH_FLOWS_TABLE_CONFIG = {
     ),
     "category": st.column_config.TextColumn("Category"),
     "transaction_type": st.column_config.TextColumn("Type"),
+    "symbol": st.column_config.TextColumn("Symbol"),
     "market": st.column_config.TextColumn("Market"),
     "description": st.column_config.TextColumn("Description"),
     "currency": st.column_config.TextColumn("Currency"),

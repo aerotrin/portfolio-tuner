@@ -517,6 +517,7 @@ def render_optimizer(
     benchmark_data: pd.DataFrame | None = None,
     risk_free_rate: float = 0.0,
     data_source_label: str = "Holdings",
+    fixed_income: list[str] | None = None,
 ) -> None:
     """Render the Portfolio Weight Optimizer tab.
 
@@ -537,8 +538,16 @@ def render_optimizer(
                         'return1Y', 'symbol' columns) for frontier chart overlay.
         risk_free_rate: Annual risk-free rate as a decimal fraction (e.g. 0.038 = 3.8%).
         data_source_label: Label shown in the disabled data-source selector.
+        fixed_income: Names of fixed-income holdings, which are not candidates
+                      (no market price to optimize on).
     """
     st.markdown("#### :material/tune: Portfolio Weight Optimizer")
+    if fixed_income:
+        st.caption(
+            ":material/info: Not a candidate (fixed income, no market price): "
+            f"{', '.join(fixed_income)}. Weights shown here still count it in "
+            "the portfolio total."
+        )
 
     result_key = f"optimizer-{context_id}-result"
     has_holdings = holdings_data is not None
@@ -546,7 +555,8 @@ def render_optimizer(
     # --- Guards -------------------------------------------------------------
     if not portfolio_symbols:
         st.info(
-            "No holdings found. Add positions to your portfolio to use the optimizer."
+            "No market-priced holdings found. Add positions to your portfolio to "
+            "use the optimizer."
             if has_holdings
             else "No symbols selected. Adjust the group filter or table selection "
             "on the Performance tab."

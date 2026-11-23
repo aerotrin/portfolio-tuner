@@ -1,6 +1,10 @@
 from types import SimpleNamespace
 
-from frontend.shared.accounts import account_label, account_labels
+from frontend.shared.accounts import (
+    account_label,
+    account_labels,
+    market_priced_symbols,
+)
 
 
 def _acc(id_: str, type_: str, number: str) -> SimpleNamespace:
@@ -58,3 +62,14 @@ def test_account_labels_hidden_short_numbers_fall_back_to_counter():
         "a": "TFSA •• (1)",
         "b": "TFSA •• (2)",
     }
+
+
+def test_market_priced_symbols_leave_out_fixed_income():
+    open_positions = [
+        {"symbol": "AAPL", "category": "Equity"},
+        {"symbol": "AAPL", "category": "Call Option"},
+        {"symbol": "GIC-5.00-20261107", "category": "Fixed Income"},
+    ]
+
+    assert market_priced_symbols(open_positions) == {"AAPL"}
+    assert market_priced_symbols([]) == set()

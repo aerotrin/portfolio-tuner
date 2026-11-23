@@ -94,7 +94,7 @@ A `Transaction` is the atomic unit of the ledger. It represents a single financi
 - **Trade events** — `Buy`, `Purchase`, `Sell`, `Sold`
 - **Corporate actions** — `Split`, `Disburse`, `Exchange`
 - **Options events** — `Expired` (options expiry)
-- **Fixed-income events** — `Redeemed`
+- **Fixed-income events** — `Redeemed` (a GIC or term deposit is opened by a `Buy` and pays `Interest`)
 - **Cash events** — `Contrib`, `EFT`, `Transfer`, `Transf In`, `Withdrawal`
 - **Income events** — `Dividend`, `Interest`
 - **Expense events** — `Tax`, `HST`, `Fee`
@@ -104,6 +104,12 @@ Each transaction has a kind, date, symbol (optional), quantity, price, amount, c
 
 Transactions are persisted in the `transactions` table and can be entered manually via the dashboard or bulk-imported from an Excel ledger export.
 
+**Fixed-income instruments.** A GIC or term deposit has no ticker, so the replay gives each one its own holding key in place of a symbol (the way options get an OSI) and never reads the ledger's Symbol column for it, which the bank leaves blank:
+
+- *Ledger rows* are recognised by their description (`... Maturity NOV 07 2024 Coupon 5.00 ...`). Maturity and coupon give the key `GIC-5.00-20241107` and the terms; the Buy row's settlement date stands in for the issue date. Buy, Interest and Redeemed rows of one instrument all resolve to the same key.
+- *Manually entered instruments* store a generated key (`GIC-2.45-20261209-7f3a`) in `symbol` and their `InstrumentTerms` (type, issuer, issue and maturity dates, annual rate, payment frequency, compounding, redeemable) in the opening Buy row's `instrument_terms`. Later Interest and Redeemed rows carry the key.
+- A row tagged fixed income only by the word "coupon", with no parseable terms, falls back to the shared key `FIXED-INCOME` and is carried at book value.
+
 ### Account
 
 An `AccountEntity` represents a brokerage account. It is a thin record — number, type (RRSP, TFSA, Non-Registered, etc.), currency, tax status, benchmark ticker, and the UUID of the owning user. The account itself holds no computed state; all derived values are re-computed from transactions at query time.
@@ -111,7 +117,7 @@ An `AccountEntity` represents a brokerage account. It is a thin record — numbe
 The `AccountManager` use case builds a richer in-memory account representation (`Account` aggregate) by replaying all transactions. From the transaction log it derives:
 
 - **Open positions** — symbols with a net positive quantity after all buys and sells
-- **Open lots** — per-lot cost basis (ACB), quantity, open date, and category (equity, call option, put option, fixed income)
+- **Open lots** — per-lot cost basis (ACB), quantity, open date, and category (equity, call option, put option, fixed income). A fixed-income lot also carries its terms, its principal in the instrument's currency, and the interest received on it so far (Interest rows are attributed by key)
 - **Cash balance** — running sum of all cash movements
 - **External cash flows** — deposits and withdrawals, used for MWRR calculation
 - **Closed lots** — positions that have been fully sold or expired
@@ -145,6 +151,8 @@ Options positions (calls and puts) are handled separately from equities. Intrins
 
 Holdings are keyed by quote symbol for equities and by OSI for options, so a stock and one or more option contracts on the same underlying coexist in a portfolio. The portfolio-level weight vector aggregates per quote symbol (option exposure proxies through the underlying's close series).
 
+Fixed-income positions never touch market data. `market_symbols()` filters them out of every symbol list sent for quotes and bars, and `Portfolio` values them from their terms with no `Security`: value = principal + interest earned to date − interest already received, converted to CAD for a USD instrument, with no accrual past maturity. The valuation date counts as an earned day (interest runs from the issue date inclusive), matching the value an issuer reports. Accrual lives in `domain/analytics/fixed_income.py`: simple interest (or annual compounding when paid at maturity) on a year fraction of whole anniversaries plus remaining days over 365, so a one-year term pays exactly its coupon across a leap day. A matured holding keeps its final value and a `Matured` status until a redemption is recorded; nothing is posted automatically. Because they have no `Security`, these holdings are absent from the correlation matrix, per-security analytics and the optimizer by construction.
+
 ---
 
 ## 4. Application Layer
@@ -157,6 +165,7 @@ Responsible for all account-related operations:
 
 - **CRUD** — create, read, patch, delete accounts
 - **Transaction management** — create, read, delete individual transactions
+- **Fixed income** — `add_fixed_income` (Buy carrying the terms, plus an optional matching deposit), `redeem_fixed_income` (Redeemed plus final Interest) and `record_fixed_income_interest`; each writes its rows in one commit. `preview_fixed_income` returns maturity and accrued figures for a set of terms without storing anything
 - **Excel import** — parse an uploaded `.xlsx` ledger and upsert transactions
 - **Account reconstruction** — replay transactions to produce the in-memory `Account` aggregate with open positions, cash balance, and cash flows
 - **Records retrieval** — return transactions, closed lots, and cash flows in a single response object
@@ -238,6 +247,10 @@ All routes are mounted under the `/api/v1` prefix. There are three routers:
 - `GET /accounts/{id}/transactions` — list transactions
 - `POST /accounts/{id}/transactions` — add a transaction
 - `DELETE /accounts/{id}/transactions/{tx_id}` — delete a transaction
+- `POST /accounts/{id}/fixed-income` — add a GIC or term deposit from its terms
+- `POST /accounts/{id}/fixed-income/redemptions` — record the redemption of an open fixed-income holding
+- `POST /accounts/{id}/fixed-income/interest` — record an interest payment on one
+- `POST /fixed-income/preview` — maturity and accrued figures for a set of terms (nothing stored)
 - `GET /accounts/{id}/records` — get transactions, open positions (open lots), closed lots, and cash flows in one call (`AccountRecordsDTO`)
 - `GET /accounts/{id}/portfolio` — get the full portfolio snapshot (summary, holdings, metrics, indicators, correlation matrix, per-security analytics)
 - `GET /accounts/portfolio` — get the combined snapshot across all of the user's accounts (`TotalPortfolioSnapshotDTO`: same shape, with one summary slice per account in `accounts`); declared before the `{id}` routes so the literal path wins
@@ -335,7 +348,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | Widget module | Responsibility |
 |---|---|
 | `kpis.py` | Account summary metrics, market snapshot strip, inline header status cluster (browser-timezone clock, rates with hover help, data recency badge, auto-refresh toggle; clock and badge are 30 s fragments) |
-| `positions.py` | Holdings table with sparklines, gain/loss colouring, FX exposure, options info |
+| `positions.py` | Holdings tables (stocks & ETFs, options, fixed income) with sparklines, gain/loss colouring, FX exposure and options info (read-only) |
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Allocation tab: concentration KPIs, breakdown donut, ranked holdings, capital vs risk, asset mix by account (renders the backend `allocation` DTO) |
 | `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes; notes symbols excluded for short history |
@@ -348,6 +361,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `treemaps.py` | Treemap visualisations |
 | `account_dialogs.py` | Create/edit account dialogs |
 | `transaction_form.py` | Manual transaction entry dialog |
+| `fixed_income_form.py` | Manage GIC / term deposit dialog, opened from the sidebar: one modal with an account selector and three actions (add from terms with a live backend preview, record redemption, record interest). Holdings for the last two come from the cached portfolio snapshot; per-holding inputs are keyed by account and holding and cleared on each open |
 
 ### Background Job UI
 
@@ -362,7 +376,7 @@ The database is hosted on Supabase (Postgres). SQLAlchemy is used as the ORM wit
 | Table | Purpose |
 |---|---|
 | `accounts` | Brokerage accounts. `owner` is the Supabase user UUID; RLS policies restrict reads and writes to the owning user. |
-| `transactions` | Transaction records. FK to `accounts(id)` with `ON DELETE CASCADE`. Indexed on `account_number`. |
+| `transactions` | Transaction records. FK to `accounts(id)` with `ON DELETE CASCADE`. Indexed on `account_number`. `instrument_terms` (nullable JSONB) holds the terms of a manually entered GIC or term deposit on its opening Buy row; it is null everywhere else, including on imported GIC rows, whose terms are derived from the description at replay. |
 | `quotes` | Latest quote snapshot per symbol (OHLCV, change, timestamp). One row per symbol, overwritten on refresh. |
 | `bars` | Daily OHLCV history. Composite primary key `(symbol, date)`. Composite index on `(symbol, date)`. |
 | `bars_sync_state` | Tracks the last successful bar fetch per symbol (`last_bar_date`, `last_checked_at`, status). Used for smart sync. |
@@ -545,7 +559,7 @@ Before computing indicators and metrics, the current live quote is appended to t
 The `Portfolio.build()` method orchestrates the analytics pipeline in the correct order:
 
 1. `_build_holdings()` — compute market values, gains, weights, and contributions per position
-2. `_build_indicators()` — compute the weighted portfolio timeseries
+2. `_build_indicators()` — compute the weighted portfolio timeseries. Fixed-income holdings enter as steady assets: the securities series and each instrument's accrual path are rescaled to 1.0 at the last date and mixed by value weight, `PORTF(t) = S(T) · [ w_sec · S(t)/S(T) + Σ w_k · A_k(t)/A_k(T) ]`, so they dampen portfolio volatility in proportion to their weight regardless of price level. With no fixed income the series is unchanged
 3. `_build_metrics()` — compute portfolio-level performance metrics from the timeseries
 4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings with enough history, and keep the matching covariance matrix and observation counts
 
@@ -554,9 +568,9 @@ The `Portfolio.build()` method orchestrates the analytics pipeline in the correc
 `compute_allocation(holdings, securities, cash_slices, covariance, observations)` in `domain/analytics/allocation.py` produces the `allocation` field of the portfolio snapshot; `PortfolioManager` calls it with one CAD-normalized cash slice per account, tagged with the account's ledger currency, plus the `Portfolio` aggregate's return covariance and observation counts. It works over holdings plus positive cash (negative cash is reported separately as `margin`) and returns:
 
 - `breakdowns` — value and share by asset type, instrument, sector, country, currency, and account. Sector and country come from the security profile; ETFs without them are labelled `ETF / unclassified` (no fund look-through).
-- `by_symbol` — one row per symbol across accounts, with options rolled up under the underlying.
+- `by_symbol` — one row per symbol across accounts, with options rolled up under the underlying and fixed-income value reported separately (`fixed_income_value`).
 - `concentration` — top 1/5/10 shares, HHI, and effective number of holdings (1 / HHI) over invested value.
-- `risk_contribution` — each symbol's share of portfolio variance, `w_i · (Σw)_i / w'Σw`, using the covariance matrix the `Portfolio` aggregate computes alongside its correlation matrix (same 252-day daily returns). Symbols with fewer than 40 return observations get `None`.
+- `risk_contribution` — each symbol's share of portfolio variance, `w_i · (Σw)_i / w'Σw`, using the covariance matrix the `Portfolio` aggregate computes alongside its correlation matrix (same 252-day daily returns). Symbols with fewer than 40 return observations get `None`; fixed-income holdings hold their value and get a risk share of zero.
 - `account_mix` — asset-type split inside each account (multi-account snapshots only).
 
 ### MWRR (Money Weighted Rate of Return)

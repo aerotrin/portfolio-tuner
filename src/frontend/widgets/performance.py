@@ -36,6 +36,7 @@ def render_performance_view(
     portfolio_close_norm_eod: pd.DataFrame | None = None,
     use_group_filter: bool = False,
     groups: list[SymbolGroup] | None = None,
+    fixed_income: list[str] | None = None,
 ) -> list[str]:
     """EOD performance view: growth chart, risk/return chart, and statistics tables.
 
@@ -50,13 +51,31 @@ def render_performance_view(
         portfolio_close_norm_eod: Optional portfolio normalized close prices
         use_group_filter: If True, render the region/group filter
         groups: Symbol groups the filter draws its options from
+        fixed_income: Names of fixed-income holdings, which count in the
+            portfolio figures but have no per-security performance
 
     Returns:
         Symbols currently in scope after the group filter and table row selection.
     """
     st.markdown("#### :material/trending_up: Performance")
+    fixed_income_note = (
+        ":material/info: Fixed income ("
+        + ", ".join(fixed_income)
+        + ") counts in the portfolio line and statistics at its accrued value. "
+        "It has no market price, so it is not listed as a security."
+        if fixed_income
+        else None
+    )
     if metrics is None or metrics.empty:
-        st.info("No metrics found")
+        if fixed_income:
+            st.info(
+                "No market-priced holdings to chart. Fixed income ("
+                + ", ".join(fixed_income)
+                + ") is valued at principal plus accrued interest and has no "
+                "price history, so there are no performance statistics for it."
+            )
+        else:
+            st.info("No metrics found")
         return []
 
     # ── Filters ───────────────────────────────────────────────────────────────
@@ -236,6 +255,8 @@ def render_performance_view(
         st.caption(
             f"{len(sub_metrics)} securities shown{selection_label} · metrics based on trailing 1Y returns data"
         )
+    if fixed_income_note:
+        st.caption(fixed_income_note)
 
     if portfolio_metrics is not None:
         st.markdown("##### Portfolio")

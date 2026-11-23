@@ -5,7 +5,7 @@ from typing import Any
 
 from backend.application.use_cases.account import AccountManager
 from backend.application.use_cases.market_data import MarketDataManager
-from backend.domain.aggregates.account import Account
+from backend.domain.aggregates.account import Account, market_symbols
 from backend.domain.aggregates.portfolio import (
     AccountSliceDTO,
     AllocationDTO,
@@ -51,7 +51,7 @@ class PortfolioManager:
             asyncio.to_thread(self.market_man.read_global_rates),
         )
         cash, flows = self._normalize_account_cash(entity, account, rates)
-        symbols = [p.symbol for p in account.open_positions]
+        symbols = market_symbols(account.open_positions)
         securities = await self.market_man.build_securities_batch_async(
             symbols, start_date=start_date, end_date=end_date, rates=rates
         )
@@ -218,7 +218,7 @@ class PortfolioManager:
             all_flows.extend(flows)
             normalized.append((entity, account, cash, flows))
 
-        symbols = sorted({p.symbol for p in positions})
+        symbols = sorted(market_symbols(positions))
         securities = await self.market_man.build_securities_batch_async(
             symbols, start_date=start_date, end_date=end_date, rates=rates
         )
@@ -235,7 +235,7 @@ class PortfolioManager:
         # Per-account slices reuse the already-fetched securities (no extra I/O)
         slices = []
         for entity, account, cash, flows in normalized:
-            acc_symbols = {p.symbol for p in account.open_positions}
+            acc_symbols = market_symbols(account.open_positions)
             acc_portfolio = Portfolio(
                 id=entity.number,
                 cash=cash,

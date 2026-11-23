@@ -6,6 +6,7 @@ from frontend.services.streamlit_data import (
     load_portfolio_snapshot,
     load_single_security_quote,
 )
+from frontend.shared.accounts import market_priced_symbols
 from frontend.shared.dto import Currency, TransactionCreate, TransactionKind
 from frontend.shared.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 
@@ -29,7 +30,7 @@ def _load_account_form_data(
         if pos.get("category") == "Equity":
             symbol = str(pos["symbol"])
             holdings_qty[symbol] = holdings_qty.get(symbol, 0) + int(pos["open_qty"])
-    portfolio_symbols = sorted({p["symbol"] for p in records.open_positions})
+    portfolio_symbols = sorted(market_priced_symbols(records.open_positions))
     return (
         portfolio_symbols,
         holdings_qty,

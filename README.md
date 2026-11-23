@@ -37,6 +37,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Multi-account support** | Switch between accounts; each user's data is isolated at the database level via RLS |
 | **Total portfolio view** | One Portfolio page with an account selector — All Accounts combines every account (per-account position attribution, pooled MWRR, weights vs the combined total, cross-account correlation, allocation, optimization) or scope everything to a single account |
 | **Options tracking** | Call and put positions tracked with intrinsic value, DTE, and breakeven |
+| **GICs and term deposits** | Imported from the ledger or entered from their terms; valued at principal plus accrued interest, counted in portfolio totals, flagged at maturity until the redemption is recorded |
 
 ![Quick demo](docs/images/streamlit_wide_fast.gif)
 
@@ -60,6 +61,12 @@ Before starting the app for the first time, initialise the database schema in yo
 4. Paste into the editor and click **Run**
 
 This creates all tables, indexes, foreign keys, RLS policies, and role grants required by the application. It is safe to re-run — all statements use `CREATE TABLE IF NOT EXISTS`.
+
+**Upgrading an existing database:** `CREATE TABLE IF NOT EXISTS` does not add columns to a table that already exists. Run the scripts in [`supabase/migrations/`](supabase/migrations/) in order in the SQL Editor; each is safe to re-run.
+
+| Script | Adds |
+|---|---|
+| [`001_instrument_terms.sql`](supabase/migrations/001_instrument_terms.sql) | `transactions.instrument_terms` — terms of manually entered GICs and term deposits |
 
 ### User Management
 

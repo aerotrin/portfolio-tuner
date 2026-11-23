@@ -8,7 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
 
@@ -123,3 +123,4 @@ class TransactionDB(Base):
     exchange_rate = mapped_column(Float, nullable=True)
     fees_paid = mapped_column(Float, nullable=False)
     amount = mapped_column(Float, nullable=False)
+    instrument_terms = mapped_column(JSONB, nullable=True)

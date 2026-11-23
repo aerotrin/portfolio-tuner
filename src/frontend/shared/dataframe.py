@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from frontend.services.streamlit_data import PortfolioData, SecurityData
+from frontend.shared.accounts import FIXED_INCOME
 from frontend.shared.settings import MIN_RETURN_OBS, TRADING_DAYS_PER_YEAR
 
 
@@ -183,6 +184,7 @@ class HoldingsView:
     correlation_matrix: pd.DataFrame | None  # square symbol matrix
     correlation_excluded: list[str]  # symbols with too little history to correlate
     equity_qty: dict[str, int]  # symbol -> open qty (equity rows only)
+    fixed_income: list[str]  # names of fixed-income holdings (no market price)
 
 
 def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> HoldingsView:
@@ -190,16 +192,26 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
 
     Holdings are keyed by holding key (quote symbol, or OSI for options), so
     per-symbol analytics are joined via the 'symbol' column, not the index.
+    `symbols` are the market-priced ones; fixed-income holdings have no
+    analytics and are left out of the per-symbol performance view.
     """
     positions = make_scalar_wide_df(portfolio.holdings)
 
-    analytics = build_security_analytics(symbols, portfolio.securities)
-    positions = add_sparkline(
-        positions, analytics.closes, add_intraday_close=True, symbol_col="symbol"
-    )
+    if symbols:
+        analytics = build_security_analytics(symbols, portfolio.securities)
+        positions = add_sparkline(
+            positions, analytics.closes, add_intraday_close=True, symbol_col="symbol"
+        )
+        new_cols = analytics.metrics.columns.difference(positions.columns)
+        holdings_data = positions.join(
+            analytics.metrics[new_cols], on="symbol", how="left"
+        )
+        close_norm = analytics.close_norm
+    else:
+        holdings_data = positions.copy()
+        close_norm = pd.DataFrame()
 
-    new_cols = analytics.metrics.columns.difference(positions.columns)
-    holdings_data = positions.join(analytics.metrics[new_cols], on="symbol", how="left")
+    is_fixed_income = holdings_data["holding_category"] == FIXED_INCOME
 
     equity = positions[positions["holding_category"] == "Equity"]
     # Group-sum: a symbol can appear once per account in the total view
@@ -210,7 +222,7 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
     # Per-symbol view for the performance charts/table: quote and metric columns
     # are identical across a symbol's rows (they come from the underlying), so
     # collapse to one row per symbol with position weights rolled up.
-    performance_data = holdings_data.copy()
+    performance_data = holdings_data[~is_fixed_income].copy()
     performance_data["weight"] = performance_data.groupby("symbol")["weight"].transform(
         "sum"
     )
@@ -240,12 +252,13 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
     return HoldingsView(
         holdings_data=holdings_data,
         performance_data=performance_data,
-        close_norm=analytics.close_norm,
+        close_norm=close_norm,
         portfolio_metrics=portfolio_metrics,
         portfolio_close_norm=portfolio_close_norm,
         correlation_matrix=correlation_matrix,
         correlation_excluded=list(correlation.get("excluded") or []),
         equity_qty=equity_qty,
+        fixed_income=sorted(holdings_data.loc[is_fixed_income, "name"].unique()),
     )
 
 

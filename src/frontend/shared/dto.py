@@ -44,6 +44,60 @@ class TransactionCreate(BaseModel):
     amount: float
 
 
+class FixedIncomeType(StrEnum):
+    GIC = "GIC"
+    TERM_DEPOSIT = "Term Deposit"
+
+
+class PaymentFrequency(StrEnum):
+    AT_MATURITY = "At Maturity"
+    ANNUAL = "Annual"
+    SEMI_ANNUAL = "Semi-Annual"
+    QUARTERLY = "Quarterly"
+    MONTHLY = "Monthly"
+
+
+class Compounding(StrEnum):
+    SIMPLE = "Simple"
+    ANNUAL = "Annual"
+
+
+class InstrumentTerms(BaseModel):
+    """Terms of a GIC or term deposit; `annual_rate` is a decimal."""
+
+    type: FixedIncomeType = FixedIncomeType.GIC
+    name: str = ""
+    issue_date: date
+    maturity_date: date
+    annual_rate: float
+    payment_frequency: PaymentFrequency = PaymentFrequency.AT_MATURITY
+    compounding: Compounding = Compounding.SIMPLE
+    redeemable: bool = False
+
+
+class FixedIncomeCreate(BaseModel):
+    terms: InstrumentTerms
+    principal: float
+    currency: Currency = Currency.CAD
+    fx_rate: float = 1.0
+    funded_by_deposit: bool = False
+
+
+class FixedIncomeRedemption(BaseModel):
+    symbol: str
+    transaction_date: date
+    principal: float
+    interest: float = 0.0
+    fx_rate: float = 1.0
+
+
+class FixedIncomeInterest(BaseModel):
+    symbol: str
+    transaction_date: date
+    amount: float
+    fx_rate: float = 1.0
+
+
 class TaxStatus(StrEnum):
     REGISTERED = "Registered"
     NON_REGISTERED = "Non-Registered"

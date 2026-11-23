@@ -297,3 +297,54 @@ def test_build_holdings_view_keeps_per_account_rows():
     # Performance frame collapses to one row per symbol with weights rolled up
     assert list(view.performance_data.index) == ["AAPL"]
     assert view.performance_data.loc["AAPL", "weight"] == pytest.approx(0.75)
+
+
+_GIC = "GIC-5.00-20261107"
+
+
+def _gic_holding() -> dict:
+    return {
+        "symbol": _GIC,
+        "name": "Example Bank 5.00% Nov 07 2026",
+        "close": 1.01,
+        "currency": "CAD",
+        "change_percent": 0.0,
+        "timestamp": "2025-01-10T16:00:00",
+        "open_qty": 1000,
+        "weight": 0.1,
+        "market_value": 1010.0,
+        "holding_category": "Fixed Income",
+    }
+
+
+def test_build_holdings_view_keeps_fixed_income_out_of_per_security_views():
+    portfolio = _mixed_portfolio(None)
+    portfolio.holdings[_GIC] = _gic_holding()
+
+    view = build_holdings_view(portfolio, ["AAPL"])
+
+    # Held, but with no analytics of its own
+    assert _GIC in view.holdings_data.index
+    assert pd.isna(view.holdings_data.loc[_GIC, "return1Y"])
+    assert list(view.performance_data.index) == ["AAPL"]
+    assert view.equity_qty == {"AAPL": 10}
+    assert view.fixed_income == ["Example Bank 5.00% Nov 07 2026"]
+
+
+def test_build_holdings_view_with_only_fixed_income():
+    portfolio = PortfolioData(
+        summary={},
+        holdings={_GIC: _gic_holding()},
+        metrics={"symbol": "PORTF", "name": "Portfolio", "rsi_slope": 0.0},
+        indicators={"PORTF": _indicator_records("PORTF", [1.0, 1.0001, 1.0002])},
+        correlation_matrix={},
+        securities=SecurityData(),
+    )
+
+    view = build_holdings_view(portfolio, [])
+
+    assert list(view.holdings_data.index) == [_GIC]
+    assert view.performance_data.empty
+    assert view.close_norm.empty
+    assert view.portfolio_metrics.index.tolist() == ["PORTF"]
+    assert view.fixed_income == ["Example Bank 5.00% Nov 07 2026"]

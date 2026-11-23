@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from frontend.shared.accounts import FIXED_INCOME
 from frontend.shared.jobs import render_auto_refresh_toggle
 from frontend.shared.settings import (
     DONUT_CASH_COLOR,
@@ -247,18 +248,21 @@ def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
 
     delta_kwargs = {"delta_color": "off", "delta_arrow": "off"} if hide_balances else {}
 
-    st.metric(
-        "Best Intraday",
-        f"{df['symbol'][df['intraday_change'].idxmax()]}",
-        _fmt_delta(df["intraday_change"].max()),
-        **delta_kwargs,
-    )
-    st.metric(
-        "Worst Intraday",
-        f"{df['symbol'][df['intraday_change'].idxmin()]}",
-        _fmt_delta(df["intraday_change"].min()),
-        **delta_kwargs,
-    )
+    # Fixed income has no intraday move, so it can't be a best or worst
+    priced = df[df["holding_category"] != FIXED_INCOME]
+    if not priced.empty:
+        st.metric(
+            "Best Intraday",
+            f"{priced['symbol'][priced['intraday_change'].idxmax()]}",
+            _fmt_delta(priced["intraday_change"].max()),
+            **delta_kwargs,
+        )
+        st.metric(
+            "Worst Intraday",
+            f"{priced['symbol'][priced['intraday_change'].idxmin()]}",
+            _fmt_delta(priced["intraday_change"].min()),
+            **delta_kwargs,
+        )
     st.metric(
         "Total FX Exposure",
         MASKED_VALUE if hide_balances else f"${df['fx_exposure'].sum():,.2f} CAD",

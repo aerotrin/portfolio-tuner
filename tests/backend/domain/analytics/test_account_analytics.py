@@ -267,3 +267,232 @@ def test_run_records_parser_cashflow_mapping_settlement_and_none_normalization()
     assert roc.category == Category.RETURN_OF_CAPITAL
     assert roc.transaction_type == "Return of Capital"
     assert roc.amount == pytest.approx(15.0)
+
+
+GIC_BUY = (
+    "CIBC FLEXIBLE GIC               AM NON-TRANSFERABLE Maturity NOV 07 2024 "
+    "Coupon         5.00  FLEXIBLE GIC               AM NON-TRANSFERABLE DUE "
+    "11/07/2024 05.000% SECURITIES OF A RELATED ISSUER UNSOLICITED"
+)
+GIC_INTEREST = (
+    "CIBC FLEXIBLE GIC               AM NON-TRANSFERABLE Maturity NOV 07 2024 "
+    "Coupon 5.0000  Maturity NOV 07 2024 Coupon 5.0000 FLEXIBLE GIC               "
+    "AM DUE 11/07/2024  INT  5.000% CPN INT   ON   20000 BND REC 11/06/24 PAY "
+    "11/07/24"
+)
+GIC_REDEEMED = (
+    "CIBC FLEXIBLE GIC               AM NON-TRANSFERABLE Maturity NOV 07 2024 "
+    "Coupon 5.0000  FLEXIBLE GIC               AM DUE 11/07/2024  INT  5.000% "
+    "ISSUE REDEEMED FOR CASH"
+)
+
+
+def _gic_rows(symbol: str = "") -> list[dict]:
+    """One GIC's ledger lifecycle; the bank leaves the symbol blank."""
+    common = dict(symbol=symbol, market="", currency="CAD")
+    return [
+        _tx(
+            transaction_date=pd.Timestamp("2023-11-06"),
+            settlement_date=pd.Timestamp("2023-11-07"),
+            transaction_type="Buy",
+            description=GIC_BUY,
+            quantity=20000,
+            price=100.0,
+            amount=-20000.0,
+            **common,
+        ),
+        _tx(
+            transaction_date=pd.Timestamp("2024-11-07"),
+            settlement_date=pd.Timestamp("2024-11-07"),
+            transaction_type="Interest",
+            description=GIC_INTEREST,
+            quantity=0,
+            amount=1000.0,
+            **common,
+        ),
+        _tx(
+            transaction_date=pd.Timestamp("2024-11-07"),
+            settlement_date=pd.Timestamp("2024-11-07"),
+            transaction_type="Redeemed",
+            description=GIC_REDEEMED,
+            quantity=20000,
+            amount=20000.0,
+            **common,
+        ),
+    ]
+
+
+def test_open_ledger_gic_with_blank_symbol_gets_a_key_and_terms():
+    open_lots, closed_lots, _ = run_records_parser(pd.DataFrame(_gic_rows()[:1]))
+
+    assert closed_lots == []
+    (lot,) = open_lots
+    assert lot.symbol == "GIC-5.00-20241107"
+    assert lot.category == Category.FIXED_INCOME
+    assert lot.book_value == pytest.approx(20000.0)
+    assert lot.principal == pytest.approx(20000.0)
+    assert lot.interest_received == 0.0
+    assert lot.terms is not None
+    assert lot.terms.issue_date == date(2023, 11, 7)
+    assert lot.terms.maturity_date == date(2024, 11, 7)
+    assert lot.terms.annual_rate == pytest.approx(0.05)
+    assert lot.terms.name == "CIBC FLEXIBLE GIC"
+
+
+@pytest.mark.parametrize("symbol", ["", "GIC"])
+def test_ledger_gic_lifecycle_closes_at_par_with_interest_attributed(symbol):
+    open_lots, closed_lots, cash_flows = run_records_parser(
+        pd.DataFrame(_gic_rows(symbol))
+    )
+
+    assert open_lots == []
+    (closed,) = closed_lots
+    assert closed.symbol == "GIC-5.00-20241107"
+    assert closed.category == Category.FIXED_INCOME
+    assert closed.cost_basis == pytest.approx(20000.0)
+    assert closed.gain == pytest.approx(0.0)
+
+    (interest,) = cash_flows
+    assert interest.category == Category.INCOME
+    assert interest.symbol == "GIC-5.00-20241107"
+    assert interest.amount == pytest.approx(1000.0)
+
+
+def test_two_gics_with_blank_symbols_stay_separate():
+    other = GIC_BUY.replace("NOV 07 2024", "MAR 15 2026").replace("5.00 ", "3.25 ")
+    rows = _gic_rows()[:1] + [
+        _tx(
+            transaction_date=pd.Timestamp("2025-03-14"),
+            settlement_date=pd.Timestamp("2025-03-15"),
+            transaction_type="Buy",
+            symbol="",
+            market="",
+            currency="CAD",
+            description=other,
+            quantity=5000,
+            price=100.0,
+            amount=-5000.0,
+        )
+    ]
+
+    open_lots, _, _ = run_records_parser(pd.DataFrame(rows))
+
+    assert {lot.symbol: lot.book_value for lot in open_lots} == {
+        "GIC-5.00-20241107": 20000.0,
+        "GIC-3.25-20260315": 5000.0,
+    }
+
+
+def test_interest_received_reduces_what_the_open_lot_still_has_to_pay():
+    rows = _gic_rows()[:2]
+
+    (lot,) = run_records_parser(pd.DataFrame(rows))[0]
+
+    assert lot.interest_received == pytest.approx(1000.0)
+
+
+def test_manual_instrument_uses_its_stored_symbol_and_terms():
+    key = "GIC-2.45-20261209-7f3a"
+    terms = {
+        "type": "GIC",
+        "name": "Example Bank",
+        "issue_date": date(2025, 12, 9),
+        "maturity_date": date(2026, 12, 9),
+        "annual_rate": 0.0245,
+        "payment_frequency": "At Maturity",
+        "compounding": "Simple",
+        "redeemable": False,
+    }
+    rows = [
+        _tx(
+            transaction_date=pd.Timestamp("2025-12-09"),
+            settlement_date=pd.Timestamp("2025-12-11"),
+            transaction_type="Buy",
+            symbol=key,
+            market="CDN",
+            currency="CAD",
+            description="EXAMPLE BANK GIC",
+            quantity=26104,
+            price=100.0,
+            amount=-26104.02,
+            instrument_terms=terms,
+        ),
+        _tx(
+            transaction_date=pd.Timestamp("2026-06-09"),
+            settlement_date=pd.Timestamp("2026-06-09"),
+            transaction_type="Interest",
+            symbol=key,
+            market="CDN",
+            currency="CAD",
+            description="EXAMPLE BANK GIC INTEREST",
+            amount=100.0,
+            instrument_terms=None,
+        ),
+    ]
+
+    open_lots, _, cash_flows = run_records_parser(pd.DataFrame(rows))
+
+    (lot,) = open_lots
+    # The key is used as stored: no '.TO' suffix or dot rewriting
+    assert lot.symbol == key
+    assert lot.category == Category.FIXED_INCOME
+    assert lot.principal == pytest.approx(26104.02)
+    assert lot.terms.issue_date == date(2025, 12, 9)
+    assert lot.interest_received == pytest.approx(100.0)
+    assert cash_flows[0].symbol == key
+
+
+def test_unparsed_fixed_income_row_falls_back_to_a_shared_key():
+    rows = [
+        _tx(
+            transaction_type="Buy",
+            symbol="",
+            market="",
+            currency="CAD",
+            description="SOME ISSUER NOTE COUPON 4.1 DUE 2027",
+            quantity=1000,
+            amount=-1000.0,
+        )
+    ]
+
+    (lot,) = run_records_parser(pd.DataFrame(rows))[0]
+
+    assert lot.symbol == "FIXED-INCOME"
+    assert lot.category == Category.FIXED_INCOME
+    assert lot.terms is None
+
+
+def test_closing_row_without_an_open_position_is_skipped():
+    tx = pd.DataFrame([_gic_rows()[2]])
+
+    open_lots, closed_lots, _ = run_records_parser(tx)
+
+    assert open_lots == []
+    assert closed_lots == []
+
+
+def test_same_day_open_and_close_reports_zero_days_held():
+    day = pd.Timestamp("2024-05-01")
+    tx = pd.DataFrame(
+        [
+            _tx(
+                transaction_date=day,
+                transaction_type="Buy",
+                symbol="MSFT",
+                quantity=10,
+                amount=-1000.0,
+            ),
+            _tx(
+                transaction_date=day,
+                transaction_type="Sell",
+                symbol="MSFT",
+                quantity=10,
+                amount=1100.0,
+            ),
+        ]
+    )
+
+    _, closed_lots, _ = run_records_parser(tx)
+
+    (closed,) = closed_lots
+    assert closed.days_held == 0

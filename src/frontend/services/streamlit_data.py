@@ -11,6 +11,10 @@ from frontend.shared.dto import (
     AccountCreateRequest,
     AccountEntity,
     AccountPatchRequest,
+    FixedIncomeCreate,
+    FixedIncomeInterest,
+    FixedIncomeRedemption,
+    InstrumentTerms,
     TransactionCreate,
 )
 
@@ -255,6 +259,71 @@ def create_transaction(account_id: str, transaction: TransactionCreate) -> None:
     except Exception:
         st.error("Failed to record transaction.")
         logger.exception("Failed to record transaction.")
+
+
+def _api_error_detail(exc: Exception, fallback: str) -> str:
+    """The API's `detail` message when the error carries one."""
+    response = getattr(exc, "response", None)
+    if response is not None:
+        try:
+            detail = response.json().get("detail", "")
+            if isinstance(detail, list):  # request validation errors
+                detail = "; ".join(str(d.get("msg", d)) for d in detail)
+            if detail:
+                return str(detail)
+        except Exception:
+            pass
+    return fallback
+
+
+@st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+def _fetch_fixed_income_preview(terms_json: str, principal: float) -> dict[str, Any]:
+    terms = InstrumentTerms.model_validate_json(terms_json)
+    return get_api_client().preview_fixed_income(terms, principal)
+
+
+def preview_fixed_income(
+    terms: InstrumentTerms, principal: float
+) -> dict[str, Any] | None:
+    """Maturity and accrued figures for a set of terms; None if unavailable."""
+    try:
+        return _fetch_fixed_income_preview(terms.model_dump_json(), principal)
+    except Exception:
+        logger.exception("Fixed-income preview failed")
+        return None
+
+
+def create_fixed_income(account_id: str, payload: FixedIncomeCreate) -> bool:
+    """Add a GIC or term deposit. Toasts the API detail on failure."""
+    try:
+        get_api_client().add_fixed_income(account_id, payload)
+        return True
+    except Exception as e:
+        st.toast(_api_error_detail(e, "Failed to add the instrument."), icon="❌")
+        logger.exception("Add fixed income failed for account_id %s", account_id)
+        return False
+
+
+def redeem_fixed_income(account_id: str, payload: FixedIncomeRedemption) -> bool:
+    """Record a redemption. Toasts the API detail on failure."""
+    try:
+        get_api_client().redeem_fixed_income(account_id, payload)
+        return True
+    except Exception as e:
+        st.toast(_api_error_detail(e, "Failed to record the redemption."), icon="❌")
+        logger.exception("Redeem fixed income failed for account_id %s", account_id)
+        return False
+
+
+def record_fixed_income_interest(account_id: str, payload: FixedIncomeInterest) -> bool:
+    """Record an interest payment. Toasts the API detail on failure."""
+    try:
+        get_api_client().record_fixed_income_interest(account_id, payload)
+        return True
+    except Exception as e:
+        st.toast(_api_error_detail(e, "Failed to record the interest."), icon="❌")
+        logger.exception("Record interest failed for account_id %s", account_id)
+        return False
 
 
 def delete_transaction(account_id: str, transaction_id: str) -> str | None:

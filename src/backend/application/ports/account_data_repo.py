@@ -15,6 +15,9 @@ class AccountDataRepository(Protocol):
 
     # Transaction operations
     def create_transaction(self, account_number: str, transaction: Transaction): ...
+    def create_transactions(
+        self, account_number: str, transactions: List[Transaction]
+    ): ...
     def read_transactions(self, account_number: str) -> List[Transaction]: ...
     def upsert_transactions(
         self, account_number: str, transactions: List[Transaction]

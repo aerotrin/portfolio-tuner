@@ -8,6 +8,10 @@ from src.backend.domain.entities.account import (
     AccountEntity,
     AccountPatchRequest,
     Currency,
+    FixedIncomeCreateRequest,
+    FixedIncomeInterestRequest,
+    FixedIncomePreviewRequest,
+    FixedIncomeRedemptionRequest,
     Transaction,
     TransactionCreateDTO,
     TransactionKind,
@@ -30,6 +34,7 @@ class FakeAccountDataRepository:
     def __init__(self):
         self.accounts: dict[str, AccountEntity] = {}
         self.transactions: dict[str, list[Transaction]] = {}
+        self.batches: list[int] = []  # size of each create_transactions call
 
     def add_account(self, account: AccountEntity) -> AccountEntity:
         self.accounts[account.id] = account
@@ -59,6 +64,10 @@ class FakeAccountDataRepository:
 
     def create_transaction(self, account_number: str, transaction: Transaction):
         self.transactions.setdefault(account_number, []).append(transaction)
+
+    def create_transactions(self, account_number: str, transactions: list[Transaction]):
+        self.batches.append(len(transactions))
+        self.transactions.setdefault(account_number, []).extend(transactions)
 
     def read_transactions(self, account_number: str) -> list[Transaction]:
         return list(self.transactions.get(account_number, []))
@@ -278,3 +287,210 @@ def test_create_transaction_roundtrip_through_repository():
 
     assert tx.symbol == "AAPL"
     assert len(repo.read_transactions("ACC-1")) == 1
+
+
+def _fixed_income_manager(
+    currency: Currency = Currency.CAD,
+) -> tuple[AccountManager, FakeAccountDataRepository, AccountEntity]:
+    repo = FakeAccountDataRepository()
+    manager = AccountManager(importer=FakeAccountDataImporter(), db=repo)
+    account = manager.create_account(
+        AccountCreateRequest(
+            number="RRSP-1",
+            name="Owner",
+            type="RRSP",
+            currency=currency,
+            tax_status="Registered",
+            benchmark="XIU.TO",
+        ),
+        owner="user-1",
+    )
+    return manager, repo, account
+
+
+def _example_gic(**overrides) -> FixedIncomeCreateRequest:
+    """1-year non-redeemable GIC, 2.45% paid at maturity, issued Dec 9 2025."""
+    payload = dict(
+        terms=dict(
+            name="Example Bank",
+            issue_date=date(2025, 12, 9),
+            maturity_date=date(2026, 12, 9),
+            annual_rate=0.0245,
+        ),
+        principal=26_104.02,
+    )
+    payload.update(overrides)
+    return FixedIncomeCreateRequest(**payload)
+
+
+def test_preview_fixed_income_reports_maturity_figures():
+    preview = AccountManager.preview_fixed_income(
+        FixedIncomePreviewRequest(
+            **_example_gic().model_dump(include={"terms", "principal"})
+        )
+    )
+
+    assert preview.term_days == 365
+    assert preview.interest_at_maturity == pytest.approx(639.55, abs=0.005)
+    assert preview.maturity_value == pytest.approx(26_743.57, abs=0.005)
+    assert preview.value_today == pytest.approx(26_104.02 + preview.accrued_interest)
+
+
+def test_add_fixed_income_records_a_buy_carrying_its_terms():
+    manager, repo, account = _fixed_income_manager()
+
+    (buy,) = manager.add_fixed_income(account, _example_gic())
+
+    assert repo.batches == [1]
+    assert buy.transaction_type == TransactionKind.BUY
+    assert buy.symbol.startswith("GIC-2.45-20261209-")
+    assert buy.transaction_date == date(2025, 12, 9)
+    assert buy.quantity == 26_104
+    assert buy.amount == pytest.approx(-26_104.02)
+    assert buy.instrument_terms.annual_rate == pytest.approx(0.0245)
+
+    built = manager.build_account("RRSP-1")
+    (lot,) = built.open_positions
+    assert lot.symbol == buy.symbol
+    assert lot.principal == pytest.approx(26_104.02)
+    assert lot.terms.maturity_date == date(2026, 12, 9)
+    assert built.cash_balance == pytest.approx(-26_104.02)
+
+
+def test_add_fixed_income_funded_by_deposit_leaves_cash_unchanged():
+    manager, repo, account = _fixed_income_manager()
+
+    deposit, buy = manager.add_fixed_income(
+        account, _example_gic(funded_by_deposit=True)
+    )
+
+    # Stored together: both rows or neither
+    assert repo.batches == [2]
+    assert deposit.transaction_type == TransactionKind.EFT
+    assert deposit.amount == pytest.approx(26_104.02)
+
+    built = manager.build_account("RRSP-1")
+    assert built.cash_balance == pytest.approx(0.0)
+    assert [f.amount for f in built.external_cash_flows] == [pytest.approx(26_104.02)]
+    assert len(built.open_positions) == 1
+
+
+def test_usd_instrument_in_a_cad_account_books_cad_and_keeps_native_principal():
+    manager, _repo, account = _fixed_income_manager()
+
+    (buy,) = manager.add_fixed_income(
+        account, _example_gic(principal=10_000.0, currency="USD", fx_rate=1.4)
+    )
+
+    assert buy.amount == pytest.approx(-14_000.0)
+    (lot,) = manager.build_account("RRSP-1").open_positions
+    assert lot.currency == "USD"
+    assert lot.principal == pytest.approx(10_000.0)
+    assert lot.book_value == pytest.approx(14_000.0)
+
+
+def test_redeem_fixed_income_closes_the_holding_and_pays_interest():
+    manager, repo, account = _fixed_income_manager()
+    (buy,) = manager.add_fixed_income(account, _example_gic(funded_by_deposit=True))[1:]
+
+    interest, redeemed = manager.redeem_fixed_income(
+        account,
+        FixedIncomeRedemptionRequest(
+            symbol=buy.symbol,
+            transaction_date=date(2026, 12, 9),
+            principal=26_104.02,
+            interest=639.55,
+        ),
+    )
+
+    assert repo.batches == [2, 2]
+    assert interest.transaction_type == TransactionKind.INTEREST
+    assert redeemed.transaction_type == TransactionKind.REDEEMED
+    assert redeemed.quantity == 26_104
+
+    built = manager.build_account("RRSP-1")
+    assert built.open_positions == []
+    (closed,) = built.closed_positions
+    assert closed.gain == pytest.approx(0.0)
+    assert built.cash_balance == pytest.approx(26_104.02 + 639.55)
+    (income,) = built.income
+    assert income.symbol == buy.symbol
+    assert income.amount == pytest.approx(639.55)
+
+
+def test_redeem_fixed_income_rejects_unknown_holding_and_over_redemption():
+    manager, repo, account = _fixed_income_manager()
+    (buy,) = manager.add_fixed_income(account, _example_gic())
+
+    with pytest.raises(KeyError):
+        manager.redeem_fixed_income(
+            account,
+            FixedIncomeRedemptionRequest(
+                symbol="GIC-9.99-20300101",
+                transaction_date=date(2026, 12, 9),
+                principal=100.0,
+            ),
+        )
+    with pytest.raises(ValueError):
+        manager.redeem_fixed_income(
+            account,
+            FixedIncomeRedemptionRequest(
+                symbol=buy.symbol,
+                transaction_date=date(2026, 12, 9),
+                principal=30_000.0,
+            ),
+        )
+    assert repo.batches == [1]
+
+
+def test_record_fixed_income_interest_is_attributed_to_the_holding():
+    manager, _repo, account = _fixed_income_manager()
+    (buy,) = manager.add_fixed_income(account, _example_gic())
+
+    manager.record_fixed_income_interest(
+        account,
+        FixedIncomeInterestRequest(
+            symbol=buy.symbol, transaction_date=date(2026, 6, 9), amount=320.0
+        ),
+    )
+
+    (lot,) = manager.build_account("RRSP-1").open_positions
+    assert lot.interest_received == pytest.approx(320.0)
+
+
+def test_ledger_imported_gic_can_be_redeemed_by_its_derived_key():
+    """A GIC that came from the ledger has no stored key; the redemption rows
+    written for it must still resolve to the same holding."""
+    manager, repo, account = _fixed_income_manager()
+    repo.create_transaction(
+        "RRSP-1",
+        Transaction(
+            transaction_date=date(2023, 11, 6),
+            settlement_date=date(2023, 11, 7),
+            transaction_type=TransactionKind.BUY,
+            symbol="",
+            description=(
+                "CIBC FLEXIBLE GIC               AM NON-TRANSFERABLE Maturity "
+                "NOV 07 2024 Coupon         5.00  FLEXIBLE GIC"
+            ),
+            quantity=20000,
+            price=100.0,
+            exchange_rate=1.0,
+            amount=-20000.0,
+        ),
+    )
+
+    manager.redeem_fixed_income(
+        account,
+        FixedIncomeRedemptionRequest(
+            symbol="GIC-5.00-20241107",
+            transaction_date=date(2024, 11, 7),
+            principal=20_000.0,
+            interest=1_000.0,
+        ),
+    )
+
+    built = manager.build_account("RRSP-1")
+    assert built.open_positions == []
+    assert built.cash_balance == pytest.approx(1_000.0)
+    assert built.income[0].symbol == "GIC-5.00-20241107"

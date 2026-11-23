@@ -16,6 +16,7 @@ This guide walks through the complete user flow for Portfolio Tuner: from first 
    - [All Accounts View](#all-accounts-view)
 7. [Market Research Pages](#7-market-research-pages)
 8. [Recording a Transaction Manually](#8-recording-a-transaction-manually)
+   - [Managing GICs and Term Deposits](#managing-gics-and-term-deposits)
 9. [Refreshing Market Data](#9-refreshing-market-data)
 10. [Account Management](#10-account-management)
 
@@ -73,13 +74,15 @@ Once an account exists, populate it with transaction history by importing your b
 3. In the dialog, click **Browse files** and select your `.xlsx` export file.
 4. Click **Import**.
 
-The importer parses all transactions from the file and upserts them into the database. Existing transactions are matched and updated; new ones are added. After a successful import, the page reloads automatically.
+The importer parses all transactions from the file and replaces the account's transactions with them, so the account always matches the file. Anything entered by hand in that account, including GICs and term deposits added from the sidebar, is removed; the import dialog warns you when that applies. After a successful import, the page reloads automatically.
 
 > **Screenshot placeholder — Import records dialog with file uploader**
 
 > **Screenshot placeholder — Post-import portfolio page showing populated holdings**
 
 **Supported transaction types in the ledger file:** Buy, Purchase, Sell, Sold, Split, Disburse, Expired, Redeemed, Exchange, Contrib, EFT, Transfer, Transf In, Withdrawal, Dividend, Interest, Return of Capital, Tax, HST, Fee.
+
+**GICs in the ledger file:** import the bank's rows as they are. A GIC's Buy, Interest and Redeemed rows have no symbol; the app recognises them from the description (`... Maturity NOV 07 2024 Coupon 5.00 ...`) and reads the maturity date and rate from it. The issue date is taken as the purchase's settlement date, and interest is assumed to be simple. If a fixed-income row's description has no maturity and coupon the app can read, the holding is kept at its purchase cost and labelled *terms unknown*.
 
 ---
 
@@ -109,6 +112,10 @@ A row of icon buttons provides account management:
 ### Record Transaction
 
 The **Record Transaction** button (prominent, full-width) opens the manual transaction entry dialog. The dialog has its own account selector, pre-filled with the active account — you can switch the target account without leaving the form. See [Section 8](#8-recording-a-transaction-manually).
+
+### Manage GIC / Term Deposit
+
+The **Manage GIC / Term Deposit** button opens one dialog with three actions: **Add** a GIC or term deposit from its terms (principal, rate, issue date, term, interest schedule), **Record redemption**, and **Record interest**. See [Managing GICs and Term Deposits](#managing-gics-and-term-deposits).
 
 ### Data Refresh
 
@@ -199,8 +206,11 @@ A detailed view of all open positions in the account. A toggle in the section he
 - **Cash table** — one row per account, listed above the securities tables (shown even when the account holds no positions). Columns: Account, Currency, Cash (in the account's own currency), Cash CAD, % of Account (cash as a share of that account's total value), Weight % (share of the portfolio's total value). Negative cash is shown in red. In **All Accounts** scope a caption totals the cash across accounts, and when more than one account holds cash a **Cash by Account** donut shows each account's share.
 - **Stocks & ETFs table** — Columns: Symbol, Name, 1Y sparkline, Quantity, Price, Currency, Day Change, Day P/L (CAD), Market Value (CAD), Total P/L (CAD), Total P/L %, Days Held, Weight %, Break-even Price, Book Value (CAD), FX Exposure, Type, Open Date, Last Trade.
 - **Options table** (if options are held) — Columns: OSI, Name, 1Y sparkline, Quantity, Right, DTE, Intrinsic Value ⚠️, Break-even Price, Weight %, Total P/L (CAD), Total P/L %, Market Value (CAD), Book Value (CAD), Expiry, Strike, Last Price, FX Exposure, Days Held, Type, Open Date, Last Trade.
+- **Fixed Income table** (if GICs or term deposits are held) — Columns: Name, Status (Active or Matured), Rate, Interest Paid, Weight %, Principal, Currency, Maturity, Days to Maturity, Accrued Interest, Interest Received, Value (CAD), Maturity Value, Total P/L (CAD), Total P/L %, Book Value (CAD), FX Exposure, Issue Date, Days Held, Type, Key. The table is read-only: to record a redemption or an interest payment, use **Manage GIC / Term Deposit** in the sidebar (see [Managing GICs and Term Deposits](#managing-gics-and-term-deposits)).
 
 > **Note:** Option market value and P/L are calculated from intrinsic value only, not the actual contract price. Intraday change for options is not supported.
+
+> **Note:** A GIC or term deposit has no market price. Its value is the principal plus the interest earned to date that has not been paid out, so it rises a little every day until maturity. Interest is counted from the issue date up to and including today, which is how banks report a deposit's current value. It appears in the total-return treemap, the KPIs and all portfolio totals, and is left out of the intraday treemap, the Best/Worst Intraday KPIs and the quote table.
 
 > **Screenshot placeholder — Holdings positions table — Intraday view**
 
@@ -216,6 +226,8 @@ A tabbed view with performance analytics:
 - **Performance metrics table** — Sharpe ratio, CAGR, volatility, max drawdown, Sortino, Calmar for each holding and the portfolio
 - **Signal display options** — toggle additional overlays (e.g., trade signals) on the chart
 
+GICs and term deposits count in the **Portfolio** line and statistics as a steady asset, which lowers portfolio volatility in proportion to their weight. They are not listed as securities and have no line of their own; a note under the Securities table names them. An account holding only fixed income shows near-zero volatility and a Sharpe ratio that is not meaningful.
+
 > **Screenshot placeholder — Performance tab with growth chart and metrics table**
 
 ---
@@ -226,8 +238,8 @@ Shows how the portfolio is spread, how concentrated it is, and where its risk co
 
 - **Concentration row** — number of holdings, the largest position and top 5 as a share of invested holdings, **Effective holdings** (how many equal-sized positions would be as concentrated as yours; the further below the holdings count, the more a few positions dominate), cash share, and USD exposure (USD-quoted holdings plus cash in USD accounts).
 - **Breakdown** — a donut with a selector for **Asset type**, **Instrument** (equity, call/put option, fixed income, cash), **Sector**, **Country**, or **Currency**, with a table of the same figures underneath. ETFs without sector or country data are grouped as *ETF / unclassified*; the app does not look inside funds.
-- **Holdings by weight** — one bar per symbol, largest first. The top 15 are shown individually and the rest are combined as *Other*; cash has its own bar. Options are counted under their underlying at intrinsic value.
-- **Capital vs risk** — each holding's weight next to its share of the portfolio's volatility over the past year of daily returns. A risk share well above the weight marks a position that drives more of the portfolio's swings than its size suggests. Holdings with too little price history are listed below the chart instead of being plotted.
+- **Holdings by weight** — one bar per symbol, largest first. The top 15 are shown individually and the rest are combined as *Other*; cash has its own bar. Options are counted under their underlying at intrinsic value, and GICs and term deposits at their accrued value.
+- **Capital vs risk** — each holding's weight next to its share of the portfolio's volatility over the past year of daily returns. A risk share well above the weight marks a position that drives more of the portfolio's swings than its size suggests. Holdings with too little price history are listed below the chart instead of being plotted. GICs and term deposits hold their value, so they show their weight with a risk share of zero.
 - **Position sizing guide** — an expandable table of the dollar amount for a new position at 1% to 20% of the portfolio.
 
 If an account's cash is negative (margin), it is left out of the shares and noted under the concentration row.
@@ -290,7 +302,7 @@ The chart footer records the run timestamp, seed, iteration count, run context (
 
 A heatmap showing pairwise return correlation between all holdings. Values close to 1 indicate highly correlated securities; values close to -1 indicate inverse correlation. Useful for understanding diversification.
 
-A security needs at least 40 days of price history within the past year to be included. Securities with less are left out of the heatmap and the pair tables, and are listed in a note above the matrix.
+A security needs at least 40 days of price history within the past year to be included. Securities with less are left out of the heatmap and the pair tables, and are listed in a note above the matrix. GICs and term deposits have no market price to correlate and are listed in a separate note. The same applies on the **Optimization** tab, where they are not candidates.
 
 > **Screenshot placeholder — Correlation matrix heatmap**
 
@@ -302,7 +314,7 @@ A tabbed section showing the raw ledger data for the account:
 
 - **Transactions** — full transaction history (type, date, symbol, quantity, price, amount, fees)
 - **Closed Lots** — positions that have been fully sold or expired, with realised gain/loss
-- **Cash Flows** — external cash movements (contributions, withdrawals) used for MWRR calculation
+- **Cash Flows** — external cash movements (contributions, withdrawals) used for MWRR calculation, and income and expenses. Interest paid by a GIC or term deposit carries that instrument's key in the Symbol column and is totalled as **Fixed Income Interest**; it is also part of **Interest Income**
 
 > **Screenshot placeholder — Transactions table**
 
@@ -384,6 +396,41 @@ Click **Record Transaction** in the sidebar to open the transaction entry form.
 Click **Submit** to save. The portfolio view updates on the next page load.
 
 > **Screenshot placeholder — Transaction form dialog**
+
+---
+
+### Managing GICs and Term Deposits
+
+Click **Manage GIC / Term Deposit** in the sidebar. The dialog works from any tab and any account scope. Pick the **Account** (pre-filled with the active account), then an **Action**: **Add**, **Record redemption** or **Record interest**. Switching account or action updates the dialog in place.
+
+#### Add
+
+Use this for a GIC or term deposit that is not in an imported ledger, for example one held directly at a bank.
+
+**Fields:**
+- **Type** and **Issuer** — GIC or Term Deposit, and the institution's name (shown as the holding's name).
+- **Principal**, **Annual rate %**, **Currency**.
+- **Issue date**, **Term**, **Maturity date** — choosing a term (30 days to 5 years) fills in the maturity date; edit the date directly for any other term.
+- **Interest paid** — At Maturity, Annual, Semi-Annual, Quarterly or Monthly.
+- **Interest calculation** — Simple, or Compounded annually (only when interest is paid at maturity).
+- **Redeemability** — Non-redeemable or Redeemable (recorded with the holding; it does not change the valuation).
+- **Paid from** — **Account cash** reduces the account's cash by the principal. **New deposit** records a matching deposit with the purchase, so cash is unchanged and the money counts as a contribution in your returns.
+
+The preview shows the maturity date, the interest at maturity, the maturity value and the value today. Click **Add** to save.
+
+*Example:* a 1-year non-redeemable GIC issued Dec 9, 2025 at 2.45% paid at maturity, principal $26,104.02, earns $639.55 and is worth $26,743.57 on Dec 9, 2026.
+
+#### Record redemption
+
+Nothing is posted automatically at maturity. From the maturity date the holding shows as **Matured** at its final value, with a notice above the Fixed Income table, until you record the redemption. Choose **Record redemption**, then the **Holding** (matured holdings are listed first). The form is pre-filled with the principal and the interest still owed; adjust either if the bank paid a different amount, then confirm. The principal and interest move to the account's cash and the holding closes. For a redeemable GIC cashed early, enter the principal redeemed and the interest actually paid.
+
+#### Record interest
+
+For a GIC that pays interest monthly, quarterly, semi-annually or annually, choose **Record interest** and the **Holding** each time a payment arrives. The amount defaults to the interest accrued and not yet received. Until a payment is recorded the app keeps counting that interest in the holding's value; the **Interest Received** column shows what has been recorded.
+
+Only holdings whose terms are known can be picked. A fixed-income holding imported without recognisable terms is closed by its ledger rows instead.
+
+> **Screenshot placeholder — Manage GIC / term deposit dialog**
 
 ---
 

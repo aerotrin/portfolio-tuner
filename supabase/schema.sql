@@ -247,7 +247,8 @@ CREATE TABLE IF NOT EXISTS "public"."transactions" (
     "commission" double precision,
     "exchange_rate" double precision,
     "fees_paid" double precision NOT NULL,
-    "amount" double precision NOT NULL
+    "amount" double precision NOT NULL,
+    "instrument_terms" "jsonb"
 );
 
 

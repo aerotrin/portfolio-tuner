@@ -28,20 +28,35 @@ def _excluded_note(excluded: list[str]) -> str:
     )
 
 
-def _render_unavailable(excluded: list[str] | None) -> None:
-    message = "Not enough price history to compute correlations."
+def _fixed_income_note(fixed_income: list[str]) -> str:
+    return "Not shown (fixed income, no market price): " + ", ".join(fixed_income) + "."
+
+
+def _render_unavailable(
+    excluded: list[str] | None, fixed_income: list[str] | None = None
+) -> None:
+    message = (
+        "Not enough price history to compute correlations."
+        if excluded
+        else "Correlations need at least two market-priced holdings."
+    )
     if excluded:
         message += " " + _excluded_note(excluded)
+    if fixed_income:
+        message += " " + _fixed_income_note(fixed_income)
     st.info(message)
 
 
 def render_correlation_matrix(
-    matrix: pd.DataFrame | None = None, excluded: list[str] | None = None
+    matrix: pd.DataFrame | None = None,
+    excluded: list[str] | None = None,
+    fixed_income: list[str] | None = None,
 ) -> None:
     """Render correlation matrix for current holdings; `excluded` names the
-    symbols left out for too little price history."""
-    if excluded and (matrix is None or matrix.shape[0] < 2):
-        _render_unavailable(excluded)
+    symbols left out for too little price history and `fixed_income` the
+    holdings that have no market price to correlate."""
+    if (excluded or fixed_income) and (matrix is None or matrix.shape[0] < 2):
+        _render_unavailable(excluded, fixed_income)
         return
     if matrix is None or matrix.empty:
         st.info("No correlation matrix found")
@@ -50,6 +65,8 @@ def render_correlation_matrix(
     st.markdown("#### :material/ssid_chart: Correlation")
     if excluded:
         st.caption(f":material/info: {_excluded_note(excluded)}")
+    if fixed_income:
+        st.caption(f":material/info: {_fixed_income_note(fixed_income)}")
 
     c = st.columns(2)
     with c[0]:

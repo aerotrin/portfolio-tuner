@@ -1,13 +1,23 @@
 from datetime import date, datetime
+from functools import partial
 import logging
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
 from backend.domain.aggregates.security import Security
+from backend.domain.analytics.fixed_income import (
+    accrual_index,
+    accrued_interest,
+    days_to_maturity,
+    instrument_label,
+    instrument_status,
+    maturity_value,
+)
 from backend.domain.analytics.security import (
+    SteadyAsset,
     compute_performance_metrics,
     compute_portfolio_timeseries_indicators,
     compute_return_statistics,
@@ -25,6 +35,11 @@ from backend.domain.entities.security import (
 logger = logging.getLogger(__name__)
 
 MULTIPLIER = 100
+
+
+def _flat_growth(dates: Sequence[date]) -> np.ndarray:
+    """Growth path of a holding with unknown terms: it stays at book value."""
+    return np.ones(len(dates))
 
 
 class CorrelationEntry(BaseModel):
@@ -88,6 +103,7 @@ class SymbolWeightDTO(BaseModel):
     weight: float
     shares_value: float
     options_value: float
+    fixed_income_value: float = 0.0
 
 
 class ConcentrationDTO(BaseModel):
@@ -172,6 +188,8 @@ class Portfolio:
         self.return_observations: pd.Series = pd.Series(dtype=float)
 
         self.holdings: dict[str, Holding] = {}
+        # Fixed-income holding key -> the lot it was built from
+        self._fixed_income_lots: dict[str, OpenLot] = {}
 
         self.book_value: float = 0.0
         self.market_value: float = 0.0
@@ -195,6 +213,87 @@ class Portfolio:
 
         self.build()
 
+    def _fixed_income_holding(self, position: OpenLot) -> Holding:
+        """Value a fixed-income lot from its terms; it has no market quote.
+
+        Without terms (a ledger row that couldn't be parsed) it stays at book.
+        """
+        today = date.today()
+        terms = position.terms
+        currency = str(position.currency or "CAD")
+        fx_rate = self.fx_rate if currency == "USD" else 1.0
+
+        fi_fields: dict = {}
+        if terms is not None:
+            principal = (
+                position.principal
+                if position.principal is not None
+                else position.book_value
+            )
+            accrued = accrued_interest(
+                principal, terms, today, position.interest_received
+            )
+            native_value = principal + accrued
+            market_value = native_value * fx_rate
+            name = instrument_label(terms)
+            fi_fields = dict(
+                fi_type=terms.type,
+                fi_rate=terms.annual_rate,
+                fi_issue_date=terms.issue_date,
+                fi_maturity_date=terms.maturity_date,
+                fi_days_to_maturity=days_to_maturity(terms, today),
+                fi_status=instrument_status(terms, today),
+                fi_payment_frequency=str(terms.payment_frequency),
+                fi_principal=principal,
+                fi_accrued_interest=accrued,
+                fi_interest_received=position.interest_received,
+                fi_maturity_value=maturity_value(principal, terms),
+            )
+        else:
+            native_value = market_value = position.book_value
+            name = "Fixed income (terms unknown)"
+
+        unit_value = native_value / position.open_qty if position.open_qty else 0.0
+        return Holding(
+            symbol=position.symbol,
+            account=position.account,
+            name=name,
+            open=unit_value,
+            high=unit_value,
+            low=unit_value,
+            close=unit_value,
+            currency=currency,
+            volume=0.0,
+            change=0.0,
+            change_percent=0.0,
+            previous_close=unit_value,
+            holding_category=position.category,
+            security_type=SecurityType.GIC,
+            fx_rate=fx_rate,
+            open_date=position.open_date,
+            open_qty=position.open_qty,
+            breakeven_price=0.0,
+            book_value=position.book_value,
+            market_value=market_value,
+            gain=market_value - position.book_value,
+            gain_pct=(
+                (market_value - position.book_value) / position.book_value
+                if position.book_value != 0.0
+                else 0.0
+            ),
+            weight=0.0,
+            intraday_change=0.0,
+            intraday_change_pct=0.0,
+            distance_to_breakeven=0.0,
+            fx_exposure=(
+                market_value - (market_value / fx_rate) if fx_rate != 1.0 else 0.0
+            ),
+            pnl_contribution=0.0,
+            intraday_contribution=0.0,
+            days_held=(today - position.open_date).days,
+            **fi_fields,
+        )
+
     def _build_holdings(self) -> None:
         try:
             # Keys stay plain (symbol/OSI) for a single account; only a
@@ -202,6 +301,13 @@ class Portfolio:
             # from different accounts don't collide.
             multi_account = len({p.account for p in self.positions}) > 1
             for position in self.positions:
+                if position.category == Category.FIXED_INCOME:
+                    key = position.symbol
+                    if multi_account:
+                        key = f"{position.account}|{key}"
+                    self.holdings[key] = self._fixed_income_holding(position)
+                    self._fixed_income_lots[key] = position
+                    continue
                 security = self.securities[position.symbol]
                 if security:
                     close = security.quote.close
@@ -317,10 +423,6 @@ class Portfolio:
                                 option_change * position.open_qty * MULTIPLIER * fx_rate
                             )
                             intraday_change_pct = option_change_pct
-                    else:
-                        market_value = position.book_value  # Fixed income
-                        breakeven_price = 0.0
-                        distance_to_breakeven = 0.0
 
                     # total gain
                     gain = market_value - position.book_value
@@ -419,6 +521,23 @@ class Portfolio:
                     holding.intraday_change / self.total_value
                 )
 
+    def _steady_assets(self) -> list[SteadyAsset]:
+        """Fixed-income holdings as inputs to the portfolio series."""
+        assets = []
+        for key, lot in self._fixed_income_lots.items():
+            terms = lot.terms
+            assets.append(
+                SteadyAsset(
+                    weight=self.holdings[key].weight,
+                    growth=(
+                        partial(accrual_index, terms)
+                        if terms is not None
+                        else _flat_growth
+                    ),
+                )
+            )
+        return assets
+
     def _build_indicators(self) -> None:
         try:
             # Aggregate weights per quote symbol, aligned to self.securities order —
@@ -428,11 +547,14 @@ class Portfolio:
                 sum(h.weight for h in self.holdings.values() if h.symbol == sym)
                 for sym in self.securities
             ]
-            self.indicators_df = compute_portfolio_timeseries_indicators(
-                list(self.securities.values()), np.array(weights, dtype=float)
-            )[
-                0
-            ]  # always return the first PORTF dataframe
+            args = (list(self.securities.values()), np.array(weights, dtype=float))
+            steady = self._steady_assets()
+            frames = (
+                compute_portfolio_timeseries_indicators(*args, steady)
+                if steady
+                else compute_portfolio_timeseries_indicators(*args)
+            )
+            self.indicators_df = frames[0]  # always return the first PORTF dataframe
             idf = self.indicators_df.rename_axis("date").reset_index()
             idf_safe = idf.replace([np.inf, -np.inf], np.nan).fillna(0.0)
             ind_records = idf_safe.to_dict(orient="records")

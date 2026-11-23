@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterable, List
 
 import pandas as pd
 
@@ -6,6 +6,7 @@ from backend.domain.analytics.account import run_records_parser
 from backend.domain.entities.account import (
     CASH_TRANSACTIONS,
     CashFlow,
+    Category,
     ClosedLot,
     EXPENSE_TRANSACTIONS,
     INCOME_TRANSACTIONS,
@@ -13,6 +14,18 @@ from backend.domain.entities.account import (
     ROC_TRANSACTIONS,
     Transaction,
 )
+
+
+def market_symbols(lots: Iterable[OpenLot]) -> list[str]:
+    """Symbols that need market data, in first-seen order.
+
+    Fixed income has no quote; its value comes from the instrument's terms.
+    """
+    return list(
+        dict.fromkeys(
+            lot.symbol for lot in lots if lot.category != Category.FIXED_INCOME
+        )
+    )
 
 
 class Account:

@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import Any
 
 import altair as alt
@@ -77,12 +78,21 @@ def _breakdown_frame(
     return pd.concat(parts, ignore_index=True)[columns]
 
 
+def _holding_labels(by_symbol: list[dict[str, Any]]) -> dict[str, str]:
+    """Display label per symbol. A fixed-income key is an internal id, so that
+    holding shows its name unless another fixed-income holding shares it."""
+    fixed_income = [r for r in by_symbol if r.get("fixed_income_value", 0) > 0]
+    counts = Counter(r["name"] for r in fixed_income)
+    return {r["symbol"]: r["name"] for r in fixed_income if counts[r["name"]] == 1}
+
+
 def _holdings_frame(
     by_symbol: list[dict[str, Any]],
     cash_slice: dict[str, Any] | None,
     top_n: int = ALLOCATION_TOP_HOLDINGS,
 ) -> pd.DataFrame:
     """Top holdings by weight, then an Other bar for the rest and a Cash bar."""
+    labels = _holding_labels(by_symbol)
     columns = [
         "label",
         "name",
@@ -91,19 +101,28 @@ def _holdings_frame(
         "weight",
         "shares_value",
         "options_value",
+        "fixed_income_value",
     ]
     df = pd.DataFrame(by_symbol)
+    if not df.empty and "fixed_income_value" not in df:
+        df["fixed_income_value"] = 0.0
     rows: list[dict[str, Any]] = []
     if not df.empty:
         df = df.sort_values("market_value", ascending=False)
         head, tail = df.iloc[:top_n], df.iloc[top_n:]
         rows = [
-            {**r, "label": r["symbol"], "kind": "Holding"}
+            {**r, "label": labels.get(r["symbol"], r["symbol"]), "kind": "Holding"}
             for r in head.to_dict("records")
         ]
         if not tail.empty:
             sums = tail[
-                ["market_value", "weight", "shares_value", "options_value"]
+                [
+                    "market_value",
+                    "weight",
+                    "shares_value",
+                    "options_value",
+                    "fixed_income_value",
+                ]
             ].sum()
             rows.append(
                 {
@@ -123,30 +142,31 @@ def _holdings_frame(
                 "weight": cash_slice["weight"],
                 "shares_value": 0.0,
                 "options_value": 0.0,
+                "fixed_income_value": 0.0,
             }
         )
     return pd.DataFrame(rows, columns=columns)
 
 
 def _risk_frame(
-    risk: list[dict[str, Any]], top_n: int = ALLOCATION_TOP_HOLDINGS
+    risk: list[dict[str, Any]],
+    top_n: int = ALLOCATION_TOP_HOLDINGS,
+    labels: dict[str, str] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     """Long frame (symbol, measure, value) for the largest measured holdings,
     plus the symbols without enough price history to measure."""
+    labels = labels or {}
     unmeasured = [r["symbol"] for r in risk if r.get("risk_share") is None]
     measured = [r for r in risk if r.get("risk_share") is not None]
     measured = sorted(measured, key=lambda r: r["weight"], reverse=True)[:top_n]
     rows = []
     for r in measured:
+        symbol = labels.get(r["symbol"], r["symbol"])
         rows.append(
-            {"symbol": r["symbol"], "measure": RISK_MEASURES[0], "value": r["weight"]}
+            {"symbol": symbol, "measure": RISK_MEASURES[0], "value": r["weight"]}
         )
         rows.append(
-            {
-                "symbol": r["symbol"],
-                "measure": RISK_MEASURES[1],
-                "value": r["risk_share"],
-            }
+            {"symbol": symbol, "measure": RISK_MEASURES[1], "value": r["risk_share"]}
         )
     return pd.DataFrame(rows, columns=["symbol", "measure", "value"]), unmeasured
 
@@ -201,6 +221,9 @@ def _build_ranked_bar(df: pd.DataFrame, dark: bool, hide_balances: bool) -> alt.
             *_value_tooltip(hide_balances),
             alt.Tooltip("shares_value:Q", title="In shares", format="$,.0f"),
             alt.Tooltip("options_value:Q", title="In options", format="$,.0f"),
+            alt.Tooltip(
+                "fixed_income_value:Q", title="In fixed income", format="$,.0f"
+            ),
         ]
     base = alt.Chart(df).encode(
         y=alt.Y("label:N", sort=None, title=None),
@@ -308,7 +331,11 @@ def _render_concentration_kpis(allocation: dict[str, Any]) -> None:
     concentration = allocation.get("concentration", {})
     breakdowns = allocation.get("breakdowns", {})
     by_symbol = allocation.get("by_symbol", [])
-    largest = by_symbol[0]["symbol"] if by_symbol else None
+    largest = (
+        _holding_labels(by_symbol).get(by_symbol[0]["symbol"], by_symbol[0]["symbol"])
+        if by_symbol
+        else None
+    )
     invested_help = "Share of invested holdings, excluding cash."
 
     with st.container(border=True, horizontal=True):
@@ -456,10 +483,13 @@ def render_portfolio_allocation(
         )
         st.caption(
             "One bar per symbol across accounts. Options are counted under "
-            "their underlying, at intrinsic value."
+            "their underlying, at intrinsic value; fixed income at accrued value."
         )
 
-    risk, unmeasured = _risk_frame(allocation.get("risk_contribution", []))
+    risk, unmeasured = _risk_frame(
+        allocation.get("risk_contribution", []),
+        labels=_holding_labels(allocation.get("by_symbol", [])),
+    )
     if not risk.empty:
         with st.container(border=True):
             st.markdown("##### Capital vs risk")
@@ -473,7 +503,8 @@ def render_portfolio_allocation(
                 "its share of the portfolio's volatility over the past year of "
                 "daily returns. A risk share well above the weight marks a "
                 "position that drives more of the swings than its size suggests. "
-                "Options are treated as their underlying."
+                "Options are treated as their underlying; fixed income holds its "
+                "value, so its risk share is zero."
             )
             if unmeasured:
                 caption += (

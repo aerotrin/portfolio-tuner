@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from src.backend.domain.analytics.security import (
+    SteadyAsset,
     _calc_annualized_return,
     _calc_flags,
     _calc_max_drawdown,
@@ -334,3 +335,65 @@ def test_compute_performance_metrics_batch_matches_loop_result() -> None:
 
 def test_compute_performance_metrics_batch_empty_input() -> None:
     assert compute_performance_metrics_batch([]).empty
+
+
+def _volatile_closes(scale: float = 1.0) -> list[float]:
+    rng = np.random.default_rng(11)
+    return (scale * 100 * np.cumprod(1 + rng.normal(0, 0.01, 120))).tolist()
+
+
+def _steady(weight: float, daily_growth: float = 0.0001) -> SteadyAsset:
+    return SteadyAsset(
+        weight=weight,
+        growth=lambda dates: np.array(
+            [(1 + daily_growth) ** i for i in range(len(dates))]
+        ),
+    )
+
+
+def test_steady_asset_blend_does_not_depend_on_price_level() -> None:
+    weights = np.array([0.5])
+    low = compute_portfolio_timeseries_indicators(
+        [_sec("AAA", _volatile_closes())], weights, [_steady(0.5)]
+    )[0]
+    high = compute_portfolio_timeseries_indicators(
+        [_sec("AAA", _volatile_closes(scale=50.0))], weights, [_steady(0.5)]
+    )[0]
+
+    np.testing.assert_allclose(
+        low["daily_return"].dropna(), high["daily_return"].dropna()
+    )
+
+
+def test_steady_asset_halves_the_volatility_of_an_equal_weight_mix() -> None:
+    securities = [_sec("AAA", _volatile_closes())]
+    alone = compute_portfolio_timeseries_indicators(securities, np.array([1.0]))[0]
+    mixed = compute_portfolio_timeseries_indicators(
+        securities, np.array([0.5]), [_steady(0.5, daily_growth=0.0)]
+    )[0]
+
+    assert mixed["daily_return"].std() == pytest.approx(
+        alone["daily_return"].std() / 2, rel=0.05
+    )
+    # Same level today; only the path differs
+    assert mixed["close"].iloc[-1] == pytest.approx(alone["close"].iloc[-1])
+
+
+def test_without_steady_assets_the_series_is_unchanged() -> None:
+    securities = [_sec("AAA", _volatile_closes()), _sec("BBB", [50.0] * 120)]
+    weights = np.array([0.7, 0.3])
+
+    plain = compute_portfolio_timeseries_indicators(securities, weights)[0]
+    empty = compute_portfolio_timeseries_indicators(securities, weights, [])[0]
+
+    pd.testing.assert_frame_equal(plain, empty)
+
+
+def test_steady_assets_alone_build_a_series() -> None:
+    portf = compute_portfolio_timeseries_indicators(
+        [], np.array([]), [_steady(1.0, daily_growth=0.0001)]
+    )[0]
+
+    assert len(portf) == 252
+    assert portf["daily_return"].dropna().gt(0).all()
+    assert (portf["symbol"] == "PORTF").all()

@@ -1,8 +1,19 @@
 from collections import Counter
-from typing import Iterable, Protocol
+from typing import Any, Iterable, Protocol
 
 MASK = "••"
 VISIBLE_DIGITS = 2
+FIXED_INCOME = "Fixed Income"
+
+
+def market_priced_symbols(open_positions: Iterable[dict[str, Any]]) -> set[str]:
+    """Symbols of open positions that have market data.
+
+    Fixed income is valued from its terms and has no quote to fetch.
+    """
+    return {
+        str(p["symbol"]) for p in open_positions if p.get("category") != FIXED_INCOME
+    }
 
 
 class _Account(Protocol):

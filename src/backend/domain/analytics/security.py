@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from datetime import date, datetime
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,17 +17,37 @@ from backend.domain.constants import (
 )
 
 
+class SteadyAsset(NamedTuple):
+    """A holding with no market price whose value follows a known path.
+
+    `growth` returns its growth factor on each of the given dates.
+    """
+
+    weight: float
+    growth: Callable[[Sequence[date]], np.ndarray]
+
+
 def compute_portfolio_timeseries_indicators(
     securities: List["Security"],
     weights: np.ndarray,
+    steady: Sequence[SteadyAsset] = (),
 ) -> List[pd.DataFrame]:
     """
     Build a single weighted 'close' series across securities, then compute indicators
     on top of that (daily_return, ema12/26/100, rsi). Returns a DataFrame indexed by date.
+
+    `steady` assets are mixed into the single-portfolio series by value weight.
     """
-    if not securities:
+    if not securities and not steady:
         return [pd.DataFrame()]
-    close_matrix = _calc_portfolio_weighted_close(securities, weights)
+    close_matrix = (
+        _calc_portfolio_weighted_close(securities, weights) if securities else None
+    )
+    if steady:
+        close_matrix = _blend_steady_assets(
+            close_matrix, float(np.sum(weights)), steady
+        )
+    assert close_matrix is not None
 
     daily = close_matrix.pct_change(fill_method=None)
     ema12 = close_matrix.ewm(span=12, adjust=False).mean()
@@ -138,6 +158,42 @@ def _calc_portfolio_weighted_close(
 
     close = pd.DataFrame(M, index=C.index, columns=cols)
     return close
+
+
+def _blend_steady_assets(
+    close: Optional[pd.DataFrame],
+    securities_weight: float,
+    steady: Sequence[SteadyAsset],
+) -> pd.DataFrame:
+    """Mix steady assets into the PORTF close series by value weight.
+
+    Each part is rescaled to 1.0 at the last date before weighting, so the
+    result doesn't depend on any part's price level:
+    PORTF(t) = S(T) · [ w_sec · S(t)/S(T) + Σ w_k · A_k(t)/A_k(T) ].
+    """
+    if close is None:
+        index = pd.bdate_range(
+            end=pd.Timestamp.now(tz="UTC").normalize(), periods=TRADING_DAYS
+        )
+        level = float(HYP_GROWTH_START)
+        relative = np.zeros(len(index))
+        securities_weight = 0.0
+    else:
+        index = close.index
+        series = close["PORTF"].to_numpy(dtype=float)
+        level = float(series[-1])
+        relative = series / level
+
+    total = securities_weight + sum(a.weight for a in steady)
+    if total <= 0 or not np.isfinite(level) or level == 0:
+        return close if close is not None else pd.DataFrame({"PORTF": []})
+
+    dates = [ts.date() for ts in index]
+    blended = relative * (securities_weight / total)
+    for asset in steady:
+        growth = np.asarray(asset.growth(dates), dtype=float)
+        blended = blended + (asset.weight / total) * growth / growth[-1]
+    return pd.DataFrame({"PORTF": level * blended}, index=index)
 
 
 def _calc_asset_close_matrix(securities: List["Security"]) -> pd.DataFrame:
