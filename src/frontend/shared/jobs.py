@@ -1,6 +1,7 @@
 import logging
 import time
 
+import requests
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
@@ -196,7 +197,20 @@ def check_job_status() -> None:
         return
 
     api = get_api_client()
-    job = api.get_refresh_job(job_id)
+    try:
+        job = api.get_refresh_job(job_id)
+    except (requests.ConnectionError, requests.Timeout):
+        logger.debug("Backend unreachable while polling job %s", job_id)
+        return
+    except requests.HTTPError as exc:
+        if exc.response is None or exc.response.status_code != 404:
+            raise
+        # The job registry is in-memory, so a backend restart loses the job.
+        logger.warning("Refresh job %s no longer exists on the backend", job_id)
+        _clear_job_state()
+        st.session_state.pop("_last_missing_attempted", None)
+        st.session_state["job_just_lost"] = True
+        st.rerun()
 
     status = job.get("status") or "pending"
     st.session_state["job_status"] = status
@@ -264,6 +278,9 @@ def render_refresh_job_ui(active_page: str) -> None:
 
     if st.session_state.pop("job_just_failed", False):
         st.toast("Refresh job failed", icon="❌")
+
+    if st.session_state.pop("job_just_lost", False):
+        st.toast("Refresh interrupted — backend restarted. Please retry.", icon="⚠️")
 
     job_id = st.session_state.get("job_id")
     if not job_id:

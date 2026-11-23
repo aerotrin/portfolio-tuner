@@ -577,6 +577,7 @@ The backend uses FastAPI's `BackgroundTasks` to schedule refresh work after the 
 4. The background task first calls `pending_quotes()`, `pending_bars()`, and `pending_profiles()` to determine exactly which fetch operations are needed across all data types. The sum of these becomes `job.work_total`. It then executes the refresh in order: global rates → quotes → bars → profiles, decrementing `job.work_remaining` via an `on_progress()` callback after each symbol is processed.
 5. The frontend polls `GET /jobs/{job_id}` (driven by `streamlit_autorefresh`) to track progress and display a progress bar (`work_completed = work_total - work_remaining`).
 6. When the job finishes (success or error), the frontend clears job state, invalidates its data cache, and reruns.
+7. Because the registry is in-memory, a backend restart loses running jobs. A `404` on the poll makes the frontend drop the stale job id and show a "Refresh interrupted" toast (a blocking refresh for missing symbols restarts itself); connection errors during the restart window are ignored and polling continues.
 
 A cooldown timer (`_LAST_REFRESH`, 3 seconds) prevents the endpoint from being hammered with duplicate requests.
 
