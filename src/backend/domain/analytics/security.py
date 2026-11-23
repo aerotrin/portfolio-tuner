@@ -6,6 +6,7 @@ import pandas as pd
 
 from backend.domain.constants import (
     HYP_GROWTH_START,
+    MIN_RETURN_OBS,
     NEAR_HIGH_LOW_PCT,
     REL_VOLUME_MIN_OBS,
     REL_VOLUME_WINDOW,
@@ -151,6 +152,11 @@ def _calc_asset_close_matrix(securities: List["Security"]) -> pd.DataFrame:
     return C
 
 
+def count_return_observations(securities: List["Security"]) -> pd.Series:
+    """Daily returns each security has in the shared trailing window."""
+    return _calc_asset_close_matrix(securities).pct_change(fill_method=None).count()
+
+
 class ReturnStatistics(NamedTuple):
     """Pairwise statistics of the securities' daily returns over one window.
 
@@ -289,7 +295,7 @@ def compute_performance_metrics_batch(
         period_ret = (1.0 + r).prod() - 1.0
         ret1y = (1.0 + period_ret) ** (TRADING_DAYS / n) - 1.0
     vol = r.std() * np.sqrt(TRADING_DAYS)
-    if n < 40:
+    if n < MIN_RETURN_OBS:
         vol[:] = np.nan
     sharpe = (excess.mean() / excess.std().replace(0, np.nan)) * np.sqrt(TRADING_DAYS)
 
@@ -418,7 +424,9 @@ def _calc_short_term_returns(
     return out
 
 
-def _calc_volatility(ret: pd.Series, trading_days: int, min_obs: int = 40) -> float:
+def _calc_volatility(
+    ret: pd.Series, trading_days: int, min_obs: int = MIN_RETURN_OBS
+) -> float:
     """
     Volatility from a daily return series.
     """

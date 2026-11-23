@@ -278,6 +278,8 @@ Sharpe (1M) and Sharpe (3M) favour recent risk-adjusted performance: the trailin
 
 The chart footer records the run timestamp, seed, iteration count, run context (account or Research), and symbol count, and is embedded in any saved PNG snapshot. The same context stamp appears as a caption above the results.
 
+> **Note:** A security needs at least 40 days of price history within the past year to take part in a run. Securities with less are left out of the simulation and named in a note above the results; the optimal weights cover the remaining securities only.
+
 > **Note:** Optimizer results are stored per account (and per research page) for the session — switching accounts shows that account's own last run, if any.
 
 > **Screenshot placeholder — Optimization tab with efficient frontier chart**
@@ -287,6 +289,8 @@ The chart footer records the run timestamp, seed, iteration count, run context (
 ### Correlation Matrix
 
 A heatmap showing pairwise return correlation between all holdings. Values close to 1 indicate highly correlated securities; values close to -1 indicate inverse correlation. Useful for understanding diversification.
+
+A security needs at least 40 days of price history within the past year to be included. Securities with less are left out of the heatmap and the pair tables, and are listed in a note above the matrix.
 
 > **Screenshot placeholder — Correlation matrix heatmap**
 
@@ -332,7 +336,7 @@ A standalone research dashboard for the ETF symbols configured in `symbols.yml` 
 - **Market movers** — volume leaders, top gainers and losers for the US or Canadian market. A selector on the right of the volume section switches between **Unusual Volume** (the default: ranked by relative volume, today's volume divided by the security's own 20-day average, so it surfaces where trading is heavier than normal) and **Most Active** (ranked by raw volume). If no data is available for a symbol group, or if market conditions produce no gainers or losers in a category, an informational message is shown in place of the table.
 - **Intraday tab** — a market-map treemap of every configured symbol, nested region → group → symbol, with a gainer/loser count and quote table. Click a region, group or symbol tile to zoom into it — the gainer/loser count and quote table narrow to match; optional type pills narrow the map
 - **Performance tab** — growth chart, risk/return chart and performance metrics table, filtered by the Region → Type → Group facets (see below)
-- **Correlation tab** — correlation matrix heatmap and strongest/weakest pair tables for the securities currently in scope on the Performance tab (facet filter, refined by any table row selection)
+- **Correlation tab** — correlation matrix heatmap and strongest/weakest pair tables for the securities currently in scope on the Performance tab (facet filter, refined by any table row selection). Securities with fewer than 40 days of price history are left out and listed in a note
 - **Optimization tab** — runs the same Monte Carlo weight optimizer as the Portfolios page, over the securities currently in scope on the Performance tab. Results are stamped "Research" with the symbol count and kept per page; if the selection changes after a run, a notice prompts a re-run. A warning appears above 25 symbols (random weight sampling becomes less meaningful) and runs are blocked above 50 — narrow the selection first.
 
 Use the date range selector to change the historical window for charts and metrics.
@@ -389,7 +393,7 @@ Market data (quotes, historical bars, profiles) is cached in the database and mu
 
 The system automatically checks symbol availability on each page load. If any required symbols are missing from the cache, a blocking refresh job starts automatically and the page waits for it to complete before rendering.
 
-A symbol only needs a current quote to be shown. A **newly listed security** (for example on its IPO day) has no daily price history yet, so it appears with its price, market value, and weight straight away, while its performance columns (returns, volatility, Sharpe, correlation) stay blank and fill in as daily history builds up. Until then it counts as flat in the portfolio's own performance figures, and an account holding only such securities shows "—" for its Performance statistics.
+A symbol only needs a current quote to be shown. A **newly listed security** (for example on its IPO day) has no daily price history yet, so it appears with its price, market value, and weight straight away, while its performance columns (returns, volatility, Sharpe, correlation) stay blank and fill in as daily history builds up. It joins the correlation matrix once it has 40 days of price history. Until then it counts as flat in the portfolio's own performance figures, and an account holding only such securities shows "—" for its Performance statistics.
 
 On subsequent loads, the smart sync only fetches data newer than the last successful bar date for each symbol — making incremental refreshes fast.
 

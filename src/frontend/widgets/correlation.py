@@ -4,6 +4,7 @@ import plotly.express as px
 import streamlit as st
 
 from frontend.shared.dataframe import compute_correlation_matrix
+from frontend.shared.settings import MIN_RETURN_OBS
 
 
 def _top_corr_pairs(
@@ -19,13 +20,36 @@ def _top_corr_pairs(
     return highest, lowest
 
 
-def render_correlation_matrix(matrix: pd.DataFrame | None = None) -> None:
-    """Render correlation matrix for current holdings."""
+def _excluded_note(excluded: list[str]) -> str:
+    return (
+        f"Not shown (fewer than {MIN_RETURN_OBS} days of price history): "
+        + ", ".join(excluded)
+        + "."
+    )
+
+
+def _render_unavailable(excluded: list[str] | None) -> None:
+    message = "Not enough price history to compute correlations."
+    if excluded:
+        message += " " + _excluded_note(excluded)
+    st.info(message)
+
+
+def render_correlation_matrix(
+    matrix: pd.DataFrame | None = None, excluded: list[str] | None = None
+) -> None:
+    """Render correlation matrix for current holdings; `excluded` names the
+    symbols left out for too little price history."""
+    if excluded and (matrix is None or matrix.shape[0] < 2):
+        _render_unavailable(excluded)
+        return
     if matrix is None or matrix.empty:
         st.info("No correlation matrix found")
         return
 
     st.markdown("#### :material/ssid_chart: Correlation")
+    if excluded:
+        st.caption(f":material/info: {_excluded_note(excluded)}")
 
     c = st.columns(2)
     with c[0]:
@@ -97,12 +121,12 @@ def render_market_correlation(closes: pd.DataFrame, symbols: list[str]) -> None:
         )
         return
 
-    matrix = compute_correlation_matrix(closes, symbols)
+    matrix, excluded = compute_correlation_matrix(closes, symbols)
     if matrix.shape[0] < 2:
-        st.info("Not enough price history to compute correlations.")
+        _render_unavailable(excluded)
         return
 
-    render_correlation_matrix(matrix)
+    render_correlation_matrix(matrix, excluded)
     st.caption(
         "Daily-return correlation, trailing 252 trading days. "
         "Scope follows the Performance tab's group filter and row selection."

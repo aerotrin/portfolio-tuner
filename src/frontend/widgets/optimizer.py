@@ -9,6 +9,7 @@ import streamlit as st
 
 from frontend.services.streamlit_data import get_api_client
 from frontend.shared.settings import (
+    MIN_RETURN_OBS,
     HEIGHT_EFFICIENT_FRONTIER_CHART,
     TRADING_DAYS_PER_YEAR,
 )
@@ -649,6 +650,7 @@ def render_optimizer(
 
     optimizer_config = result.get("config", {})
     run_symbols: list[str] = optimizer_config.get("symbols", [])
+    excluded_symbols: list[str] = optimizer_config.get("excluded") or []
     run_at = optimizer_config.get("run_at", "")
     stored_seed = optimizer_config.get("seed")
     seed_display = str(stored_seed) if stored_seed is not None else "random"
@@ -657,7 +659,13 @@ def render_optimizer(
     st.markdown("#### :material/analytics: Optimization Results")
     st.caption(f"{context_label} · {len(run_symbols)} symbols · run at {run_at}")
 
-    if sorted(run_symbols) != sorted(portfolio_symbols):
+    if excluded_symbols:
+        st.caption(
+            f":material/info: Left out of this run (fewer than {MIN_RETURN_OBS} "
+            f"days of price history): {', '.join(excluded_symbols)}."
+        )
+
+    if sorted(run_symbols + excluded_symbols) != sorted(portfolio_symbols):
         st.info(
             f"Selection has changed since this run ({len(run_symbols)} → "
             f"{n_symbols} symbols) — run the optimizer again to update."

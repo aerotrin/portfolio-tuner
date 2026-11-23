@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Mapping, NamedTuple, Optional
 import numpy as np
 import pandas as pd
 
+from backend.domain.constants import MIN_RETURN_OBS
 from backend.domain.entities.account import Category, Holding
 from backend.domain.entities.security import SecurityType
 
@@ -14,9 +15,6 @@ UNCLASSIFIED_LABEL = "Unclassified"
 ETF_UNCLASSIFIED_LABEL = "ETF / unclassified"
 DIMENSIONS = ("asset_type", "instrument", "sector", "country", "currency", "account")
 OPTION_CATEGORIES = {Category.CALL_OPTION, Category.PUT_OPTION}
-
-# Matches the minimum history required for a volatility estimate
-MIN_RISK_OBS = 40
 
 
 class CashSlice(NamedTuple):
@@ -180,7 +178,7 @@ def calc_risk_contribution(
     measured = [
         s
         for s in share
-        if s in covariance.columns and observations.get(s, 0) >= MIN_RISK_OBS
+        if s in covariance.columns and observations.get(s, 0) >= MIN_RETURN_OBS
     ]
     risk: dict[str, float] = {}
     if measured:

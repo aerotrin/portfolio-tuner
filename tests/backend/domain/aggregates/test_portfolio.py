@@ -450,6 +450,74 @@ def test_build_correlation_matrix_dto_shape(monkeypatch: pytest.MonkeyPatch):
     assert portfolio.return_observations["SHOP"] == 100
 
 
+def _portfolio_with_stats(
+    monkeypatch: pytest.MonkeyPatch, observations: dict[str, int]
+) -> Portfolio:
+    _stub_portfolio_analytics(monkeypatch)
+
+    import src.backend.domain.aggregates.portfolio as portfolio_module
+
+    symbols = list(observations)
+    corr = pd.DataFrame(0.35, index=symbols, columns=symbols)
+    for s in symbols:
+        corr.loc[s, s] = 1.0
+    stats = _return_stats(corr)._replace(observations=pd.Series(observations))
+    monkeypatch.setattr(
+        portfolio_module, "compute_return_statistics", lambda _securities: stats
+    )
+
+    return Portfolio(
+        id="acct-4",
+        cash=0.0,
+        external_cash_flows=[],
+        positions=[
+            OpenLot(
+                symbol="EQUSD",
+                category=Category.EQUITY,
+                open_date=date.today() - timedelta(days=1),
+                open_qty=1,
+                acb_per_sh=10.0,
+                book_value=10.0,
+            )
+        ],
+        securities={
+            "EQUSD": _make_security(
+                "EQUSD", "USD", close=50.0, change=2.0, change_percent=0.04
+            )
+        },
+        rates=GlobalRates(rf_rate=0.0, fx_rate=1.25),
+    )
+
+
+def test_build_correlation_matrix_excludes_short_history(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    portfolio = _portfolio_with_stats(
+        monkeypatch, {"AAPL": 252, "SHOP": 252, "NEW": 10}
+    )
+
+    corr = portfolio.correlation_matrix
+    assert corr.symbols == ["AAPL", "SHOP"]
+    assert corr.excluded == ["NEW"]
+    assert corr.entries is not None
+    assert {e.row for e in corr.entries} == {"AAPL", "SHOP"}
+    assert {e.col for e in corr.entries} == {"AAPL", "SHOP"}
+
+    # Risk analytics keep the full statistics and apply their own guard
+    assert "NEW" in portfolio.covariance_matrix_df.columns
+    assert portfolio.return_observations["NEW"] == 10
+
+
+def test_build_correlation_matrix_too_few_measured_symbols(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    portfolio = _portfolio_with_stats(monkeypatch, {"AAPL": 252, "NEW": 10})
+
+    corr = portfolio.correlation_matrix
+    assert corr.entries is None
+    assert corr.excluded == ["NEW"]
+
+
 def test_build_correlation_matrix_empty_securities_guard():
     portfolio = Portfolio(
         id="acct-3",

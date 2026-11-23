@@ -35,15 +35,24 @@ class PortfolioSimulatorManager:
         symbols: List[str],
         n_p: int = 5000,
         seed: int | None = None,
-    ) -> tuple[list[dict[str, Any]], datetime]:
+    ) -> tuple[list[dict[str, Any]], datetime, list[str]]:
+        """Returns the optimal portfolio, the run time, and the symbols left
+        out of the run for too little price history."""
         simulations = await self._build_sim_portfolios(symbols, n_p, seed=seed)
-        return [simulations.find_optimal_portfolio()], simulations.run_at
+        portfolios = (
+            [simulations.find_optimal_portfolio()] if simulations.securities else []
+        )
+        return portfolios, simulations.run_at, simulations.excluded
 
     async def get_all_portfolios(
         self,
         symbols: List[str],
         n_p: int = 5000,
         seed: int | None = None,
-    ) -> tuple[list[dict[str, Any]], datetime]:
+    ) -> tuple[list[dict[str, Any]], datetime, list[str]]:
         simulations = await self._build_sim_portfolios(symbols, n_p, seed=seed)
-        return simulations.get_all_portfolios(), simulations.run_at
+        return (
+            simulations.get_all_portfolios(),
+            simulations.run_at,
+            simulations.excluded,
+        )

@@ -12,6 +12,7 @@ from backend.domain.analytics.security import (
     compute_portfolio_timeseries_indicators,
     compute_return_statistics,
 )
+from backend.domain.constants import MIN_RETURN_OBS
 from backend.domain.entities.account import Category, CashFlow, Holding, OpenLot
 from backend.domain.entities.security import (
     GlobalRates,
@@ -35,6 +36,7 @@ class CorrelationEntry(BaseModel):
 class CorrelationMatrixDTO(BaseModel):
     symbols: Optional[list[str]] = None
     entries: Optional[list[CorrelationEntry]] = None
+    excluded: Optional[list[str]] = None
     as_of: Optional[datetime] = None
 
 
@@ -516,13 +518,22 @@ class Portfolio:
             return
         try:
             stats = compute_return_statistics(list(self.securities.values()))
-            self.correlation_matrix_df = stats.correlation
             self.covariance_matrix_df = stats.covariance
             self.return_observations = stats.observations
-            corr = self.correlation_matrix_df
 
-            # Validate matrix is not empty
-            if corr.empty or len(corr.columns) == 0:
+            # Correlations from a handful of returns are noise; leave those
+            # symbols out and name them instead
+            counts = stats.observations.reindex(stats.correlation.columns).fillna(0)
+            keep = [s for s in stats.correlation.columns if counts[s] >= MIN_RETURN_OBS]
+            excluded = sorted(s for s in stats.correlation.columns if s not in keep)
+            corr = stats.correlation.loc[keep, keep]
+            self.correlation_matrix_df = corr
+
+            if len(keep) < 2:
+                if excluded:
+                    self.correlation_matrix = CorrelationMatrixDTO(
+                        symbols=keep, excluded=excluded
+                    )
                 return
 
             stacked = corr.stack(future_stack=True)
@@ -534,6 +545,7 @@ class Portfolio:
             self.correlation_matrix = CorrelationMatrixDTO(
                 symbols=list(corr.columns),
                 entries=[CorrelationEntry(**r) for r in entries_df.to_dict("records")],
+                excluded=excluded,
             )
         except Exception as e:
             logger.error(

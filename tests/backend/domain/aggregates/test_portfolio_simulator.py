@@ -121,3 +121,47 @@ def test_find_optimal_portfolio_raises_before_run_simulator() -> None:
 
     with pytest.raises(ValueError, match=r"Run run_simulator\(\) first"):
         simulator.find_optimal_portfolio()
+
+
+def _with_short_history() -> list[Security]:
+    """The three established securities plus one that listed 20 sessions ago."""
+    rates = GlobalRates(rf_rate=0.02, fx_rate=1.0)
+    securities = _build_securities()
+    new = _build_security("NEW", [50 + i * 0.5 for i in range(20)], rates)
+    for bar in new.bars:
+        bar.date = bar.date + timedelta(days=120)
+    # The quote is appended as a bar, so it must not predate the listing
+    new.quote.timestamp = datetime(2024, 1, 1) + timedelta(days=139)
+    return securities + [
+        Security(quote=new.quote, bars=new.bars, rates=rates, profile=new.profile)
+    ]
+
+
+def test_short_history_security_is_excluded_from_run() -> None:
+    simulator = SimPortfolios(
+        securities=_with_short_history(),
+        rates=GlobalRates(rf_rate=0.02, fx_rate=1.0),
+        n_p=4,
+        seed=42,
+    )
+
+    simulator.run()
+
+    assert simulator.excluded == ["NEW"]
+    assert simulator.weight_matrix.shape == (4, 3)
+    for record in simulator.get_all_portfolios():
+        assert set(record["weights"]) == {"AAA", "BBB", "CCC"}
+
+
+def test_run_with_only_short_history_securities_returns_no_portfolios() -> None:
+    rates = GlobalRates(rf_rate=0.02, fx_rate=1.0)
+    simulator = SimPortfolios(
+        securities=[_build_security("NEW", [50 + i * 0.5 for i in range(20)], rates)],
+        rates=rates,
+        n_p=4,
+    )
+
+    simulator.run()
+
+    assert simulator.excluded == ["NEW"]
+    assert simulator.get_all_portfolios() == []

@@ -223,6 +223,7 @@ holdings_close_norm = None
 portfolio_metrics = None
 portfolio_close_norm = None
 portfolio_correlation_matrix = None
+portfolio_correlation_excluded: list[str] = []
 
 if portfolio_symbols:
     view = build_holdings_view(portfolio, portfolio_symbols)
@@ -232,6 +233,7 @@ if portfolio_symbols:
     portfolio_metrics = view.portfolio_metrics
     portfolio_close_norm = view.portfolio_close_norm
     portfolio_correlation_matrix = view.correlation_matrix
+    portfolio_correlation_excluded = view.correlation_excluded
     # All-accounts holdings carry the raw account number — show the label
     if not single and "account" in holdings_data.columns:
         holdings_data["account_type"] = holdings_data["account"].map(
@@ -312,7 +314,9 @@ with tabs[2]:
     )
 
 with tabs[3]:
-    render_correlation_matrix(portfolio_correlation_matrix)
+    render_correlation_matrix(
+        portfolio_correlation_matrix, portfolio_correlation_excluded
+    )
 
 with tabs[4]:
     render_optimizer(

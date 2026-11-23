@@ -5,6 +5,9 @@ Global constants for *optimal-portfolio*.
 # ── Portfolio metrics ─────────────────────────────────────────────
 RISK_FREE_RATE = 0.0300
 TRADING_DAYS = 252
+# Fewest daily returns a security needs before its volatility, risk share or
+# correlations are reported
+MIN_RETURN_OBS = 40
 NEAR_HIGH_LOW_PCT = 0.025
 SHORT_TERM_WINDOWS = {"5D": 5, "1M": 21, "3M": 63, "6M": 126}
 RSI_WINDOW = 14

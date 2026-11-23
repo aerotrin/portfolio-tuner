@@ -9,7 +9,9 @@ from backend.domain.aggregates.security import Security
 from backend.domain.analytics.security import (
     compute_performance_metrics_batch,
     compute_portfolio_timeseries_indicators,
+    count_return_observations,
 )
+from backend.domain.constants import MIN_RETURN_OBS
 from backend.domain.entities.security import GlobalRates
 
 
@@ -24,6 +26,8 @@ class SimulationConfig(BaseModel):
     n_p: int
     seed: int | None = None
     run_at: datetime
+    # Requested symbols left out for having fewer than MIN_RETURN_OBS returns
+    excluded: List[str] = Field(default_factory=list)
 
 
 class SimulatedPortfoliosDTO(BaseModel):
@@ -41,7 +45,19 @@ class SimPortfolios:
         n_p: int,
         seed: int | None = None,
     ):
-        self.securities = securities
+        # A short-history security would be held flat before it listed, which
+        # understates its risk, so it is left out of the simulation
+        counts = (
+            count_return_observations(securities)
+            if securities
+            else pd.Series(dtype=float)
+        )
+        self.securities = [
+            s for s in securities if counts[s.quote.symbol] >= MIN_RETURN_OBS
+        ]
+        self.excluded = sorted(
+            s.quote.symbol for s in securities if s not in self.securities
+        )
         self.rf_rate = float(rates.rf_rate)
         self.fx_rate = float(rates.fx_rate)
         self.n_p = n_p
@@ -55,6 +71,8 @@ class SimPortfolios:
     def run(self):
         """Generate random portfolios and compute indicators & metrics."""
         self.run_at = datetime.now(timezone.utc)
+        if not self.securities:
+            return
         rng = np.random.default_rng(self.seed)
         weight_matrix = rng.dirichlet(np.ones(len(self.securities)), size=self.n_p)
         self.weight_matrix = weight_matrix
@@ -87,6 +105,8 @@ class SimPortfolios:
 
     def get_all_portfolios(self) -> list[dict[str, Any]]:
         """Return all simulated portfolios, each with flat metrics and a weights sub-dict."""
+        if not self.securities:
+            return []
         if self.performance.empty:
             raise ValueError("No metrics computed. Run run() first.")
 

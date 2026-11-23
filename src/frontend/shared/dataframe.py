@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from frontend.services.streamlit_data import PortfolioData, SecurityData
-from frontend.shared.settings import TRADING_DAYS_PER_YEAR
+from frontend.shared.settings import MIN_RETURN_OBS, TRADING_DAYS_PER_YEAR
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
@@ -181,6 +181,7 @@ class HoldingsView:
     portfolio_metrics: pd.DataFrame  # single "PORTF" row with sparkline/indicators
     portfolio_close_norm: pd.DataFrame  # wide "PORTF" close_norm
     correlation_matrix: pd.DataFrame | None  # square symbol matrix
+    correlation_excluded: list[str]  # symbols with too little history to correlate
     equity_qty: dict[str, int]  # symbol -> open qty (equity rows only)
 
 
@@ -225,7 +226,8 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
     portfolio_close_norm = make_timeseries_wide_df(portfolio_indicators, "close_norm")
 
     correlation_matrix = None
-    entries = (portfolio.correlation_matrix or {}).get("entries")
+    correlation = portfolio.correlation_matrix or {}
+    entries = correlation.get("entries")
     if entries:
         correlation_matrix = pd.DataFrame(entries).pivot(
             index="row", columns="col", values="value"
@@ -242,6 +244,7 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
         portfolio_metrics=portfolio_metrics,
         portfolio_close_norm=portfolio_close_norm,
         correlation_matrix=correlation_matrix,
+        correlation_excluded=list(correlation.get("excluded") or []),
         equity_qty=equity_qty,
     )
 
@@ -249,13 +252,16 @@ def build_holdings_view(portfolio: PortfolioData, symbols: list[str]) -> Holding
 def compute_correlation_matrix(
     closes: pd.DataFrame,
     symbols: list[str] | None = None,
-) -> pd.DataFrame:
-    """Correlation of daily returns over the trailing TRADING_DAYS_PER_YEAR window.
+) -> tuple[pd.DataFrame, list[str]]:
+    """Correlation of daily returns over the trailing TRADING_DAYS_PER_YEAR window,
+    plus the symbols left out for having fewer than MIN_RETURN_OBS returns.
 
     Mirrors backend compute_return_statistics semantics (ffill, tail, pct_change, corr).
     """
     sub = closes.filter(items=symbols) if symbols is not None else closes
     C = sub.sort_index().ffill().tail(TRADING_DAYS_PER_YEAR)
     R = C.pct_change(fill_method=None).dropna(how="all")
-    corr = R.corr()
-    return corr.dropna(axis=0, how="all").dropna(axis=1, how="all")
+    counts = R.count()
+    excluded = sorted(str(s) for s in counts[counts < MIN_RETURN_OBS].index)
+    corr = R.loc[:, counts >= MIN_RETURN_OBS].corr()
+    return corr.dropna(axis=0, how="all").dropna(axis=1, how="all"), excluded

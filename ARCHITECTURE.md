@@ -338,7 +338,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `positions.py` | Holdings table with sparklines, gain/loss colouring, FX exposure, options info |
 | `performance.py` | Multi-tab performance view with signal options and analytics table |
 | `allocation.py` | Allocation tab: concentration KPIs, breakdown donut, ranked holdings, capital vs risk, asset mix by account (renders the backend `allocation` DTO) |
-| `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes |
+| `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes; notes symbols excluded for short history |
 | `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page); derives trailing 1M/3M period Sharpe metrics client-side from simulated window returns and annual volatility — when one is selected, the frontier chart and KPI cards render in that window's period space |
 | `growth_chart.py` | Normalised growth chart |
 | `risk_chart.py` | Risk/return scatter chart |
@@ -538,7 +538,7 @@ Before computing indicators and metrics, the current live quote is appended to t
 
 `compute_portfolio_timeseries_indicators(securities, weights)` combines the bar series of multiple securities using a weight vector to produce a weighted portfolio timeseries. It handles a weight *matrix* (used in simulation) and returns one `DataFrame` per row of the weight matrix.
 
-`compute_return_statistics(securities)` extracts the daily returns from each security's bar series, aligns them on a shared date index, and returns the Pearson correlation matrix, the covariance matrix, and the per-symbol observation counts from that one returns frame. The `Portfolio` aggregate calls it once: the correlation matrix is serialised as a flat list of `(row, col, value)` entries for efficient JSON transport, and the covariance and counts feed the allocation risk contribution.
+`compute_return_statistics(securities)` extracts the daily returns from each security's bar series, aligns them on a shared date index, and returns the Pearson correlation matrix, the covariance matrix, and the per-symbol observation counts from that one returns frame. The `Portfolio` aggregate calls it once: the correlation matrix is serialised as a flat list of `(row, col, value)` entries for efficient JSON transport, and the covariance and counts feed the allocation risk contribution. Symbols with fewer than `MIN_RETURN_OBS` (40) return observations are dropped from the serialised correlation matrix and named in its `excluded` list; the covariance and counts stay unfiltered. The market pages' client-side `compute_correlation_matrix` applies the same threshold.
 
 ### Portfolio-Level Analytics
 
@@ -547,7 +547,7 @@ The `Portfolio.build()` method orchestrates the analytics pipeline in the correc
 1. `_build_holdings()` — compute market values, gains, weights, and contributions per position
 2. `_build_indicators()` — compute the weighted portfolio timeseries
 3. `_build_metrics()` — compute portfolio-level performance metrics from the timeseries
-4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings, and keep the matching covariance matrix and observation counts
+4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings with enough history, and keep the matching covariance matrix and observation counts
 
 ### Allocation Analytics
 
@@ -588,7 +588,8 @@ This in-memory job store is simple and sufficient for a single-instance deployme
 
 The `PortfolioSimulator` (`domain/aggregates/portfolio_simulator.py`) implements a Monte Carlo approach to portfolio optimisation:
 
-1. Generate `n_p` random weight vectors for the given symbol set using a Dirichlet distribution. This produces uniformly distributed points on the simplex (all weights positive, sum to 1).
+0. Drop securities with fewer than `MIN_RETURN_OBS` (40) daily returns in the shared trailing window. They would otherwise be held flat before their first bar, understating their risk. The dropped symbols are returned in `config.excluded`, and `config.symbols` lists the ones actually simulated.
+1. Generate `n_p` random weight vectors for the remaining symbol set using a Dirichlet distribution. This produces uniformly distributed points on the simplex (all weights positive, sum to 1).
 2. For each weight vector, compute the weighted portfolio timeseries using `compute_portfolio_timeseries_indicators`.
 3. Compute performance metrics (Sharpe, volatility, return) for each simulated portfolio.
 4. Find the portfolio with the highest Sharpe ratio and return its metrics and weights as the "optimal" allocation.

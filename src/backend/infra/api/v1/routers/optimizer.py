@@ -50,17 +50,18 @@ async def get_optimal_portfolio(
 ):
     """Run Monte Carlo portfolio simulation and return the optimal allocation with highest Sharpe ratio."""
     try:
-        portfolios, run_at = await portfolio_man.get_optimal_portfolio(
+        portfolios, run_at, excluded = await portfolio_man.get_optimal_portfolio(
             symbols=payload.symbols,
             n_p=payload.n_p,
             seed=payload.seed,
         )
         return SimulatedPortfoliosDTO(
             config=SimulationConfig(
-                symbols=payload.symbols,
+                symbols=[s for s in payload.symbols if s not in excluded],
                 n_p=payload.n_p,
                 seed=payload.seed,
                 run_at=run_at,
+                excluded=excluded,
             ),
             portfolios=portfolios,
         )
@@ -79,17 +80,18 @@ async def get_simulated_portfolios(
 ):
     """Run Monte Carlo simulation and return all portfolios for frontend-driven optimization."""
     try:
-        portfolios, run_at = await portfolio_man.get_all_portfolios(
+        portfolios, run_at, excluded = await portfolio_man.get_all_portfolios(
             symbols=payload.symbols,
             n_p=payload.n_p,
             seed=payload.seed,
         )
         return SimulatedPortfoliosDTO(
             config=SimulationConfig(
-                symbols=payload.symbols,
+                symbols=[s for s in payload.symbols if s not in excluded],
                 n_p=payload.n_p,
                 seed=payload.seed,
                 run_at=run_at,
+                excluded=excluded,
             ),
             portfolios=portfolios,
         )

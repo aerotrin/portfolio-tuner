@@ -26,7 +26,7 @@ def test_perfectly_correlated_and_inverse_pairs():
         n,
     )
 
-    corr = compute_correlation_matrix(closes)
+    corr, _ = compute_correlation_matrix(closes)
 
     assert corr.loc["AAA", "BBB"] == pytest.approx(1.0)
     assert corr.loc["AAA", "CCC"] == pytest.approx(-1.0)
@@ -39,7 +39,7 @@ def test_symbols_filter_restricts_columns_and_ignores_unknown():
         {s: (100 + rng.standard_normal(n).cumsum()).tolist() for s in "ABC"}, n
     )
 
-    corr = compute_correlation_matrix(closes, symbols=["A", "B", "ZZZ"])
+    corr, _ = compute_correlation_matrix(closes, symbols=["A", "B", "ZZZ"])
 
     assert sorted(corr.columns) == ["A", "B"]
     assert sorted(corr.index) == ["A", "B"]
@@ -54,7 +54,7 @@ def test_only_trailing_window_used():
     y = np.concatenate([-x[:extra] + 300, x[extra:]])
     closes = _closes({"X": x.tolist(), "Y": y.tolist()}, n)
 
-    corr = compute_correlation_matrix(closes)
+    corr, _ = compute_correlation_matrix(closes)
 
     assert corr.loc["X", "Y"] == pytest.approx(1.0)
 
@@ -71,7 +71,7 @@ def test_constant_price_column_dropped():
         n,
     )
 
-    corr = compute_correlation_matrix(closes)
+    corr, _ = compute_correlation_matrix(closes)
 
     assert "FLAT" not in corr.columns
     assert "FLAT" not in corr.index
@@ -86,11 +86,33 @@ def test_interior_nans_forward_filled():
     a[10:15] = np.nan
     closes = _closes({"A": a.tolist(), "B": (100 * np.cumprod(1 + 2 * r)).tolist()}, n)
 
-    corr = compute_correlation_matrix(closes)
+    corr, _ = compute_correlation_matrix(closes)
 
     # A stays in the matrix (ffill bridges the gap) and remains strongly correlated.
     assert not np.isnan(corr.loc["A", "B"])
     assert corr.loc["A", "B"] > 0.8
+
+
+def test_short_history_symbol_excluded():
+    n = 100
+    rng = np.random.default_rng(5)
+    short = (100 + rng.standard_normal(n).cumsum()).tolist()
+    # NEW only lists 20 sessions ago, well under the minimum return count
+    short[: n - 20] = [np.nan] * (n - 20)
+    closes = _closes(
+        {
+            "A": (100 + rng.standard_normal(n).cumsum()).tolist(),
+            "B": (100 + rng.standard_normal(n).cumsum()).tolist(),
+            "NEW": short,
+        },
+        n,
+    )
+
+    corr, excluded = compute_correlation_matrix(closes)
+
+    assert excluded == ["NEW"]
+    assert sorted(corr.columns) == ["A", "B"]
+    assert sorted(corr.index) == ["A", "B"]
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +221,16 @@ def test_build_holdings_view_keeps_stock_and_option_rows():
 def test_build_holdings_view_missing_correlation_entries():
     view = build_holdings_view(_mixed_portfolio(None), ["AAPL"])
     assert view.correlation_matrix is None
+    assert view.correlation_excluded == []
+
+
+def test_build_holdings_view_reads_correlation_excluded():
+    portfolio = _mixed_portfolio(None)
+    portfolio.correlation_matrix["excluded"] = ["NEW"]
+
+    view = build_holdings_view(portfolio, ["AAPL"])
+
+    assert view.correlation_excluded == ["NEW"]
 
 
 def _two_account_portfolio() -> PortfolioData:

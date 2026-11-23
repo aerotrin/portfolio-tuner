@@ -38,6 +38,9 @@ RETURN_HORIZONS = {
 }
 
 TRADING_DAYS_PER_YEAR = 252
+# Matches the backend MIN_RETURN_OBS: fewest daily returns before a security
+# is included in a correlation matrix
+MIN_RETURN_OBS = 40
 
 # [Market/Portfolio] Trade sizing guide for Transaction Form
 TRADE_SIZING_GUIDE = {

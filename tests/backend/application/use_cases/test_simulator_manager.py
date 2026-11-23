@@ -35,6 +35,8 @@ def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):
             captured["seed"] = seed
             self.ran = False
             self.run_at = _run_at
+            self.securities = securities
+            self.excluded = ["NEW"]
 
         def run(self):
             self.ran = True
@@ -53,7 +55,7 @@ def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):
         FakeSimPortfolios,
     )
 
-    portfolios, run_at = asyncio.run(
+    portfolios, run_at, excluded = asyncio.run(
         manager.get_optimal_portfolio(symbols=["AAPL", "MSFT"], n_p=200, seed=99)
     )
 
@@ -65,6 +67,7 @@ def test_get_optimal_portfolio_delegates_to_sim_portfolios(monkeypatch):
         {"id": "PORTF_7", "sharpe": 2.1, "weights": {"AAPL": 0.7, "MSFT": 0.3}}
     ]
     assert run_at == _run_at
+    assert excluded == ["NEW"]
 
 
 def test_get_optimal_portfolio_omits_seed_by_default(monkeypatch):
@@ -78,6 +81,8 @@ def test_get_optimal_portfolio_omits_seed_by_default(monkeypatch):
         def __init__(self, securities, rates, n_p, seed=None):
             captured["seed"] = seed
             self.run_at = datetime(2026, 3, 1)
+            self.securities = securities
+            self.excluded = []
 
         def run(self):
             pass
