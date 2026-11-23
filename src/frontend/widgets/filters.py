@@ -1,61 +1,66 @@
-"""Cascading region/type/group filter for the market Performance tab.
+"""Group filter for the market Performance tab.
+
+One multiselect whose options are the group tiles of the Intraday treemap,
+named by region ("US / Sectors"). Picking several compares them side by side,
+which the treemap itself cannot show. Regions are not options: a region next
+to one of its own groups would be redundant, so a region is its groups.
 
 Split into `resolve_group_facets` (pure read) and `render_group_facets` (draw)
 because `render_performance_view` needs the resolved symbol set at the top of the
-function while the widgets themselves belong further down the layout.
+function while the widget itself belongs further down the layout.
 
-Cascade invalidation is intersect-on-read: at each level, stored values that are
-no longer valid options are simply dropped. Nothing writes to session state, so
-no callbacks or explicit reruns are needed — Streamlit independently prunes a
-widget's stored value when it renders with narrowed options, and the two agree by
-the next run.
+The untouched-state selection follows the Intraday treemap: `sync_facets_to_drill`
+records what the map is zoomed into and starts a fresh widget whenever that
+changes, so the filter falls back to a default derived from it. Nothing writes
+to the widget key.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import streamlit as st
 
-from frontend.shared.symbols_loader import (
-    REGION_ORDER,
-    TYPE_ORDER,
-    SymbolGroup,
-    facet_sort_key,
-)
+from frontend.shared.symbols_loader import REGION_ORDER, SymbolGroup, facet_sort_key
 
-REGION_LEVEL = "region"
-TYPE_LEVEL = "type"
-LABEL_LEVEL = "label"
-LEVELS = (REGION_LEVEL, TYPE_LEVEL, LABEL_LEVEL)
+TILE_SEP = " / "
 
 
 @dataclass(frozen=True)
 class FacetSelection:
-    """Resolved filter state: what is selected, and what remains selectable."""
+    """Resolved filter state: what is selected, and what is selectable."""
 
-    groups: tuple[SymbolGroup, ...]  # groups surviving every level
+    groups: tuple[SymbolGroup, ...]  # groups under the selected tiles
     symbols: tuple[str, ...]  # sorted, deduped union of their symbols
-    region_options: tuple[str, ...]  # narrowed by type
-    type_options: tuple[str, ...]  # narrowed by region
-    label_options: tuple[str, ...]  # distinct labels, narrowed by region + type
-    sel_regions: tuple[str, ...]  # validated — orphans already dropped
-    sel_types: tuple[str, ...]
-    sel_labels: tuple[str, ...]
-    default_labels: tuple[str, ...]  # the untouched-state selection
-    key_prefix: str  # widget keys are derived, so any prefix stays renderable
+    options: tuple[str, ...]  # every tile, in treemap order
+    selected: tuple[str, ...]  # validated — unknown tiles already dropped
+    defaults: tuple[str, ...]  # the untouched-state selection
+    defaults_label: str  # the same, named as the treemap would: "US"
+    key_prefix: str
 
 
-def facet_keys(key_prefix: str) -> dict[str, str]:
-    return {level: f"{key_prefix}-facet-{level}" for level in LEVELS}
+def facet_key(key_prefix: str, version: int = 0) -> str:
+    return f"{key_prefix}-facet-tiles-v{version}"
+
+
+def _version_key(key_prefix: str) -> str:
+    return f"{key_prefix}-facet-version"
+
+
+def _current_key(key_prefix: str) -> str:
+    return facet_key(key_prefix, st.session_state.get(_version_key(key_prefix), 0))
+
+
+def _drill_key(key_prefix: str) -> str:
+    return f"{key_prefix}-facet-drill"
+
+
+def _group_tile(group: SymbolGroup) -> str:
+    return f"{group.region}{TILE_SEP}{group.label}"
 
 
 def _as_list(value: object) -> list[str]:
-    """Coerce a stored widget value to a list.
-
-    Single-select widgets store a bare string or None, multi-select ones store a
-    list. Without this, a stored string would be iterated character by character
-    and never match an option.
-    """
+    """Coerce a stored widget value to a list, so a bare string is one value
+    rather than a sequence of characters."""
     if value is None:
         return []
     if isinstance(value, str):
@@ -63,192 +68,174 @@ def _as_list(value: object) -> list[str]:
     return list(value)  # type: ignore[call-overload]
 
 
-def _options(
-    groups: Sequence[SymbolGroup], attr: str, order: tuple[str, ...]
+def tile_options(groups: Sequence[SymbolGroup]) -> dict[str, tuple[SymbolGroup, ...]]:
+    """Each selectable tile and the groups under it, region by region and in
+    config order within a region. Tiles are looked up here rather than parsed
+    back out of their text, since a label may itself contain a slash.
+    """
+    by_region: dict[str, list[SymbolGroup]] = {}
+    for group in groups:
+        by_region.setdefault(group.region, []).append(group)
+
+    options: dict[str, tuple[SymbolGroup, ...]] = {}
+    for region in sorted(by_region, key=lambda v: facet_sort_key(v, REGION_ORDER)):
+        members = by_region[region]
+        # A label repeated under two types is one tile on the map, so one option.
+        for tile in dict.fromkeys(_group_tile(g) for g in members):
+            options[tile] = tuple(g for g in members if _group_tile(g) == tile)
+    return options
+
+
+def drill_state(sel_types: Sequence[str], drill_parts: Sequence[str]) -> dict:
+    """What the Intraday treemap shows: its type slice and the region and group
+    zoomed into. A symbol tile counts as its group."""
+    return {
+        "types": sorted(sel_types),
+        "region": drill_parts[0] if drill_parts else None,
+        "group": drill_parts[1] if len(drill_parts) > 1 else None,
+    }
+
+
+def drill_defaults(
+    groups: Sequence[SymbolGroup], drill: Mapping | None
 ) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            {getattr(g, attr) for g in groups}, key=lambda v: facet_sort_key(v, order)
-        )
-    )
+    """Untouched-state selection for a treemap drill state.
+
+    The selection is what the map shows: the group zoomed into, or the groups
+    of the region zoomed into, narrowed to its type slice. A map that is
+    neither zoomed nor sliced selects only the first group, so the tab opens
+    on a readable handful of symbols rather than the whole universe.
+    """
+    drill = drill or {}
+    types = set(drill.get("types") or ())
+    region, group = drill.get("region"), drill.get("group")
+    typed = [g for g in groups if g.type in types]
+
+    if group:
+        return (f"{region}{TILE_SEP}{group}",)
+    if region:
+        shown = [g for g in typed if g.region == region] or [
+            g for g in groups if g.region == region
+        ]
+    else:
+        shown = typed or list(groups[:1])
+    return tuple(dict.fromkeys(_group_tile(g) for g in shown))
 
 
-def _matching(
+def _tiles_label(
+    options: Mapping[str, tuple[SymbolGroup, ...]], tiles: Sequence[str]
+) -> str:
+    """Name a set of tiles, as its region when it is exactly one region's groups."""
+    by_region: dict[str, set[str]] = {}
+    for tile, members in options.items():
+        by_region.setdefault(members[0].region, set()).add(tile)
+    if len(tiles) > 1:
+        for region, region_tiles in by_region.items():
+            if region_tiles == set(tiles):
+                return region
+    return ", ".join(tiles)
+
+
+def _select(
     groups: Sequence[SymbolGroup],
-    regions: Sequence[str],
-    types: Sequence[str],
-    labels: Sequence[str],
-) -> list[SymbolGroup]:
-    """Groups satisfying every non-empty selection. Empty means 'all'."""
-    return [
-        g
-        for g in groups
-        if (not regions or g.region in regions)
-        and (not types or g.type in types)
-        and (not labels or g.label in labels)
-    ]
-
-
-def _cascade(
-    groups: Sequence[SymbolGroup],
-    raw_regions: Sequence[str],
-    raw_types: Sequence[str],
-    raw_labels: Sequence[str],
+    raw: object,
+    defaults: Sequence[str] = (),
     *,
     key_prefix: str,
-    default_labels: Sequence[str] = (),
 ) -> FacetSelection:
-    """Pure cascade — no Streamlit calls, so it is testable without a runtime."""
-    raw_regions = _as_list(raw_regions)
-    raw_types = _as_list(raw_types)
-    raw_labels = _as_list(raw_labels)
-
-    # Pass 1 — validate top-down, so orphan-dropping stays deterministic:
-    # a region change may orphan a type, which in turn may orphan a label.
-    hier_regions = _options(groups, "region", REGION_ORDER)
-    sel_regions = tuple(v for v in raw_regions if v in hier_regions)
-    after_region = _matching(groups, sel_regions, (), ())
-
-    hier_types = _options(after_region, "type", TYPE_ORDER)
-    sel_types = tuple(v for v in raw_types if v in hier_types)
-    after_type = _matching(after_region, (), sel_types, ())
-
-    # Selection is by label, not by group key: a label names a concept that can
-    # span regions, so picking "Sectors" with no region selected means every
-    # region's Sectors group. Region and type are what narrow it.
-    hier_labels = tuple(dict.fromkeys(g.label for g in after_type))  # yaml order
-    sel_labels = tuple(v for v in raw_labels if v in hier_labels)
-
-    # Pass 2 — region and type narrow each other, so picking "Fixed Income"
-    # leaves only the regions that have some. Both can be empty, which is what
-    # makes mutual narrowing safe: either one can always be widened again.
-    #
-    # The group level deliberately does not narrow upwards. It holds a selection
-    # by default, so letting it constrain region would hide every region without
-    # a group of that name before the user has touched anything.
-    region_options = _options(
-        _matching(groups, (), sel_types, ()), "region", REGION_ORDER
-    )
-    sel_regions = tuple(v for v in sel_regions if v in region_options)
-
-    type_options = _options(_matching(groups, sel_regions, (), ()), "type", TYPE_ORDER)
-    sel_types = tuple(v for v in sel_types if v in type_options)
-
-    label_options = tuple(
-        dict.fromkeys(g.label for g in _matching(groups, sel_regions, sel_types, ()))
-    )
-    sel_labels = tuple(v for v in sel_labels if v in label_options)
-
-    final = _matching(groups, sel_regions, sel_types, sel_labels)
-
+    """Pure selection — no Streamlit calls, so it is testable without a runtime.
+    An empty selection means every group."""
+    options = tile_options(groups)
+    selected = tuple(dict.fromkeys(v for v in _as_list(raw) if v in options))
+    picked = {g.key for tile in selected for g in options[tile]}
+    final = tuple(g for g in groups if not selected or g.key in picked)
+    valid_defaults = tuple(v for v in defaults if v in options)
     return FacetSelection(
-        groups=tuple(final),
+        groups=final,
         symbols=tuple(sorted({s for g in final for s in g.symbols})),
-        region_options=region_options,
-        type_options=type_options,
-        label_options=label_options,
-        sel_regions=sel_regions,
-        sel_types=sel_types,
-        sel_labels=sel_labels,
-        default_labels=tuple(v for v in default_labels if v in label_options),
+        options=tuple(options),
+        selected=selected,
+        defaults=valid_defaults,
+        defaults_label=_tiles_label(options, valid_defaults),
         key_prefix=key_prefix,
     )
 
 
 def resolve_group_facets(
-    groups: Sequence[SymbolGroup],
-    key_prefix: str,
-    *,
-    default_labels: Sequence[str] = (),
+    groups: Sequence[SymbolGroup], key_prefix: str
 ) -> FacetSelection:
-    """Read the current selection. Safe to call before the widgets render."""
-    keys = facet_keys(key_prefix)
+    """Read the current selection. Safe to call before the widget renders."""
     state = st.session_state
-    return _cascade(
+    defaults = drill_defaults(groups, state.get(_drill_key(key_prefix)))
+    return _select(
         groups,
-        _as_list(state.get(keys[REGION_LEVEL])),
-        _as_list(state.get(keys[TYPE_LEVEL])),
-        _as_list(state.get(keys[LABEL_LEVEL], default_labels)),
+        state.get(_current_key(key_prefix), defaults),
+        defaults,
         key_prefix=key_prefix,
-        default_labels=default_labels,
     )
 
 
-def _clear_facets(key_prefix: str) -> None:
-    """Drop the stored selections so every level falls back to its default.
+def reset_group_facets(key_prefix: str) -> None:
+    """Start a fresh widget so the filter falls back to its default.
 
-    Popping rather than assigning: writing a value to a widget key while also
-    passing `default=` is what triggers Streamlit's "set via Session State"
-    warning. Removing the key lets the widget re-initialise cleanly.
+    A new key rather than a cleared one: the widget is identified by its key,
+    so the browser keeps showing its old value when only the stored selection
+    is dropped and the default changes underneath it.
     """
-    for key in facet_keys(key_prefix).values():
-        st.session_state.pop(key, None)
+    key = _version_key(key_prefix)
+    st.session_state[key] = st.session_state.get(key, 0) + 1
 
 
 def _is_narrowed(selection: FacetSelection) -> bool:
-    """Whether Clear would change anything — i.e. we differ from the defaults."""
-    return bool(
-        selection.sel_regions
-        or selection.sel_types
-        or selection.sel_labels != selection.default_labels
+    """Whether the filter has been moved off what the Intraday treemap shows."""
+    return set(selection.selected) != set(selection.defaults)
+
+
+def _summary(selection: FacetSelection) -> str:
+    n_groups = len(selection.groups)
+    text = (
+        f"{n_groups} group{'' if n_groups == 1 else 's'} · "
+        f"{len(selection.symbols)} securities"
     )
+    if _is_narrowed(selection):
+        text += f" · differs from Intraday ({selection.defaults_label})"
+    return text
 
 
-def render_group_facets(
-    selection: FacetSelection,
-    *,
-    border: bool = True,
-    show_summary: bool = True,
+def sync_facets_to_drill(
+    key_prefix: str, sel_types: Sequence[str], drill_parts: Sequence[str]
 ) -> None:
-    """Draw the filter widgets for a selection resolved in the same run.
+    """Point the filter at what the Intraday treemap now shows. Only a change
+    of view resets it, so manual filter edits last until the next map click."""
+    drill = drill_state(sel_types, drill_parts)
+    key = _drill_key(key_prefix)
+    if st.session_state.get(key) != drill:
+        st.session_state[key] = drill
+        reset_group_facets(key_prefix)
 
-    If a `format_func` is ever added here, keep its output constant across runs:
-    the button-group widgets serialize their state by formatted string, so an
-    option label carrying a live count would make every stored selection look
-    stale. Counts belong in the caption.
-    """
-    keys = facet_keys(selection.key_prefix)
+
+def render_group_facets(selection: FacetSelection, *, border: bool = True) -> None:
+    """Draw the filter for a selection resolved in the same run."""
     with st.container(border=border):
-        if selection.region_options:
-            st.pills(
-                ":material/public: Region",
-                selection.region_options,
-                selection_mode="multi",
-                default=list(selection.sel_regions),
-                key=keys[REGION_LEVEL],
-            )
-        if selection.type_options:
-            st.pills(
-                ":material/category: Type",
-                selection.type_options,
-                selection_mode="multi",
-                default=list(selection.sel_types),
-                key=keys[TYPE_LEVEL],
-            )
-
         st.multiselect(
-            ":material/filter_list: Filter by groups",
-            selection.label_options,
-            default=list(selection.sel_labels),
+            ":material/filter_list: Compare groups",
+            selection.options,
+            default=list(selection.selected),
             placeholder="All groups",
-            key=keys[LABEL_LEVEL],
+            key=_current_key(selection.key_prefix),
         )
 
         foot = st.columns([6, 1], vertical_alignment="center")
         with foot[0]:
-            if show_summary:
-                n_groups = len(selection.groups)
-                st.caption(
-                    f"{n_groups} group{'' if n_groups == 1 else 's'} · "
-                    f"{len(selection.symbols)} securities"
-                )
+            st.caption(_summary(selection))
         with foot[1]:
             st.button(
-                "Clear",
+                "Reset",
                 type="tertiary",
-                icon=":material/filter_list_off:",
+                icon=":material/restart_alt:",
+                help="Back to the Intraday treemap selection",
                 disabled=not _is_narrowed(selection),
-                on_click=_clear_facets,
+                on_click=reset_group_facets,
                 args=(selection.key_prefix,),
                 key=f"{selection.key_prefix}-facet-clear",
                 width="stretch",

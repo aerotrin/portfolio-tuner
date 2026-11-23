@@ -35,7 +35,7 @@ TYPE_ORDER = (
     "Index",
     DEFAULT_TYPE,
 )
-REGION_ORDER = ("US", "Canada", "World", DEFAULT_REGION)
+REGION_ORDER = ("US", "Canada", "International", DEFAULT_REGION)
 
 
 def facet_sort_key(value: str, order: tuple[str, ...]) -> tuple[int, str]:
@@ -140,7 +140,7 @@ class SymbolsConfig(BaseModel):
 
     @model_validator(mode="after")
     def _unique_group_keys(self) -> "SymbolsConfig":
-        # Labels may repeat across regions ("Core" under US, Canada and World);
+        # Labels may repeat across regions ("Core" under US, Canada and International);
         # the region/type/label triple is what has to stay unique, since it names
         # the group in the filter widgets and in their Streamlit keys.
         for field in ("base_market_etfs", "base_market_stocks"):

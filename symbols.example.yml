@@ -12,19 +12,17 @@
 # Every section below is a list of groups, and every group is written the same
 # way: region, type, label, then symbols.
 #
-# - region: optional, defaults to "Global". Suggested values: US, Canada, World, Global.
+# - region: optional, defaults to "Global". Suggested values: US, Canada, International, Global.
 # - type:   optional, defaults to "Other". Suggested values: Equity, Fixed Income,
 #           Multi-Asset, Commodity, Crypto, Forex, Index.
 # - label:  required. Names a concept and is meant to repeat across regions and
 #           types — see the three "Core" groups below. Only the region + type +
 #           label combination has to be unique.
 #
-# Suggested values sort first in the filter chips; any other value is accepted and
-# sorts after them. region and type drive the Region / Type filters on the market
-# pages only — they are never validated against a symbol's exchange or holdings.
-#
-# The group filter lists each label once, so selecting "Core" with no region chosen
-# gives you every region's Core group; pick a region to narrow it.
+# Suggested values sort first; any other value is accepted and sorts after them.
+# region nests the Intraday treemap and prefixes the Performance tab's filter
+# options ("US / Core"); type drives the Intraday type pills. Neither is
+# ever validated against a symbol's exchange or holdings.
 
 # Required ------------------------------
 benchmarks:
@@ -70,7 +68,7 @@ base_market_etfs:
       - XIU.TO
       - VDY.TO
 
-  - region: World
+  - region: International
     type: Equity
     label: Core
     symbols:

@@ -48,11 +48,11 @@ def render_performance_view(
         close_norm_eod: Normalized close prices for securities
         portfolio_metrics: Optional portfolio metrics (for holdings view)
         portfolio_close_norm_eod: Optional portfolio normalized close prices
-        use_group_filter: If True, render the region/type/group facet filter
-        groups: Symbol groups the facet filter draws its options from
+        use_group_filter: If True, render the region/group filter
+        groups: Symbol groups the filter draws its options from
 
     Returns:
-        Symbols currently in scope after the facet filter and table row selection.
+        Symbols currently in scope after the group filter and table row selection.
     """
     st.markdown("#### :material/trending_up: Performance")
     if metrics is None or metrics.empty:
@@ -68,9 +68,7 @@ def render_performance_view(
     # below, which the charts and the returned chart_symbols depend on.
     facets = None
     if use_group_filter and groups:
-        facets = resolve_group_facets(
-            groups, key_prefix, default_labels=(groups[0].label,)
-        )
+        facets = resolve_group_facets(groups, key_prefix)
         sel_symbols = [s for s in facets.symbols if s in metrics.index]
     else:
         sel_symbols = []

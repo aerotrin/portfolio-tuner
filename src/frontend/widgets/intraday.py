@@ -6,6 +6,7 @@ import streamlit as st
 
 from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
 from frontend.shared.symbols_loader import TYPE_ORDER, SymbolGroup, facet_sort_key
+from frontend.widgets.filters import sync_facets_to_drill
 from frontend.widgets.kpis import render_intraday_health_bar
 from frontend.widgets.treemaps import (
     COLOR_CHANGE,
@@ -108,7 +109,7 @@ def render_market_intraday(
     Type pills give a one-click asset-class slice (none selected means all);
     region and group are treemap structure — clicking a region, group or
     symbol tile zooms into it and narrows the health bar and quote table to
-    match.
+    match. The Performance tab's filter follows the same view.
     """
 
     t_str = market_type if market_type.isupper() else market_type.title()
@@ -174,6 +175,7 @@ def render_market_intraday(
     if not drill_parts:
         level = None
     st.session_state[level_key] = level
+    sync_facets_to_drill(key_prefix, sel_types, drill_parts)
 
     fig = render_treemap_intraday(
         sub,

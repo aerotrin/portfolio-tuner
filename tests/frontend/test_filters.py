@@ -1,258 +1,270 @@
-"""Tests for the pure cascade behind the Performance tab facet filter.
+"""Tests for the pure selection logic behind the Performance tab group filter.
 
-`_cascade` takes the raw selections as arguments rather than reading session
+`_select` takes the raw selection as an argument rather than reading session
 state, so these run without a Streamlit runtime.
 
 Labels are deliberately non-unique here ("Core" under both US and Canada),
-mirroring symbols.yml: a group is identified by region + type + label.
+mirroring symbols.yml: a tile is a region plus a label.
 """
 
 from frontend.shared.symbols_loader import SymbolGroup
-from frontend.widgets.filters import _cascade, facet_keys
+from frontend.widgets.filters import (
+    _is_narrowed,
+    _select,
+    _summary,
+    drill_defaults,
+    drill_state,
+    facet_key,
+    tile_options,
+)
 
 US_CORE = SymbolGroup(label="Core", type="Equity", region="US", symbols=("SPY", "VTI"))
 US_SECTORS = SymbolGroup(
     label="Sectors", type="Equity", region="US", symbols=("XLK", "XLF")
 )
 US_CASH = SymbolGroup(label="Cash", type="Fixed Income", region="US", symbols=("BIL",))
+US_CREDIT = SymbolGroup(
+    label="Bonds/Credit", type="Fixed Income", region="US", symbols=("LQD",)
+)
 CA_CORE = SymbolGroup(label="Core", type="Equity", region="Canada", symbols=("XIC.TO",))
+CA_SECTORS = SymbolGroup(
+    label="Sectors", type="Equity", region="Canada", symbols=("XFN.TO",)
+)
 COMMODITY = SymbolGroup(
     label="Commodity", type="Commodity", region="Global", symbols=("GLD", "SPY")
 )
 
-GROUPS = [US_CORE, US_SECTORS, US_CASH, CA_CORE, COMMODITY]
+# Canada before US in config order: options must still follow REGION_ORDER.
+GROUPS = [CA_CORE, CA_SECTORS, US_CORE, US_SECTORS, US_CASH, US_CREDIT, COMMODITY]
 
 
-def _run(regions=(), types=(), labels=(), **kwargs):
-    kwargs.setdefault("key_prefix", "test")
-    return _cascade(GROUPS, regions, types, labels, **kwargs)
+def _run(selected=(), defaults=()):
+    return _select(GROUPS, selected, defaults, key_prefix="test")
 
 
-# Group identity ----------------------------------------------------------------
+# Options -----------------------------------------------------------------------
 
 
-def test_duplicate_labels_get_distinct_keys():
-    assert US_CORE.key == "us-equity-core"
-    assert CA_CORE.key == "canada-equity-core"
-    assert US_CORE.key != CA_CORE.key
+def test_options_are_group_tiles_in_region_order():
+    assert _run().options == (
+        "US / Core",
+        "US / Sectors",
+        "US / Cash",
+        "US / Bonds/Credit",
+        "Canada / Core",
+        "Canada / Sectors",
+        "Global / Commodity",
+    )
 
 
-def test_options_are_distinct_labels():
-    """A label names a concept; it appears once however many regions carry it."""
-    assert _run().label_options == ("Core", "Sectors", "Cash", "Commodity")
+def test_a_region_is_not_an_option():
+    assert _run(["US"]).selected == ()
 
 
-# Empty means all ---------------------------------------------------------------
+def test_a_label_under_two_types_is_one_tile():
+    twin = SymbolGroup(label="Core", type="Fixed Income", region="US", symbols=("AGG",))
+    options = tile_options([US_CORE, twin])
+
+    assert list(options) == ["US / Core"]
+    assert options["US / Core"] == (US_CORE, twin)
 
 
-def test_no_selection_yields_every_group():
+def test_no_groups_yields_empty_everything():
+    result = _select([], [], key_prefix="test")
+
+    assert result.groups == () and result.symbols == () and result.options == ()
+
+
+# Selection ---------------------------------------------------------------------
+
+
+def test_empty_selection_means_every_group():
     result = _run()
 
-    assert len(result.groups) == len(GROUPS)
-    assert result.region_options == ("US", "Canada", "Global")
-    assert result.type_options == ("Equity", "Fixed Income", "Commodity")
+    assert result.groups == tuple(GROUPS)
+    assert result.symbols == (
+        "BIL",
+        "GLD",
+        "LQD",
+        "SPY",
+        "VTI",
+        "XFN.TO",
+        "XIC.TO",
+        "XLF",
+        "XLK",
+    )
 
 
-def test_symbols_are_sorted_and_deduped_across_groups():
-    # SPY appears in both "Core" (US) and "Commodity".
-    result = _run()
-
-    assert result.symbols == ("BIL", "GLD", "SPY", "VTI", "XIC.TO", "XLF", "XLK")
-
-
-# Narrowing ---------------------------------------------------------------------
-
-
-def test_region_narrows_type_and_label_options():
-    result = _run(regions=["Canada"])
-
-    assert result.type_options == ("Equity",)
-    assert result.label_options == ("Core",)
-    assert result.symbols == ("XIC.TO",)
-
-
-def test_type_narrows_label_options():
-    result = _run(regions=["US"], types=["Fixed Income"])
-
-    assert result.label_options == ("Cash",)
-    assert result.symbols == ("BIL",)
-
-
-def test_a_label_spans_every_region_that_carries_it():
-    """Picking "Core" with no region means Core everywhere, not just the first."""
-    result = _run(labels=["Core"])
-
-    assert result.groups == (US_CORE, CA_CORE)
-    assert result.symbols == ("SPY", "VTI", "XIC.TO")
-
-
-def test_region_narrows_a_label_that_spans_regions():
-    result = _run(regions=["Canada"], labels=["Core"])
+def test_group_tile_selects_one_region_only():
+    result = _run(["Canada / Core"])
 
     assert result.groups == (CA_CORE,)
     assert result.symbols == ("XIC.TO",)
 
 
-def test_label_selection_wins_over_the_wider_facets():
-    result = _run(regions=["US"], labels=["Sectors"])
+def test_tiles_from_different_regions_combine():
+    result = _run(["US / Sectors", "Canada / Sectors"])
 
-    assert result.symbols == ("XLF", "XLK")
+    assert result.groups == (CA_SECTORS, US_SECTORS)
+    assert result.symbols == ("XFN.TO", "XLF", "XLK")
 
 
-def test_multiple_regions_union():
-    result = _run(regions=["US", "Canada"])
+def test_symbols_are_deduped_across_tiles():
+    # SPY sits in both US Core and Global Commodity.
+    result = _run(["US / Core", "Global / Commodity"])
 
-    assert "Commodity" not in result.label_options
-    assert "XIC.TO" in result.symbols and "SPY" in result.symbols
+    assert result.symbols == ("GLD", "SPY", "VTI")
 
 
-# Symmetric options -------------------------------------------------------------
+def test_label_containing_a_slash_round_trips():
+    result = _run(["US / Bonds/Credit"])
 
+    assert result.groups == (US_CREDIT,)
 
-def test_a_type_selection_narrows_the_region_options():
-    """Both are clearable, so narrowing between them is always reversible."""
-    result = _run(types=["Fixed Income"])
 
-    assert result.region_options == ("US",)
+def test_unknown_tile_is_dropped():
+    result = _run(["Atlantis / Core", "US / Core"])
 
+    assert result.selected == ("US / Core",)
 
-def test_a_region_selection_narrows_the_type_options():
-    result = _run(regions=["Canada"])
 
-    assert result.type_options == ("Equity",)
+def test_only_unknown_tiles_falls_back_to_all():
+    result = _run(["Atlantis"])
 
+    assert result.selected == ()
+    assert result.groups == tuple(GROUPS)
 
-def test_a_group_selection_never_narrows_the_region_options():
-    """The group level holds a value by default, so constraining region upwards
-    would hide regions before the user has touched anything."""
-    result = _run(labels=["Sectors"])  # Sectors is US-only in this fixture
 
-    assert result.region_options == ("US", "Canada", "Global")
-    assert result.symbols == ("XLF", "XLK")
+def test_bare_string_is_treated_as_one_value():
+    assert _run("Canada / Core").selected == ("Canada / Core",)
 
 
-def test_options_stay_full_when_nothing_is_selected():
-    result = _run()
+# Following the treemap ---------------------------------------------------------
 
-    assert result.region_options == ("US", "Canada", "Global")
-    assert result.type_options == ("Equity", "Fixed Income", "Commodity")
 
+def test_drill_state_reads_region_and_group_from_the_path():
+    assert drill_state([], []) == {"types": [], "region": None, "group": None}
+    assert drill_state([], ["US"])["region"] == "US"
+    assert drill_state([], ["US"])["group"] is None
+    assert drill_state([], ["US", "Core"])["group"] == "Core"
 
-# Cascade invalidation ----------------------------------------------------------
 
+def test_drill_state_treats_a_symbol_tile_as_its_group():
+    assert drill_state([], ["US", "Core", "SPY"]) == drill_state([], ["US", "Core"])
 
-def test_type_orphaned_by_region_change_is_dropped():
-    # "Fixed Income" exists only in the US; switching to Canada must not blank out.
-    result = _run(regions=["Canada"], types=["Fixed Income"])
 
-    assert result.sel_types == ()
-    assert result.symbols == ("XIC.TO",)  # empty selection falls back to all
+def test_drill_state_ignores_type_pick_order():
+    assert drill_state(["Equity", "Commodity"], []) == drill_state(
+        ["Commodity", "Equity"], []
+    )
 
 
-def test_label_orphaned_by_region_change_is_dropped():
-    # "Sectors" exists only in the US in this fixture.
-    result = _run(regions=["Canada"], labels=["Sectors"])
+def test_unzoomed_map_defaults_to_the_first_group():
+    for drill in (None, drill_state([], [])):
+        assert drill_defaults(GROUPS, drill) == ("Canada / Core",)
 
-    assert result.sel_labels == ()
-    assert result.symbols == ("XIC.TO",)
 
+def test_unzoomed_map_with_a_type_slice_selects_every_group_it_shows():
+    drill = drill_state(["Equity"], [])
 
-def test_a_label_surviving_the_region_change_is_kept():
-    # "Core" exists in Canada too, so it must not be dropped.
-    result = _run(regions=["Canada"], labels=["Core"])
+    assert drill_defaults(GROUPS, drill) == (
+        "Canada / Core",
+        "Canada / Sectors",
+        "US / Core",
+        "US / Sectors",
+    )
 
-    assert result.sel_labels == ("Core",)
 
+def test_type_slice_matching_nothing_falls_back_to_the_first_group():
+    assert drill_defaults(GROUPS, drill_state(["Crypto"], [])) == ("Canada / Core",)
 
-def test_label_orphaned_by_type_change_is_dropped():
-    result = _run(types=["Commodity"], labels=["Core"])
 
-    assert result.sel_labels == ()
-    assert result.symbols == ("GLD", "SPY")
+def test_region_zoom_selects_every_group_in_the_region():
+    assert drill_defaults(GROUPS, drill_state([], ["US"])) == (
+        "US / Core",
+        "US / Sectors",
+        "US / Cash",
+        "US / Bonds/Credit",
+    )
 
 
-def test_unknown_region_is_ignored():
-    result = _run(regions=["Atlantis"])
+def test_group_and_symbol_zoom_select_the_group_tile():
+    for parts in (["Canada", "Core"], ["Canada", "Core", "XIC.TO"]):
+        assert drill_defaults(GROUPS, drill_state([], parts)) == ("Canada / Core",)
 
-    assert result.sel_regions == ()
-    assert len(result.groups) == len(GROUPS)
 
+def test_region_zoom_within_a_type_slice_names_the_groups_shown():
+    drill = drill_state(["Fixed Income"], ["US"])
 
-def test_unknown_label_is_ignored():
-    result = _run(labels=["Nonexistent"])
+    assert drill_defaults(GROUPS, drill) == ("US / Cash", "US / Bonds/Credit")
 
-    assert result.sel_labels == ()
-    assert len(result.groups) == len(GROUPS)
 
+def test_region_zoom_with_a_type_slice_missing_there_shows_the_whole_region():
+    drill = drill_state(["Commodity"], ["Canada"])
 
-def test_selections_never_escape_their_options():
-    result = _run(regions=["Canada"], types=["Fixed Income"], labels=["Commodity"])
+    assert drill_defaults(GROUPS, drill) == ("Canada / Core", "Canada / Sectors")
 
-    assert set(result.sel_regions) <= set(result.region_options)
-    assert set(result.sel_types) <= set(result.type_options)
-    assert set(result.sel_labels) <= set(result.label_options)
 
+def test_every_default_is_a_selectable_tile():
+    options = tile_options(GROUPS)
+    drills = [
+        None,
+        drill_state(["Commodity"], []),
+        drill_state([], ["Global"]),
+        drill_state(["Fixed Income"], ["US"]),
+        drill_state([], ["US", "Bonds/Credit"]),
+    ]
 
-# Defaults ----------------------------------------------------------------------
+    for drill in drills:
+        assert set(drill_defaults(GROUPS, drill)) <= set(options)
 
 
-def test_untouched_state_is_not_narrowed():
-    """When the stored value is exactly the default, Clear has nothing to do."""
-    result = _run(labels=["Core"], default_labels=("Core",))
+def test_no_groups_yields_no_default():
+    assert drill_defaults([], None) == ()
 
-    assert result.sel_labels == result.default_labels == ("Core",)
 
+# Alignment with Intraday -------------------------------------------------------
 
-def test_emptied_selection_differs_from_a_nonempty_default():
-    result = _run(default_labels=("Core",))
 
-    assert result.sel_labels == ()
-    assert result.default_labels == ("Core",)
+def test_untouched_selection_is_aligned():
+    result = _run(["US / Core"], defaults=("US / Core",))
 
+    assert not _is_narrowed(result)
+    assert _summary(result) == "1 group · 2 securities"
 
-def test_orphaned_default_is_dropped_too():
-    result = _run(regions=["Canada"], default_labels=("Sectors",))
 
-    assert result.default_labels == ()
+def test_pick_order_does_not_count_as_a_change():
+    result = _run(["US / Cash", "US / Core"], defaults=("US / Core", "US / Cash"))
 
+    assert not _is_narrowed(result)
 
-# Stored-value coercion ---------------------------------------------------------
 
+def test_edited_selection_is_flagged_against_intraday():
+    result = _run(["US / Sectors", "Canada / Sectors"], defaults=("US / Sectors",))
 
-def test_bare_string_region_is_treated_as_one_value():
-    # A bare string is a Sequence[str] that would otherwise be iterated
-    # character by character and never match an option.
-    result = _run(regions="Canada")
+    assert _is_narrowed(result)
+    assert _summary(result) == (
+        "2 groups · 3 securities · differs from Intraday (US / Sectors)"
+    )
 
-    assert result.sel_regions == ("Canada",)
-    assert result.symbols == ("XIC.TO",)
 
+def test_a_whole_region_default_is_named_as_the_region():
+    defaults = drill_defaults(GROUPS, drill_state([], ["Canada"]))
+    result = _run(["Canada / Core"], defaults=defaults)
 
-def test_bare_string_label_is_treated_as_one_value():
-    result = _run(labels="Commodity")
+    assert _summary(result) == "1 group · 1 securities · differs from Intraday (Canada)"
 
-    assert result.sel_labels == ("Commodity",)
 
+def test_a_single_group_region_default_keeps_the_group_name():
+    result = _run(defaults=("Global / Commodity",))
 
-# Empty inputs ------------------------------------------------------------------
+    assert result.defaults_label == "Global / Commodity"
 
 
-def test_no_groups_yields_empty_everything():
-    result = _cascade([], [], [], [], key_prefix="test")
+def test_emptied_selection_differs_from_a_default():
+    assert _is_narrowed(_run(defaults=("US / Core",)))
 
-    assert result.groups == () and result.symbols == ()
-    assert result.label_options == ()
 
-
-# Renderability -----------------------------------------------------------------
-
-
-def test_every_selection_carries_a_usable_key_prefix():
-    """A resolved selection must always be renderable — widget keys are derived
-    from key_prefix, so there is no half-valid state to trip over."""
-    assert _run().key_prefix == "test"
-    assert facet_keys(_run().key_prefix) == {
-        "region": "test-facet-region",
-        "type": "test-facet-type",
-        "label": "test-facet-label",
-    }
+def test_widget_key_changes_with_the_version():
+    assert facet_key("market-etf") == "market-etf-facet-tiles-v0"
+    assert facet_key("market-etf", 3) == "market-etf-facet-tiles-v3"
