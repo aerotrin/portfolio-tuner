@@ -62,7 +62,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
                 st.segmented_control(
                     "Volume ranking",
                     [MOST_ACTIVE, UNUSUAL_VOLUME],
-                    default=UNUSUAL_VOLUME,
+                    default=MOST_ACTIVE,
                     required=True,
                     label_visibility="collapsed",
                     help="Most Active: highest volume. Unusual Volume: highest "
@@ -70,7 +70,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
                     key=f"market-movers-volume-mode-{market_type}",
                     width="content",
                 )
-                or UNUSUAL_VOLUME
+                or MOST_ACTIVE
             )
         heading.markdown(f"##### :material/swap_horiz: {volume_title} {t_str}s")
     volume_df = _volume_leaders(sub_df, MOVER_SHOW_COUNT, volume_title)
