@@ -52,7 +52,6 @@ def test_workbook_has_fixed_columns_and_typed_cells():
     assert list(header) == [
         "As Of",
         "Account Number",
-        "Account Name",
         "Account Type",
         "Asset Type",
         "Symbol",
@@ -68,7 +67,6 @@ def test_workbook_has_fixed_columns_and_typed_cells():
     assert stock == (
         datetime(2026, 11, 23),
         "ACC-A",
-        "Alice TFSA",
         "TFSA",
         "Stock",
         "AAPL",
@@ -82,13 +80,13 @@ def test_workbook_has_fixed_columns_and_typed_cells():
         0.8,
     )
     # Cash keeps the same columns; quantity and P/L % stay blank
-    assert cash[4:9] == ("Cash", "CASH", "Cash (CAD)", "CAD", None)
-    assert cash[9:] == (500.0, 500.0, 0.0, None, 0.2)
+    assert cash[3:8] == ("Cash", "CASH", "Cash (CAD)", "CAD", None)
+    assert cash[8:] == (500.0, 500.0, 0.0, None, 0.2)
 
     assert sheet.freeze_panes == "A2"
     assert sheet["A2"].number_format == "yyyy-mm-dd"
-    assert sheet["K2"].number_format == "#,##0.00"
-    assert sheet["N2"].number_format == "0.00%"
+    assert sheet["J2"].number_format == "#,##0.00"
+    assert sheet["M2"].number_format == "0.00%"
 
 
 def test_workbook_with_no_rows_still_has_headers():

@@ -128,7 +128,7 @@ The **Export Summary** button downloads an Excel workbook (`portfolio_summary_<s
 | Column | Meaning |
 |---|---|
 | As Of | Date of the export |
-| Account Number, Account Name, Account Type | The owning account |
+| Account Number, Account Type | The owning account |
 | Asset Type | Stock, ETF, Call Option, Put Option, GIC, Term Deposit, Cash, … |
 | Symbol | Ticker; the OSI contract code for options; the instrument key for GICs and term deposits; `CASH` for cash |
 | Security Name | Security name; `AAPL Jan 15 2027 150 Call` style for options; the instrument label for GICs and term deposits |
