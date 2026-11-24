@@ -19,6 +19,10 @@ from frontend.shared.env_loader import config
 from frontend.shared.jobs import ALL_DATA_PAGES, AUTO_REFRESH_ON, start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
+from frontend.widgets.export_summary import (
+    SLOT_KEY as EXPORT_SLOT_KEY,
+    render_export_summary_button,
+)
 from frontend.widgets.fixed_income_form import (
     manage_fixed_income,
     reset_manage_state,
@@ -583,6 +587,16 @@ with st.sidebar:
         _show_force_refresh_dialog(
             sorted({*st.session_state["base_symbols"], *market_symbols, *_holdings})
         )
+
+    # The Portfolio page fills this slot after its own data checks, so the
+    # export never loads a snapshot ahead of the page
+    _export_slot = st.container()
+    if pg.url_path == portfolio_page.url_path:
+        st.session_state[EXPORT_SLOT_KEY] = _export_slot
+    else:
+        st.session_state.pop(EXPORT_SLOT_KEY, None)
+        with _export_slot:
+            render_export_summary_button(None)
 
     st.divider()
     if st.button(

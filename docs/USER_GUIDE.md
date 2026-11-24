@@ -121,6 +121,26 @@ The **Manage GIC / Term Deposit** button opens one dialog with three actions: **
 
 The **Force Data Refresh** button triggers a full re-fetch of all market data for every symbol across all pages (after a confirmation dialog showing the symbol count), bypassing the smart sync state. Use this when data appears stale or after adding new symbols to `symbols.yml`. (For routine background updates, use the **Auto** (auto refresh) toggle at the top-right of each page instead — see [Section 9](#9-refreshing-market-data).)
 
+### Export Summary
+
+The **Export Summary** button downloads an Excel workbook (`portfolio_summary_<scope>_<date>.xlsx`, one sheet named `Summary`) listing every constituent of the portfolio shown on the Portfolio page: all accounts when the selector is on **All Accounts**, or just the selected account. It is meant for importing into another workbook that rolls up positions by account, so every row has the same columns whatever the asset type:
+
+| Column | Meaning |
+|---|---|
+| As Of | Date of the export |
+| Account Number, Account Name, Account Type | The owning account |
+| Asset Type | Stock, ETF, Call Option, Put Option, GIC, Term Deposit, Cash, … |
+| Symbol | Ticker; the OSI contract code for options; the instrument key for GICs and term deposits; `CASH` for cash |
+| Security Name | Security name; `AAPL Jan 15 2027 150 Call` style for options; the instrument label for GICs and term deposits |
+| Currency | The security's own currency (the account's ledger currency for cash) |
+| Quantity | Units held (blank for cash) |
+| Book Value (CAD), Market Value (CAD), Unrealized P/L (CAD), Unrealized P/L % | Same values as the Positions tab |
+| Weight | Share of the exported portfolio's total value, cash included |
+
+Each account also gets one **Cash** row (negative for a margin balance), so Market Value adds up to the portfolio's total value and Weight adds up to 100%. Rows are sorted by account, then symbol, with cash last.
+
+The button is active on the Portfolio page only. The file always contains real account numbers and values, even when **Hide Balances** or **Hide Account Numbers** is on.
+
 ### Hide Balances
 
 The **Hide Balances** toggle masks the dollar amounts in the Account Summary KPI row (and the cash/securities donut hover) — useful for screen-sharing or demos. On the Positions tab, it also masks dollar figures in the KPI strip and treemap tiles/tooltips, and hides value-revealing columns (Quantity, Day P/L, Mkt Value, Total P/L, Book Value, FX Exposure, Intrinsic Value, Cash, Cash CAD) from the positions tables; the Cash by Account donut keeps its percentages but masks the total. On the Allocation tab, it removes dollar values from chart tooltips and the Breakdown table and masks the position sizing guide. Percentage figures (returns, MWRR, cash %, weights) remain visible.

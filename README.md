@@ -33,6 +33,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Portfolio simulation** | Monte Carlo simulation across random weight distributions; optimise for Sharpe (1Y, 3M, or 1M), volatility, max drawdown, or 1Y return with an interactive efficient frontier chart |
 | **Market research pages** | ETF and stock screener views with movers, performance tables, intraday chart, and correlation and optimization tabs |
 | **Transaction entry** | Manual transaction recording and broker Excel import |
+| **Summary export** | One-click Excel export of every constituent (securities, options, GICs, cash) for all accounts or a single account, with one fixed column set for rolling up positions elsewhere |
 | **Background refresh jobs** | Async market data updates with real-time progress tracking |
 | **Multi-account support** | Switch between accounts; each user's data is isolated at the database level via RLS |
 | **Total portfolio view** | One Portfolio page with an account selector — All Accounts combines every account (per-account position attribution, pooled MWRR, weights vs the combined total, cross-account correlation, allocation, optimization) or scope everything to a single account |

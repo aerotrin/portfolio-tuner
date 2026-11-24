@@ -15,6 +15,7 @@ from backend.domain.aggregates.portfolio import (
     TotalPortfolioSnapshotDTO,
 )
 from backend.domain.analytics.allocation import CashSlice, compute_allocation
+from backend.domain.analytics.summary_export import build_summary_rows
 from backend.domain.entities.account import AccountEntity, CashFlow, OpenLot
 from backend.domain.entities.security import GlobalRates, SecurityAnalyticsResponse
 
@@ -154,16 +155,22 @@ class PortfolioManager:
         portfolio, native_cash = await self._build_portfolio_from_account(
             entity, start_date, end_date
         )
+        cash_slices = [
+            CashSlice(entity.number, entity.currency, portfolio.cash_balance)
+        ]
         return PortfolioSnapshotDTO(
-            **self._to_snapshot_fields(
-                portfolio,
-                [CashSlice(entity.number, entity.currency, portfolio.cash_balance)],
-            ),
+            **self._to_snapshot_fields(portfolio, cash_slices),
             accounts=[
                 self._account_slice(
                     entity, portfolio, native_cash, portfolio.total_value
                 )
             ],
+            summary_rows=build_summary_rows(
+                portfolio.holdings.values(),
+                [entity],
+                cash_slices,
+                portfolio.total_value,
+            ),
         )
 
     @staticmethod
@@ -255,5 +262,9 @@ class PortfolioManager:
             for entity, _account, cash, _flows in normalized
         ]
         return TotalPortfolioSnapshotDTO(
-            **self._to_snapshot_fields(total, cash_slices), accounts=slices
+            **self._to_snapshot_fields(total, cash_slices),
+            accounts=slices,
+            summary_rows=build_summary_rows(
+                total.holdings.values(), accounts, cash_slices, total.total_value
+            ),
         )

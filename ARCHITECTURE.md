@@ -361,6 +361,7 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `treemaps.py` | Treemap visualisations |
 | `account_dialogs.py` | Create/edit account dialogs |
 | `transaction_form.py` | Manual transaction entry dialog |
+| `export_summary.py` | Sidebar Export Summary button: writes the snapshot's backend-built `summary_rows` to a one-sheet `.xlsx` for the Portfolio page's account scope (`app.py` reserves a sidebar slot and the Portfolio page fills it after loading its snapshot, so the export never fetches a snapshot ahead of the page's missing-symbol check; other pages show the button disabled) |
 | `fixed_income_form.py` | Manage GIC / term deposit dialog, opened from the sidebar: one modal with an account selector and three actions (add from terms with a live backend preview, record redemption, record interest). Holdings for the last two come from the cached portfolio snapshot; per-holding inputs are keyed by account and holding and cleared on each open |
 
 ### Background Job UI
@@ -562,6 +563,10 @@ The `Portfolio.build()` method orchestrates the analytics pipeline in the correc
 2. `_build_indicators()` — compute the weighted portfolio timeseries. Fixed-income holdings enter as steady assets: the securities series and each instrument's accrual path are rescaled to 1.0 at the last date and mixed by value weight, `PORTF(t) = S(T) · [ w_sec · S(t)/S(T) + Σ w_k · A_k(t)/A_k(T) ]`, so they dampen portfolio volatility in proportion to their weight regardless of price level. With no fixed income the series is unchanged
 3. `_build_metrics()` — compute portfolio-level performance metrics from the timeseries
 4. `_build_correlation_matrix()` — compute pairwise return correlations across holdings with enough history, and keep the matching covariance matrix and observation counts
+
+### Summary Export Rows
+
+`build_summary_rows(holdings, accounts, cash_slices, total_value)` in `domain/analytics/summary_export.py` produces the `summary_rows` field of the portfolio snapshot (single-account and all-accounts): one flat row per holding plus one cash row per account, with the same fields for every asset type (account number/name/type, asset type, symbol, name, currency, quantity, book value, market value, unrealized gain and gain %, weight). Holdings are joined to their account by `Holding.account`; options are identified by OSI and get a contract label; negative cash stays in as a negative row so market values sum to `total_value` and weights to 1. The frontend only serializes these rows to Excel.
 
 ### Allocation Analytics
 

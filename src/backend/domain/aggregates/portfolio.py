@@ -22,6 +22,7 @@ from backend.domain.analytics.security import (
     compute_portfolio_timeseries_indicators,
     compute_return_statistics,
 )
+from backend.domain.analytics.summary_export import SummaryRow
 from backend.domain.constants import MIN_RETURN_OBS
 from backend.domain.entities.account import Category, CashFlow, Holding, OpenLot
 from backend.domain.entities.security import (
@@ -153,6 +154,7 @@ class PortfolioSnapshotDTO(BaseModel):
     securities: dict[str, SecurityAnalyticsResponse] = {}
     accounts: List[AccountSliceDTO] = []
     allocation: AllocationDTO = AllocationDTO()
+    summary_rows: List[SummaryRow] = []
 
 
 class TotalPortfolioSnapshotDTO(PortfolioSnapshotDTO):

@@ -28,6 +28,10 @@ from frontend.shared.jobs import (
 from frontend.shared.settings import MASKED_VALUE
 from frontend.widgets.allocation import render_portfolio_allocation
 from frontend.widgets.correlation import render_correlation_matrix
+from frontend.widgets.export_summary import (
+    SLOT_KEY as EXPORT_SLOT_KEY,
+    render_export_summary_button,
+)
 from frontend.widgets.kpis import (
     render_account_summary,
     render_market_snapshot,
@@ -169,6 +173,14 @@ portfolio = (
     if single
     else load_total_portfolio_snapshot(user_id, start_date, end_date)
 )
+
+# --- Sidebar export (slot created by app.py) ---------------------------------
+export_slot = st.session_state.get(EXPORT_SLOT_KEY)
+if export_slot is not None:
+    with export_slot:
+        render_export_summary_button(
+            portfolio.summary_rows, account.number if account else None
+        )
 
 # --- Make header dataframes -------------------------------------------------------
 header_quotes = combine_header_data(header_symbols, securities)

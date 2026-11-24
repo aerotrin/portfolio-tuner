@@ -423,6 +423,20 @@ def test_get_total_portfolio_combines_accounts():
     assert len(snap.indicators) > 0
     assert snap.correlation_matrix is not None
 
+    # Export rows: every holding plus one cash row per account, account-attributed
+    assert [(r.account_number, r.symbol) for r in snap.summary_rows] == [
+        ("ACC-A", "AAPL"),
+        ("ACC-A", "CASH"),
+        ("ACC-B", "AAPL"),
+        ("ACC-B", "MSFT"),
+        ("ACC-B", "CASH"),
+    ]
+    assert {r.account_type for r in snap.summary_rows[2:]} == {"RRSP"}
+    assert snap.summary_rows[0].account_name == "Acct ACC-A"
+    assert snap.summary_rows[4].market_value == pytest.approx(50.0 * FX)
+    assert sum(r.market_value for r in snap.summary_rows) == pytest.approx(total_value)
+    assert sum(r.weight for r in snap.summary_rows) == pytest.approx(1.0)
+
 
 def test_get_total_portfolio_no_accounts_returns_empty_snapshot():
     manager = PortfolioManager(
