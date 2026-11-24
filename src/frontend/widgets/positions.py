@@ -153,8 +153,9 @@ def _render_fixed_income_section(
     )
     st.caption(
         "Value is principal plus interest accrued to date. Fixed income has no "
-        "market price: it counts in the portfolio totals and is left out of the "
-        "intraday, correlation and optimization views. To record a redemption "
+        "market price: it counts in the portfolio totals, shows in the Intraday "
+        "treemap without a price move, and is left out of the intraday "
+        "statistics, correlation and optimization. To record a redemption "
         "or an interest payment, use **Manage GIC / Term Deposit** in the sidebar."
     )
 
@@ -222,11 +223,11 @@ def render_portfolio_positions(
             )
             st.plotly_chart(fig, key="chart-holdings-open")
             render_positions_health_bar(df)
-        elif market_df.empty:
-            st.info("No market-priced holdings to show intraday.")
         else:
+            # Same tiles as Total Return, so the layout holds across the toggle;
+            # fixed income shows as a neutral tile and stays out of the bar
             fig = render_treemap_intraday(
-                market_df,
+                df,
                 top_label="Intraday",
                 has_weight=True,
                 row_px=HEIGHT_POSITIONS_TREEMAP_ROW,
@@ -234,7 +235,7 @@ def render_portfolio_positions(
                 group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")
-            render_intraday_health_bar(market_df)
+            render_intraday_health_bar(market_df, unpriced=len(fixed_income_df))
 
         # Positions Table
         st.markdown("##### Holdings")

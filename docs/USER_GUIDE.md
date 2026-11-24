@@ -215,13 +215,13 @@ A detailed view of all open positions in the account. A toggle in the section he
 
 **Intraday view:**
 
-- **Treemap** — tiles sized by portfolio weight and coloured by intraday percentage change (red–yellow–green). Each tile shows the current price, day change, volume, and last trade timestamp.
+- **Treemap** — tiles sized by portfolio weight and coloured by intraday percentage change (red–yellow–green). Each tile shows, in order: current price, day change, volume (`Vol. 1.2M · 1.5×`), portfolio weight (`Wt. 15.88%`) and last trade time.
 - **Health bar** — a row of green/red squares summarising how many securities are advancing vs. declining today.
 - **Quote table** — one table for Stocks & ETFs and, if applicable, a second for Options. Columns: Symbol, Name, 1Y price sparkline, Signal, Price, Currency, Change, Change %, Volume, Prev. Close, High, Low, Exchange, Last Trade.
 
 **Holdings view:**
 
-- **Treemap** — tiles sized by portfolio weight and coloured by total unrealised gain/loss percentage. Each tile shows market value (CAD), total P/L, share count (or contract count for options), and days held (or DTE for options).
+- **Treemap** — tiles sized by portfolio weight and coloured by total unrealised gain/loss percentage. Each tile shows, in order: market value (CAD), total P/L, shares and days held (`350 sh · 913 d`; contracts and DTE for options, `2 ct · 30 DTE`), portfolio weight and last trade time. The rows line up with the Intraday view, so toggling swaps the first three rows in place and leaves weight and trade time where they are.
 - **Health bar** — green/red squares showing how many positions are in profit vs. loss on a total-return basis.
 - **Cash table** — one row per account, listed above the securities tables (shown even when the account holds no positions). Columns: Account, Currency, Cash (in the account's own currency), Cash CAD, % of Account (cash as a share of that account's total value), Weight % (share of the portfolio's total value). Negative cash is shown in red. In **All Accounts** scope a caption totals the cash across accounts, and when more than one account holds cash a **Cash by Account** donut shows each account's share.
 - **Stocks & ETFs table** — Columns: Symbol, Name, 1Y sparkline, Quantity, Price, Currency, Day Change, Day P/L (CAD), Market Value (CAD), Total P/L (CAD), Total P/L %, Days Held, Weight %, Break-even Price, Book Value (CAD), FX Exposure, Type, Open Date, Last Trade.
@@ -230,7 +230,7 @@ A detailed view of all open positions in the account. A toggle in the section he
 
 > **Note:** Option market value and P/L are calculated from intrinsic value only, not the actual contract price. Intraday change for options is not supported.
 
-> **Note:** A GIC or term deposit has no market price. Its value is the principal plus the interest earned to date that has not been paid out, so it rises a little every day until maturity. Interest is counted from the issue date up to and including today, which is how banks report a deposit's current value. It appears in the total-return treemap, the KPIs and all portfolio totals, and is left out of the intraday treemap, the Best/Worst Intraday KPIs and the quote table.
+> **Note:** A GIC or term deposit has no market price. Its value is the principal plus the interest earned to date that has not been paid out, so it rises a little every day until maturity. Interest is counted from the issue date up to and including today, which is how banks report a deposit's current value. It appears in both treemaps, the KPIs and all portfolio totals. In the Intraday treemap it is a neutral tile of the same size as in Total Return, so the layout stays the same when you toggle between the two views. Its tile shows value, total P/L (`No intraday chg` in the Intraday view), rate and time left (`2.45% · 15 d left`, or `matured`), weight and maturity date (`Mat. 2026-12-09`). It is left out of the Best/Worst Intraday KPIs, the up/down bar under the Intraday treemap and the quote table.
 
 > **Screenshot placeholder — Holdings positions table — Intraday view**
 

@@ -57,6 +57,70 @@ def leaf_labels(df: pd.DataFrame) -> "pd.Series | pd.Index":
     return df["symbol"]
 
 
+# Tile rows line up across the Intraday and Total Return views so a toggle
+# swaps content in place: value, change, activity/position, weight, time.
+# Lines stay short (abbreviated) because the longest one sets the text size.
+
+
+def _weight_row(df: pd.DataFrame) -> pd.Series:
+    return "<br>" + df["weight"].map("Wt. {:.2%}".format)
+
+
+def _quote_text(
+    df: pd.DataFrame, rel_volume: pd.Series, show_weight: bool = False
+) -> pd.Series:
+    return (
+        df["close"].map("{:,.2f}".format)
+        + " "
+        + df["currency"]
+        + "<br>"
+        + df["change"].map("{:+,.2f}".format)
+        + " "
+        + df["change_percent"].map("{:+.2%}".format)
+        + "<br>"
+        + df["volume"].map(lambda v: f"Vol. {compact_number(v)}")
+        + rel_volume.map(lambda x: "" if pd.isna(x) else f" · {x:.1f}×")
+        + (_weight_row(df) if show_weight else "")
+        + "<br>"
+        + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
+    )
+
+
+def _maturity_text(days: float) -> str:
+    if pd.isna(days):
+        return ""
+    return "matured" if days <= 0 else f"{days:,.0f} d left"
+
+
+def _maturity_date_row(df: pd.DataFrame) -> pd.Series:
+    """Takes the row where a security shows its last trade time."""
+    if "fi_maturity_date" not in df.columns:
+        return pd.Series("", index=df.index)
+    dates = pd.to_datetime(df["fi_maturity_date"], errors="coerce")
+    return dates.map(lambda d: "" if pd.isna(d) else f"<br>Mat. {d:%Y-%m-%d}")
+
+
+def _fixed_income_rows(df: pd.DataFrame, show_weight: bool = True) -> pd.Series:
+    """Rows shared by both views: terms, weight, maturity date."""
+    return (
+        df["fi_rate"].map(lambda r: "" if pd.isna(r) else f"{r:.2%} · ")
+        + df["fi_days_to_maturity"].map(_maturity_text)
+        + (_weight_row(df) if show_weight else "")
+        + _maturity_date_row(df)
+    )
+
+
+def _fixed_income_quote_text(
+    df: pd.DataFrame, hide_balances: bool, show_weight: bool
+) -> pd.Series:
+    value = (
+        pd.Series(MASKED_VALUE, index=df.index)
+        if hide_balances
+        else df["market_value"].map("{:,.2f} CAD".format)
+    )
+    return value + "<br>No intraday chg<br>" + _fixed_income_rows(df, show_weight)
+
+
 def render_treemap_intraday(
     df: pd.DataFrame,
     top_label: str = "",
@@ -81,23 +145,40 @@ def render_treemap_intraday(
         else pd.Series(np.nan, index=df.index)
     )
 
-    df["display_text"] = (
-        df["close"].map("{:,.2f}".format)
-        + " "
-        + df["currency"]
-        + "<br>"
-        + df["change"].map("{:+,.2f}".format)
-        + " "
-        + df["change_percent"].map("{:.2%}".format)
-        + "<br>"
-        + df["volume"].map(lambda v: f"Vol. {compact_number(v)}")
-        + rel_volume.map(lambda x: "" if pd.isna(x) else f" · {x:.1f}×")
-        + "<br>"
-        + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
+    # Holdings frames only: fixed income has no quote, so it gets a neutral
+    # tile sized like any other, keeping the layout of the Total Return view
+    is_fixed_income = (
+        (df["holding_category"] == FIXED_INCOME).to_numpy()
+        if "holding_category" in df.columns
+        else np.zeros(len(df), dtype=bool)
     )
+    has_fixed_income = bool(is_fixed_income.any())
+    show_weight = has_weight and "weight" in df.columns
+
+    if has_fixed_income:
+        text = pd.Series("", index=df.index, dtype=object)
+        if not is_fixed_income.all():
+            text.iloc[np.flatnonzero(~is_fixed_income)] = _quote_text(
+                df[~is_fixed_income], rel_volume[~is_fixed_income], show_weight
+            ).to_numpy()
+        text.iloc[np.flatnonzero(is_fixed_income)] = _fixed_income_quote_text(
+            df[is_fixed_income], hide_balances, show_weight
+        ).to_numpy()
+        df["display_text"] = text
+        df.loc[is_fixed_income, "change_percent"] = 0.0
+    else:
+        df["display_text"] = _quote_text(df, rel_volume, show_weight)
 
     path: list = [px.Constant(top_label)]
-    if group_cols:
+    if has_fixed_income:
+        leaves = pd.Series(
+            np.asarray(leaf_labels(df) if group_cols else df.index), index=df.index
+        )
+        df["_leaf"] = _name_fixed_income(
+            leaves, df["name"], pd.Series(is_fixed_income, index=df.index)
+        )
+        path.extend([*(group_cols or []), "_leaf"])
+    elif group_cols:
         # An explicit leaf column: passing df.index alongside other path columns
         # is ambiguous to plotly when a column shares the index's name ("symbol").
         df["_leaf"] = leaf_labels(df)
@@ -151,12 +232,6 @@ def render_treemap_intraday(
     return fig
 
 
-def _maturity_text(days: float) -> str:
-    if pd.isna(days):
-        return ""
-    return "matured" if days <= 0 else f"{days:,.0f} days to maturity"
-
-
 def _name_fixed_income(
     labels: pd.Series, names: pd.Series, is_fixed_income: pd.Series
 ) -> pd.Series:
@@ -186,6 +261,7 @@ def render_treemap_positions(
         )
         stocks_qty_text = ""
         option_qty_text = ""
+        sep = ""
     else:
         common_text = (
             df["market_value"].map("{:,.2f} CAD".format)
@@ -195,15 +271,18 @@ def render_treemap_positions(
             + df["gain_pct"].map("{:+.2%}".format)
             + "<br>"
         )
-        stocks_qty_text = df["open_qty"].astype(str) + " shares"
-        option_qty_text = df["open_qty"].astype(str) + " contracts"
+        stocks_qty_text = df["open_qty"].astype(str) + " sh"
+        option_qty_text = df["open_qty"].astype(str) + " ct"
+        sep = " · "
+    weight_row = _weight_row(df)
 
     if not stocks_df.empty:
         stocks_text = (
             common_text
             + stocks_qty_text
-            + ", "
-            + df["days_held"].map("{:,.0f} days".format)
+            + sep
+            + df["days_held"].map("{:,.0f} d".format)
+            + weight_row
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
         )
@@ -214,8 +293,9 @@ def render_treemap_positions(
         option_text = (
             common_text
             + option_qty_text
-            + ", "
+            + sep
             + df["option_dte"].map("{:,.0f} DTE".format)
+            + weight_row
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
         )
@@ -223,11 +303,7 @@ def render_treemap_positions(
         option_text = ""
 
     if is_fixed_income.any():
-        fixed_income_text = (
-            common_text
-            + df["fi_rate"].map(lambda r: "" if pd.isna(r) else f"{r:.2%}, ")
-            + df["fi_days_to_maturity"].map(_maturity_text)
-        )
+        fixed_income_text = common_text + _fixed_income_rows(df)
     else:
         fixed_income_text = ""
 

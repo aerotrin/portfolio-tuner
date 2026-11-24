@@ -282,12 +282,17 @@ def render_positions_health_bar(df: pd.DataFrame) -> None:
     st.caption(f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})")
 
 
-def render_intraday_health_bar(df: pd.DataFrame, show_squares: bool = True) -> None:
+def render_intraday_health_bar(
+    df: pd.DataFrame, show_squares: bool = True, unpriced: int = 0
+) -> None:
     """Gainer/loser summary, led by one square per security unless
-    `show_squares` is off (market pages, where there are too many to read)."""
+    `show_squares` is off (market pages, where there are too many to read).
+    `unpriced` counts fixed-income holdings, which have no intraday move."""
     gainers = df["change_percent"].gt(0).sum()
     losers = df["change_percent"].lt(0).sum()
     summary = f"{len(df)} securities (↑ {gainers}, ↓ {losers})"
-    if show_squares:
+    if show_squares and (gainers or losers):
         summary = f"{'🟩' * gainers + '🟥' * losers}   |   {summary}"
+    if unpriced:
+        summary += f" · {unpriced} fixed income (no intraday price)"
     st.caption(summary)
