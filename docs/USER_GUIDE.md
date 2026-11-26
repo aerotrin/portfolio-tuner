@@ -494,7 +494,7 @@ About two years of daily prices are kept per symbol (`BARS_HISTORY_DAYS` in `.en
 
 ### Auto Refresh Toggle
 
-The **Auto** toggle — just left of the **Refresh Data** button at the top-right of each page — re-runs the incremental smart sync for the current page's symbols on a fixed interval (default 5 minutes, set via `AUTO_REFRESH_DATA_INTERVAL` in milliseconds). The setting carries across pages, and each page scope keeps its own refresh cycle: the two market research pages are tracked separately (they cover many symbols and take longer), while all account portfolio pages share one scope — a portfolio refresh covers the holdings of **every** account plus the benchmark/header symbols, so switching between accounts always shows current data. A refresh fires immediately — without waiting for the next cycle — whenever the toggle is on and the current page's scope hasn't been refreshed yet this session (shown by the gray **Last trade** badge): both when you switch the toggle on and when you first open such a page. Refreshes run in the background — the page stays fully interactive and updates once with fresh data when each job completes.
+The **Auto** toggle — just left of the **Refresh Data** button at the top-right of each page — re-runs the incremental smart sync for the current page's symbols on a fixed interval (default 5 minutes, set via `AUTO_REFRESH_DATA_INTERVAL` in milliseconds). The setting carries across pages, and each page scope keeps its own refresh cycle: the two market research pages are tracked separately (they cover many symbols and take longer), while all account portfolio pages share one scope — a portfolio refresh covers the holdings of **every** account plus the benchmark/header symbols, so switching between accounts always shows current data. A refresh starts within about ten seconds — without waiting for the next cycle — whenever the toggle is on and the current page's scope hasn't been refreshed yet this session (shown by the gray **Last trade** badge): both when you switch the toggle on and when you first open such a page. Refreshes run in the background — the page stays fully interactive and updates once with fresh data when each job completes.
 
 ### Manual Refresh
 
@@ -511,7 +511,7 @@ Use **Force Data Refresh** when quotes appear stale, after changing the date ran
 
 ### Refresh Progress
 
-Background refreshes (the **Refresh Data** button and the **Auto** toggle) show a live progress bar under **Refresh Status** at the bottom of the sidebar; the page reloads with fresh data when the job finishes.
+Background refreshes (the **Refresh Data** button and the **Auto** toggle) show a live progress bar in place of the **Refresh Data** button. The rest of the page stays as it is while the job runs, and redraws once with fresh data when the job finishes.
 
 Blocking refreshes (missing-symbol bootstrap and **Force Data Refresh**) show a progress banner at the top of the page and pause rendering until the job completes. After a Force Data Refresh, every page is marked as refreshed.
 

@@ -372,7 +372,12 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 
 ### Background Job UI
 
-When a market data refresh is triggered, the frontend calls `POST /admin/refresh-securities`, receives a job ID, and then polls `GET /jobs/{job_id}` on every Streamlit rerun (driven by `streamlit_autorefresh`) until the job completes. `shared/jobs.py` manages this state in `st.session_state` and renders a progress banner. Blocking jobs (triggered automatically when symbols are missing) hold the page until completion; non-blocking jobs (triggered manually) allow the rest of the page to render while the job runs.
+When a market data refresh is triggered, the frontend calls `POST /admin/refresh-securities`, receives a job ID, and then polls `GET /jobs/{job_id}` on every Streamlit rerun (driven by `streamlit_autorefresh`) until the job completes. `shared/jobs.py` manages this state in `st.session_state` and renders a progress banner. Blocking jobs (triggered automatically when symbols are missing, or by Force Data Refresh) hold the page until completion, polled by `streamlit_autorefresh`.
+
+Background jobs (the **Refresh Data** button and the Auto toggle) are handled by `render_refresh_control()`, a fragment in the page header that holds the button. A click, or an Auto refresh coming due, starts the job from inside the fragment (`start_refresh_job(rerun=False)`), and the fragment then shows the progress bar in the button's place and polls the job once a second with a fragment-scoped rerun. Nothing else on the page reruns until the job finishes, when `check_job_status()` clears the data cache and does the one full rerun that loads the new data.
+
+- **Timer:** the fragment's `run_every` is chosen on each full run: one second while a background job is running, a ten-second tick while Auto is on (to notice when a refresh is due), none otherwise. A fragment-scoped rerun is not allowed while the fragment runs as part of a full page run, so `_rerun_fragment()` falls back to a full rerun there, after which the one-second timer takes over.
+- **Symbols:** the control renders in the header, before a page has computed its symbols. Pages therefore register them with `set_page_symbols(active_page, symbols)`, and the control ignores a list recorded for another page, so the first run after a page switch cannot refresh the previous page's symbols.
 
 ---
 

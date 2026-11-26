@@ -3,6 +3,7 @@ import time
 
 import requests
 import streamlit as st
+from streamlit.errors import StreamlitAPIException
 from streamlit_autorefresh import st_autorefresh
 
 from frontend.services.streamlit_data import get_api_client
@@ -51,9 +52,11 @@ def start_refresh_job(
     start_date: str | None = None,
     end_date: str | None = None,
     refreshed_pages: list[str] | None = None,
+    rerun: bool = True,
 ) -> None:
     """Start a refresh job. ``refreshed_pages`` lists the pages whose data the
     job covers (stamped as refreshed on success); defaults to ``active_page``.
+    Pass ``rerun=False`` from a fragment that shows the job's progress itself.
     """
     job_id = st.session_state.get("job_id")
     if job_id:
@@ -83,7 +86,8 @@ def start_refresh_job(
             st.session_state["job_refreshed_pages"] = refreshed_pages
             logger.info("%s refresh job accepted: %s", job_type, job_id)
             st.toast("Refresh started", icon="🔄")
-            st.rerun()
+            if rerun:
+                st.rerun()
         elif status == "skipped":
             logger.info("%s refresh job skipped due to cooldown: %s", job_type, resp)
             st.toast("Refresh skipped", icon="❌")
@@ -167,29 +171,36 @@ def render_auto_refresh_toggle() -> None:
     )
 
 
-def maybe_auto_refresh_data() -> None:
-    """Trigger a smart, non-blocking refresh of the current page's symbols when
-    the Auto Refresh toggle is on, with an independent cadence per page scope.
+def set_page_symbols(active_page: str, symbols: list[str]) -> None:
+    """Record the symbols a refresh of this page covers.
+
+    The page is stored with them because the refresh control renders in the
+    header, before a page has computed its symbols: without it, the first
+    run after a page switch would see the previous page's list.
+    """
+    st.session_state["page_symbols"] = symbols
+    st.session_state["page_symbols_page"] = active_page
+
+
+def _page_symbols(active_page: str) -> list[str]:
+    if st.session_state.get("page_symbols_page") != active_page:
+        return []
+    return st.session_state.get("page_symbols") or []
+
+
+def auto_refresh_due(page: str) -> bool:
+    """Whether the Auto toggle should start a refresh of this page now, with
+    an independent cadence per page scope.
 
     Each page keeps its own timer in ``_last_auto_refresh_at_by_page`` so heavy
     market pages and the portfolio scope never postpone each other. A page that
-    was never refreshed this session fires immediately; one already refreshed
-    (manual or blocking job) just arms its timer and fires an interval later.
-
-    Call from page scripts after ``page_symbols`` / ``active_page`` are set, so
-    the check never sees a previous page's state. The timestamp is set before
-    starting the job so a skipped or failed attempt waits a full interval
-    before retrying.
+    was never refreshed this session is due at once; one already refreshed
+    (manual or blocking job) just arms its timer and is due an interval later.
+    The timestamp is set when this returns True, so a skipped or failed
+    attempt waits a full interval before retrying.
     """
     if not st.session_state.get(AUTO_REFRESH_ON):
-        return
-    if st.session_state.get("job_id"):
-        return
-    symbols = st.session_state.get("page_symbols") or []
-    if not symbols:
-        return
-
-    page = st.session_state.get("active_page")
+        return False
     last_by_page: dict = st.session_state.setdefault(
         "_last_auto_refresh_at_by_page", {}
     )
@@ -199,19 +210,12 @@ def maybe_auto_refresh_data() -> None:
     if last is None:
         if page in st.session_state.get("last_refresh_by_page", {}):
             last_by_page[page] = now
-            return
+            return False
     elif (now - last) * 1000 < config.auto_refresh_data_interval:
-        return
+        return False
 
     last_by_page[page] = now
-    logger.info("Auto refresh triggered for %d symbols", len(symbols))
-    start_refresh_job(
-        symbols=symbols,
-        blocking=False,
-        active_page=page,
-        start_date=st.session_state.get("start_date"),
-        end_date=st.session_state.get("end_date"),
-    )
+    return True
 
 
 def check_job_status() -> None:
@@ -273,30 +277,100 @@ def check_job_status() -> None:
         st.rerun()
 
 
-@st.fragment(run_every="1s")
-def _refresh_status_fragment() -> None:
-    """One-stop status UI for non-blocking refresh jobs.
+REFRESH_POLL_SEC = 1
+AUTO_REFRESH_TICK_SEC = 10
+REFRESH_PROGRESS_WIDTH = 170
 
-    Runs as a scoped fragment: only this region reruns each second, so the
-    rest of the page stays untouched while polling. On job completion,
-    check_job_status() clears the data cache and triggers a single
-    full-page rerun, after which this fragment is no longer rendered and
-    its timer stops.
+
+def _rerun_fragment() -> None:
+    """Rerun only the calling fragment; a fragment-scoped rerun is not allowed
+    while the fragment runs as part of a full page run, so fall back to that."""
+    try:
+        st.rerun(scope="fragment")
+    except StreamlitAPIException:
+        st.rerun()
+
+
+def _refresh_control(active_page: str, polled_by_timer: bool) -> None:
+    """Refresh Data button, or the running job's progress in its place.
+
+    Runs as a fragment, so starting a refresh and following its progress
+    rerun only this control. The page reruns once, when the job finishes and
+    there is new data to load (check_job_status).
     """
-    check_job_status()
-    p = st.session_state.get("job_progress")
-    st.progress(0 if p is None else int(p), text="Refreshing data…")
+    if st.session_state.get("job_id"):
+        if st.session_state.get("job_blocking"):
+            st.button(
+                "Refresh Data",
+                icon=":material/refresh:",
+                disabled=True,
+                key=f"{active_page}_refresh_button_disabled",
+            )
+            return
+        check_job_status()
+        p = st.session_state.get("job_progress")
+        st.progress(
+            0 if p is None else int(p),
+            text="Refreshing data…",
+            width=REFRESH_PROGRESS_WIDTH,
+        )
+        if not polled_by_timer:
+            time.sleep(REFRESH_POLL_SEC)
+            _rerun_fragment()
+        return
+
+    clicked = st.button(
+        "Refresh Data",
+        icon=":material/refresh:",
+        type="secondary",
+        key=f"{active_page}_refresh_button",
+    )
+    symbols = _page_symbols(active_page)
+    if not symbols:
+        return
+    if clicked or auto_refresh_due(active_page):
+        start_refresh_job(
+            symbols=symbols,
+            blocking=False,
+            active_page=active_page,
+            start_date=st.session_state.get("start_date"),
+            end_date=st.session_state.get("end_date"),
+            rerun=False,
+        )
+        if st.session_state.get("job_id"):
+            _rerun_fragment()
+
+
+def render_refresh_control(active_page: str) -> None:
+    """Refresh Data button for a page header, with in-place progress.
+
+    The fragment's timer is chosen on each full run: fast while a background
+    job is running, a slow tick while Auto refresh is on (to notice when a
+    refresh is due), and none otherwise.
+    """
+    running = bool(st.session_state.get("job_id")) and not st.session_state.get(
+        "job_blocking"
+    )
+    auto = (
+        st.session_state.get(AUTO_REFRESH_ON) and config.auto_refresh_data_interval > 0
+    )
+    if running:
+        run_every: int | None = REFRESH_POLL_SEC
+    elif auto:
+        run_every = AUTO_REFRESH_TICK_SEC
+    else:
+        run_every = None
+    # A fragment's wrapper block stretches; content width keeps the header tight
+    with st.container(width="content"):
+        st.fragment(_refresh_control, run_every=run_every)(active_page, running)
 
 
 def render_refresh_job_ui(active_page: str) -> None:
     """
-    Rules:
-    - If job_blocking AND job_page == active_page:
-        * block rendering (st.stop)
-        * fast poll (500ms)
-        * show progress bar in MAIN area (not sidebar)
-    - Else:
-        * show a sidebar progress fragment that polls without page reruns
+    Completion toasts, and the blocking banner: if job_blocking AND
+    job_page == active_page, block rendering (st.stop), poll fast (500ms) and
+    show the progress bar in the main area. Background jobs show their
+    progress in the page header instead (render_refresh_control).
     """
     if st.session_state.pop("job_just_completed", False):
         failed = st.session_state.pop("last_job_failed_symbols", [])
@@ -335,9 +409,3 @@ def render_refresh_job_ui(active_page: str) -> None:
         # fast refresh + stop page content rendering
         st_autorefresh(interval=500, key="job_autorefresh_blocking")
         st.stop()
-
-    # ---- SIDEBAR non-blocking status (scoped fragment; no full-page polling) ----
-    with st.sidebar:
-        st.divider()
-        st.subheader("Refresh Status")
-        _refresh_status_fragment()

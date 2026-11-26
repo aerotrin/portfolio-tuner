@@ -16,7 +16,7 @@ from frontend.services.streamlit_data import (
 from frontend.shared.accounts import account_labels, market_priced_symbols
 from frontend.shared.symbols_loader import load_symbols_config
 from frontend.shared.env_loader import config
-from frontend.shared.jobs import ALL_DATA_PAGES, AUTO_REFRESH_ON, start_refresh_job
+from frontend.shared.jobs import ALL_DATA_PAGES, start_refresh_job
 from frontend.shared.logging import setup_logging
 from frontend.widgets.account_dialogs import create_account_dialog, edit_account_dialog
 from frontend.widgets.export_summary import (
@@ -256,12 +256,6 @@ bootstrap_once()
 # -----------------------------------------------------------------------------
 if config.app_refresh_interval and config.app_refresh_interval > 0:
     st_autorefresh(interval=config.app_refresh_interval, key="app_autorefresh")
-# Data auto-refresh: mount a dedicated timer at the data cadence while the
-# toggle is on (independent of APP_REFRESH_INTERVAL). The fire check itself
-# lives in the page scripts (maybe_auto_refresh_data) so it always sees the
-# current page's symbols, never a previous page's stale state.
-if st.session_state.get(AUTO_REFRESH_ON) and config.auto_refresh_data_interval > 0:
-    st_autorefresh(interval=config.auto_refresh_data_interval, key="data_autorefresh")
 
 # -----------------------------------------------------------------------------
 # Services

@@ -21,9 +21,9 @@ from frontend.shared.dataframe import (
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
     check_job_status,
-    maybe_auto_refresh_data,
+    render_refresh_control,
     render_refresh_job_ui,
-    start_refresh_job,
+    set_page_symbols,
 )
 from frontend.shared.settings import MASKED_VALUE
 from frontend.widgets.allocation import render_portfolio_allocation
@@ -118,13 +118,7 @@ with st.container(
         label_visibility="collapsed",
         width="content",
     )
-    # Click handled below, once page_symbols is computed
-    refresh_clicked = st.button(
-        "Refresh Data",
-        icon=":material/refresh:",
-        type="secondary",
-        key="portfolio_refresh_button",
-    )
+    render_refresh_control(active_page)
 
 # --- Auto job status checking ------------------------------------------------
 check_job_status()
@@ -145,24 +139,11 @@ portfolio_symbols = (
     else sorted(all_holdings)
 )
 page_symbols = sorted(all_holdings | set(base_symbols))
-st.session_state["page_symbols"] = page_symbols
-
-# --- Handle Refresh Data click (button rendered in the header row) -----------
-if refresh_clicked:
-    start_refresh_job(
-        symbols=page_symbols,
-        blocking=False,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
+set_page_symbols(active_page, page_symbols)
 
 # --- Ensure all page symbols are available else blocking refresh job --------
 missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
 auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
-
-# --- Timed / first-visit background refresh (Auto Refresh toggle) ------------
-maybe_auto_refresh_data()
 
 # --- Load base data (header + benchmark only) ------------------------------
 securities = load_security_data(base_symbols, start_date, end_date)

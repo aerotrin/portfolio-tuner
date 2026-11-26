@@ -13,9 +13,9 @@ from frontend.shared.dataframe import (
 from frontend.shared.jobs import (
     auto_refresh_if_missing,
     check_job_status,
-    maybe_auto_refresh_data,
+    render_refresh_control,
     render_refresh_job_ui,
-    start_refresh_job,
+    set_page_symbols,
 )
 from frontend.widgets.correlation import render_market_correlation
 from frontend.widgets.intraday import render_market_intraday
@@ -59,13 +59,7 @@ with st.container(
     # Nested content-width container keeps the cluster tight on the right
     with st.container(horizontal=True, vertical_alignment="center", width="content"):
         render_status_inline(rates, active_page)
-        # Click handled below, once page_symbols is computed
-        market_refresh = st.button(
-            "Refresh Data",
-            icon=":material/refresh:",
-            type="secondary",
-            key="market_refresh_button",
-        )
+        render_refresh_control(active_page)
 
 # --- Auto job status checking ------------------------------------------------
 check_job_status()
@@ -79,24 +73,11 @@ page_symbols = sorted(
         *market_etf_symbols,
     }
 )
-st.session_state["page_symbols"] = page_symbols
+set_page_symbols(active_page, page_symbols)
 
 # --- Ensure all page symbols are available else blocking refresh job --------
 missing_symbols = sorted(check_missing_symbols(tuple(page_symbols)))
 auto_refresh_if_missing(missing_symbols, active_page, start_date, end_date)
-
-# --- Timed / first-visit background refresh (Auto Refresh toggle) ------------
-maybe_auto_refresh_data()
-
-# --- Handle Refresh Data click (button rendered in the header row) -----------
-if market_refresh:
-    start_refresh_job(
-        symbols=page_symbols,
-        blocking=False,
-        active_page=active_page,
-        start_date=start_date,
-        end_date=end_date,
-    )
 
 # --- Load base + market securities data ---------------------------------------
 securities = load_security_data(page_symbols, start_date, end_date)
