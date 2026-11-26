@@ -19,7 +19,12 @@ from frontend.widgets.kpis import (
     render_portfolio_kpis,
     render_positions_health_bar,
 )
-from frontend.widgets.treemaps import render_treemap_intraday, render_treemap_positions
+from frontend.widgets.treemaps import (
+    render_treemap_intraday,
+    render_treemap_positions,
+    intraday_map_key,
+    total_return_map_key,
+)
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -222,7 +227,7 @@ def render_portfolio_positions(
                 group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-open")
-            render_positions_health_bar(df)
+            render_positions_health_bar(df, help=total_return_map_key())
         else:
             # Same tiles as Total Return, so the layout holds across the toggle;
             # fixed income shows as a neutral tile and stays out of the bar
@@ -235,7 +240,9 @@ def render_portfolio_positions(
                 group_cols=group_cols,
             )
             st.plotly_chart(fig, key="chart-holdings-intraday")
-            render_intraday_health_bar(market_df, unpriced=len(fixed_income_df))
+            render_intraday_health_bar(
+                market_df, unpriced=len(fixed_income_df), help=intraday_map_key()
+            )
 
         # Positions Table
         st.markdown("##### Holdings")

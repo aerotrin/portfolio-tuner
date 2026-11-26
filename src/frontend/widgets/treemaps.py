@@ -20,6 +20,73 @@ CHANGE_COLOR_NEUTRAL = "#ECEFF1"
 CHANGE_COLOR_SCALE = ["#D32F2F", CHANGE_COLOR_NEUTRAL, "#15803D"]
 
 
+AGE_DOT_BUCKETS = (30, 90, 180, 365)
+AGE_DOT_FILLED = "●"
+AGE_DOT_EMPTY = "○"
+
+
+def _age_dots(days: float) -> str:
+    """Holding age as five dots: one under a month, then 3 months, 6 months,
+    a year, and all five at a year or more."""
+    if pd.isna(days):
+        return ""
+    filled = 1 + sum(days >= threshold for threshold in AGE_DOT_BUCKETS)
+    total = len(AGE_DOT_BUCKETS) + 1
+    return AGE_DOT_FILLED * filled + AGE_DOT_EMPTY * (total - filled)
+
+
+def _span(days: int) -> tuple[int, str]:
+    """30 -> (1, "month"), 180 -> (6, "month"), 365 -> (1, "year")."""
+    if days % 365 == 0:
+        return days // 365, "year"
+    return round(days / 30), "month"
+
+
+def _span_label(count: int, unit: str) -> str:
+    return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
+
+
+def _span_range(lo_days: int, hi_days: int) -> str:
+    """ "1–3 months" within one unit, "6 months–1 year" across units."""
+    (lo, lo_unit), (hi, hi_unit) = _span(lo_days), _span(hi_days)
+    if lo_unit == hi_unit:
+        return f"{lo}–{_span_label(hi, hi_unit)}"
+    return f"{_span_label(lo, lo_unit)}–{_span_label(hi, hi_unit)}"
+
+
+def total_return_map_key() -> str:
+    """How to read the Total Return treemap: its colour scale and age dots."""
+    buckets = AGE_DOT_BUCKETS
+    ranges = (
+        [f"under {_span_label(*_span(buckets[0]))}"]
+        + [_span_range(lo, hi) for lo, hi in zip(buckets, buckets[1:])]
+        + [f"{_span_label(*_span(buckets[-1]))} or more"]
+    )
+    thresholds = [0, *AGE_DOT_BUCKETS]
+    dots = " · ".join(
+        f"{_age_dots(days)} {label}" for days, label in zip(thresholds, ranges)
+    )
+    return (
+        "**Colour:** total gain/loss %, red to green, full colour at "
+        f"±{format_cap(TOTAL_RETURN_COLOR_MAX)} or more.\n\n"
+        f"**Dots:** how long the position has been held: {dots}. "
+        "Hover a tile for exact days. Options show days to expiry instead."
+    )
+
+
+def intraday_map_key() -> str:
+    """How to read the holdings Intraday treemap: colour scale and volume row."""
+    cap = format_cap(CHANGE_COLOR_MAX)
+    return (
+        f"**Colour:** today's change %, red to green. Full red or green means "
+        f"down or up {cap} or more today; light grey is flat. Fixed income has "
+        "no intraday price, so it stays grey.\n\n"
+        "**Volume:** `Vol. 1.2M · 1.5×` is shares traded today, then today's "
+        "volume as a multiple of the 20-day average (1.5× = half again as busy "
+        "as usual). The multiple reads low early in the session."
+    )
+
+
 def format_cap(fraction: float) -> str:
     """0.04 -> "4%", 0.025 -> "2.5%": a colour cap as written, not rounded."""
     return f"{round(fraction * 100, 2):g}%"
@@ -301,7 +368,7 @@ def render_treemap_positions(
             common_text
             + stocks_qty_text
             + sep
-            + df["days_held"].map("{:,.0f} d".format)
+            + df["days_held"].map(_age_dots)
             + weight_row
             + "<br>"
             + df["timestamp"].map(lambda x: humanize_timestamp(x)[0])
@@ -344,9 +411,9 @@ def render_treemap_positions(
         **_diverging_color("gain_pct", TOTAL_RETURN_COLOR_MAX),
         custom_data=["display_text"],
         hover_data=(
-            ["name", "timestamp"]
+            ["name", "days_held", "timestamp"]
             if hide_balances
-            else ["name", "market_value", "timestamp"]
+            else ["name", "market_value", "days_held", "timestamp"]
         ),
     )
 

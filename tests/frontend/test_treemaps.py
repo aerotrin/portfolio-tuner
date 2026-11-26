@@ -10,6 +10,9 @@ from frontend.widgets.treemaps import (
     COLOR_REL_VOLUME,
     REL_VOLUME_COLOR_MAX,
     TOTAL_RETURN_COLOR_MAX,
+    _age_dots,
+    intraday_map_key,
+    total_return_map_key,
     compact_number,
     format_cap,
     render_treemap_intraday,
@@ -83,6 +86,44 @@ def test_tile_text_shows_the_multiple_only_when_known():
 
 
 @pytest.mark.parametrize(
+    "days, dots",
+    [
+        (0, "●○○○○"),
+        (29, "●○○○○"),
+        (30, "●●○○○"),
+        (89, "●●○○○"),
+        (90, "●●●○○"),
+        (364, "●●●●○"),
+        (365, "●●●●●"),
+        (2000, "●●●●●"),
+        (np.nan, ""),
+    ],
+)
+def test_age_dots(days, dots):
+    assert _age_dots(days) == dots
+
+
+def test_total_return_hover_carries_exact_days_held():
+    fig = render_treemap_positions(_positions_frame())
+
+    assert "days_held" in fig.data[0].hovertemplate
+
+
+def test_total_return_map_key_matches_the_scale_and_buckets():
+    key = total_return_map_key()
+
+    assert f"±{format_cap(TOTAL_RETURN_COLOR_MAX)}" in key
+    assert "●○○○○ under 1 month" in key
+    assert "●●○○○ 1–3 months" in key
+    assert "●●●●○ 6 months–1 year" in key
+    assert "●●●●● 1 year or more" in key
+
+
+def test_intraday_map_key_states_the_day_change_cap():
+    assert f"{format_cap(CHANGE_COLOR_MAX)} or more today" in intraday_map_key()
+
+
+@pytest.mark.parametrize(
     "fraction, text",
     [(0.04, "4%"), (0.05, "5%"), (0.025, "2.5%"), (0.07, "7%"), (0.25, "25%")],
 )
@@ -146,7 +187,7 @@ def test_positions_treemap_tile_rows():
     assert _rows(text["AAA"])[:4] == [
         "1,000.00 CAD",
         "+100.00 +10.00%",
-        "10 sh · 30 d",
+        "10 sh · ●●○○○",
         "Wt. 30.00%",
     ]
     assert len(_rows(text["AAA"])) == 5
@@ -164,7 +205,7 @@ def test_positions_treemap_with_balances_hidden_keeps_the_same_rows():
     text = _leaf_text(render_treemap_positions(_positions_frame(), hide_balances=True))
 
     stock, gic = _rows(text["AAA"]), _rows(text["Bank GIC"])
-    assert stock[1:4] == ["+10.00%", "30 d", "Wt. 30.00%"]
+    assert stock[1:4] == ["+10.00%", "●●○○○", "Wt. 30.00%"]
     assert len(stock) == 5
     assert "2,050" not in text["Bank GIC"] and "+50.00" not in text["Bank GIC"]
     assert gic[1:] == [

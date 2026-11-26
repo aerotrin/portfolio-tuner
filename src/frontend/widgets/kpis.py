@@ -274,20 +274,27 @@ def render_portfolio_kpis(df: pd.DataFrame, hide_balances: bool) -> None:
     )
 
 
-def render_positions_health_bar(df: pd.DataFrame) -> None:
-    """Render the health bar."""
+def render_positions_health_bar(df: pd.DataFrame, help: str | None = None) -> None:
+    """Render the health bar, with an optional tooltip at its end."""
     gainers = df["gain_pct"].gt(0).sum()
     losers = df["gain_pct"].lt(0).sum()
     health_bar = "🟩" * gainers + "🟥" * losers
-    st.caption(f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})")
+    st.caption(
+        f"{health_bar}   |   {len(df)} positions (↑ {gainers}, ↓ {losers})",
+        help=help,
+    )
 
 
 def render_intraday_health_bar(
-    df: pd.DataFrame, show_squares: bool = True, unpriced: int = 0
+    df: pd.DataFrame,
+    show_squares: bool = True,
+    unpriced: int = 0,
+    help: str | None = None,
 ) -> None:
     """Gainer/loser summary, led by one square per security unless
     `show_squares` is off (market pages, where there are too many to read).
-    `unpriced` counts fixed-income holdings, which have no intraday move."""
+    `unpriced` counts fixed-income holdings, which have no intraday move.
+    `help` adds a tooltip at the end of the line."""
     gainers = df["change_percent"].gt(0).sum()
     losers = df["change_percent"].lt(0).sum()
     summary = f"{len(df)} securities (↑ {gainers}, ↓ {losers})"
@@ -295,4 +302,4 @@ def render_intraday_health_bar(
         summary = f"{'🟩' * gainers + '🟥' * losers}   |   {summary}"
     if unpriced:
         summary += f" · {unpriced} fixed income (no intraday price)"
-    st.caption(summary)
+    st.caption(summary, help=help)
