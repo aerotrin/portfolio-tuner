@@ -12,11 +12,9 @@ from frontend.shared.styles import (
     POSITIONS_EQUITY_TABLE_CONFIG,
     POSITIONS_FIXED_INCOME_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
-    QUOTE_TABLE_CONFIG,
     balance_safe_column_order,
     cash_table_styler,
     positions_table_styler,
-    quote_table_styler,
     with_account_column,
 )
 from frontend.widgets.kpis import (
@@ -44,7 +42,8 @@ def holdings_shading_key() -> str:
         "**Row shading:** green when a position's total gain is "
         f"+{format_cap(TAKE_PROFIT_LIMIT)} or more (take-profit level), red at "
         f"−{format_cap(abs(LOSS_LIMIT))} or worse (stop-loss level). Gain and "
-        "change figures are coloured green or red by sign."
+        "change figures are coloured green or red by sign; Price and Day "
+        "follow today's move."
     )
 
 
@@ -206,14 +205,12 @@ def render_portfolio_positions(
         group_cols = None
         equity_config = POSITIONS_EQUITY_TABLE_CONFIG
         option_config = POSITIONS_OPTION_TABLE_CONFIG
-        quote_config = QUOTE_TABLE_CONFIG
         if has_accounts:
             group_cols = ["account"]
             equity_config = with_account_column(POSITIONS_EQUITY_TABLE_CONFIG, "symbol")
             option_config = with_account_column(
                 POSITIONS_OPTION_TABLE_CONFIG, "option_osi"
             )
-            quote_config = with_account_column(QUOTE_TABLE_CONFIG, "symbol")
 
         df = df.sort_values(by="gain_pct", ascending=False)
         equity_df = cast(pd.DataFrame, df[df["holding_category"] == "Equity"])
@@ -288,31 +285,3 @@ def render_portfolio_positions(
             )
         if not fixed_income_df.empty:
             _render_fixed_income_section(fixed_income_df, hide_balances, has_accounts)
-
-        with st.expander("Intraday Quote Table", icon=":material/table:"):
-            intraday_equity_df = equity_df.sort_values(
-                by="change_percent", ascending=False
-            )
-            intraday_option_df = option_df.sort_values(
-                by="change_percent", ascending=False
-            )
-            if not intraday_equity_df.empty:
-                st.markdown("###### Stocks & ETFs")
-                st.dataframe(
-                    quote_table_styler(intraday_equity_df),
-                    hide_index=True,
-                    height="content",
-                    column_order=quote_config.keys(),
-                    column_config=quote_config,
-                    key="table-holdings-intraday-quote-stocks",
-                )
-            if not intraday_option_df.empty:
-                st.markdown("###### Options")
-                st.dataframe(
-                    quote_table_styler(intraday_option_df),
-                    hide_index=True,
-                    height="content",
-                    column_order=quote_config.keys(),
-                    column_config=quote_config,
-                    key="table-holdings-intraday-quote-options",
-                )

@@ -18,6 +18,9 @@ SIGNAL_HELP = (
     "⚠ = RSI > 70 (overbought) | ▽ = RSI < 30 (oversold)"
 )
 
+PRICE_HELP = "In the security's own currency; green or red by today's move."
+DAY_HELP = "Change since the previous close."
+
 # Columns that reveal account size — dropped from tables when Hide Balances is on
 BALANCE_COLUMNS = (
     "open_qty",
@@ -58,11 +61,10 @@ QUOTE_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "close": st.column_config.NumberColumn("Price", format="accounting"),
-    "change": st.column_config.NumberColumn("Chg $", format="%+.2f"),
-    "currency": st.column_config.TextColumn("Currency"),
+    # Price and Day carry no format: the table stylers supply their text
+    "close": st.column_config.NumberColumn("Price", help=PRICE_HELP),
+    "change_percent": st.column_config.NumberColumn("Day", help=DAY_HELP),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
-    "change_percent": st.column_config.NumberColumn("Chg 1D", format="percent"),
     "return5D": st.column_config.NumberColumn("Chg 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Chg 1M", format="percent"),
     "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
@@ -110,9 +112,12 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
             elif rsi < 30:
                 style["rsi"] = f"color: {GREEN};"
 
+        if "close" in style.index and "change_percent" in style.index:
+            style["close"] = style["change_percent"]
+
         return style
 
-    return df.style.apply(style_row, axis=1)
+    return _format_price_and_day(df.style.apply(style_row, axis=1), df)
 
 
 POSITIONS_EQUITY_TABLE_CONFIG = {
@@ -121,20 +126,21 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    "close": st.column_config.NumberColumn("Price", format="accounting"),
+    # Price and Day carry no format: positions_table_styler supplies their text
+    "close": st.column_config.NumberColumn("Price", help=PRICE_HELP),
+    "change_percent": st.column_config.NumberColumn("Day", help=DAY_HELP),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
-    "currency": st.column_config.TextColumn("Currency"),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
-    # "change": st.column_config.NumberColumn("Chg", format="%+.2f"),
-    # "change_percent": st.column_config.NumberColumn("Chg %", format="percent"),
+    "relative_volume": st.column_config.NumberColumn(
+        "Rel Vol", format="%.1f×", help="Today's volume ÷ 20-day average volume"
+    ),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
-    "days_held": st.column_config.NumberColumn("Days", format="compact"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "days_held": st.column_config.NumberColumn("Days", format="compact"),
     "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
-    # "intraday_change_pct": st.column_config.NumberColumn("Day %", format="percent"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
     "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
     "security_type": st.column_config.TextColumn("Type"),
@@ -150,23 +156,26 @@ POSITIONS_OPTION_TABLE_CONFIG = {
     "sparkline": st.column_config.AreaChartColumn(
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
-    # "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
-    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
-    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "close": st.column_config.NumberColumn(
+        "Underlying", help="Latest price of the underlying. " + PRICE_HELP
+    ),
+    "change_percent": st.column_config.NumberColumn(
+        "Und. Day", help="The underlying's change today. " + DAY_HELP
+    ),
     "holding_category": st.column_config.TextColumn("Right"),
     "option_dte": st.column_config.NumberColumn("DTE", format="compact"),
     "option_value": st.column_config.NumberColumn(
         "Intrinsic Value ⚠️", format="accounting"
     ),
-    "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
-    # "currency": st.column_config.TextColumn("Currency"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
     "market_value": st.column_config.NumberColumn("Mkt Value CAD", format="dollar"),
+    "weight": st.column_config.NumberColumn("Weight %", format="percent"),
+    "open_qty": st.column_config.NumberColumn("Quantity", format="compact"),
+    "breakeven_price": st.column_config.NumberColumn("B/E Price", format="accounting"),
     "book_value": st.column_config.NumberColumn("Book Value CAD", format="dollar"),
     "option_expiry": st.column_config.DateColumn("Expiry", format="YYYY-MM-DD"),
     "option_strike": st.column_config.NumberColumn("Strike", format="accounting"),
-    "close": st.column_config.NumberColumn("Last", format="accounting"),
     "fx_exposure": st.column_config.NumberColumn("FX Exposure", format="dollar"),
     "days_held": st.column_config.NumberColumn("Days Held", format="compact"),
     "security_type": st.column_config.TextColumn("Type"),
@@ -236,7 +245,36 @@ def cash_table_styler(df: pd.DataFrame) -> Styler:
     )
 
 
+def _day_change_text(value: float) -> str:
+    """0.0414 -> "▲ 4.14%", -0.0414 -> "▼ 4.14%"; a dash before any change
+    is published (premarket)."""
+    if pd.isna(value):
+        return "—"
+    arrow = "▲ " if value > 0 else "▼ " if value < 0 else ""
+    return f"{arrow}{abs(value):.2%}"
+
+
+def _format_price_and_day(styler: Styler, df: pd.DataFrame) -> Styler:
+    """Display text for the Price and Day columns: "611.68 USD" and "▼ 4.14%".
+    Both stay numeric underneath, so they sort as numbers; the currency and
+    the arrow are display only."""
+    if "change_percent" in df.columns:
+        styler = styler.format(_day_change_text, subset=["change_percent"])
+    if "close" in df.columns:
+        styler = styler.format("{:,.2f}", subset=["close"], na_rep="")
+        if "currency" in df.columns:
+            # A formatter sees only the cell, so each currency gets its own
+            for currency in df["currency"].dropna().unique():
+                rows = df.index[(df["currency"] == currency) & df["close"].notna()]
+                styler = styler.format(
+                    f"{{:,.2f}} {currency}", subset=pd.IndexSlice[rows, ["close"]]
+                )
+    return styler
+
+
 def positions_table_styler(df: pd.DataFrame) -> Styler:
+    """Row shading, gain/loss colours, and Price and Day coloured by today's
+    move and shown as text by `_format_price_and_day`."""
     VALUE_COLS = [
         "change",
         "change_percent",
@@ -291,9 +329,12 @@ def positions_table_styler(df: pd.DataFrame) -> Styler:
                 else:
                     style[col] = row_bg
 
+        if "close" in style.index and "change_percent" in style.index:
+            style["close"] = style["change_percent"]
+
         return style
 
-    return df.style.apply(style_row, axis=1)
+    return _format_price_and_day(df.style.apply(style_row, axis=1), df)
 
 
 PERFORMANCE_TABLE_CONFIG = {
@@ -303,11 +344,9 @@ PERFORMANCE_TABLE_CONFIG = {
         "Price (1Y)", width=SPARKLINE_WIDTH, color="auto"
     ),
     "weight": st.column_config.NumberColumn("Weight", format="percent"),
-    "close": st.column_config.NumberColumn("Last Price", format="accounting"),
+    "close": st.column_config.NumberColumn("Price", help=PRICE_HELP),
+    "change_percent": st.column_config.NumberColumn("Day", help=DAY_HELP),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
-    # "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
-    "currency": st.column_config.TextColumn("CUR"),
-    "change_percent": st.column_config.NumberColumn("Intraday", format="percent"),
     "return5D": st.column_config.NumberColumn("Return 5D", format="percent"),
     "return1M": st.column_config.NumberColumn("Return 1M", format="percent"),
     "return3M": st.column_config.NumberColumn("Return 3M", format="percent"),
@@ -368,9 +407,12 @@ def performance_table_styler(df: pd.DataFrame) -> Styler:
             else:
                 style["rsi"] = row_bg
 
+        if "close" in style.index and "change_percent" in style.index:
+            style["close"] = style["change_percent"]
+
         return style
 
-    return df.style.apply(style_row, axis=1)
+    return _format_price_and_day(df.style.apply(style_row, axis=1), df)
 
 
 TRANSACTIONS_TABLE_CONFIG = {

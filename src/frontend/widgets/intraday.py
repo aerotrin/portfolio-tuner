@@ -1,5 +1,4 @@
 from functools import partial
-from typing import cast
 
 import pandas as pd
 import streamlit as st
@@ -256,50 +255,3 @@ def render_market_intraday(
         st.caption(
             f"{len(flat)} securities across {sub['group_label'].nunique()} groups"
         )
-
-
-def render_portfolio_intraday(
-    portfolio: pd.DataFrame | None,
-) -> None:
-    """Intraday view for current account holdings."""
-
-    st.markdown("#### :material/show_chart: Intraday")
-
-    if portfolio is None:
-        st.info("No holdings found")
-    else:
-        df = portfolio.copy()
-        df = df.sort_values(by="change_percent", ascending=False)
-        equity_df = cast(pd.DataFrame, df[df["holding_category"] == "Equity"])
-        option_df = cast(
-            pd.DataFrame, df[df["holding_category"].isin(["Call Option", "Put Option"])]
-        )
-
-        # Treemap
-        fig = render_treemap_intraday(portfolio, top_label="Portfolio", has_weight=True)
-        st.plotly_chart(fig, key="chart-holdings-intraday")
-
-        # Health bar
-        render_intraday_health_bar(df)
-
-        # Quote table
-        if not equity_df.empty:
-            st.markdown("###### Stocks & ETFs")
-            st.dataframe(
-                quote_table_styler(equity_df),
-                hide_index=True,
-                height="content",
-                column_order=QUOTE_TABLE_CONFIG.keys(),
-                column_config=QUOTE_TABLE_CONFIG,
-                key="table-holdings-intraday-quote-stocks",
-            )
-        if not option_df.empty:
-            st.markdown("###### Options")
-            st.dataframe(
-                quote_table_styler(option_df),
-                hide_index=True,
-                height="content",
-                column_order=QUOTE_TABLE_CONFIG.keys(),
-                column_config=QUOTE_TABLE_CONFIG,
-                key="table-holdings-intraday-quote-options",
-            )
