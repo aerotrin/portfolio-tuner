@@ -218,3 +218,25 @@ def test_rate_limited_on_backup_after_primary_error_stays_unchecked() -> None:
     )
 
     assert _written_states(manager) == {}
+
+
+def test_bars_are_stored_before_the_sync_state_changes() -> None:
+    # Readers cache bars by sync-state version, so the version must move last
+    primary = MagicMock()
+    primary.fetch_bars.return_value = [_bar("AAA")]
+    manager = _manager(primary)
+
+    asyncio.run(
+        manager.refresh_bars_async(
+            [("AAA", START, YESTERDAY)],
+            sync_states={"AAA": _synced("AAA")},
+            trim_before_date=START,
+        )
+    )
+
+    writes = [
+        call[0]
+        for call in manager.db.method_calls
+        if call[0] in ("upsert_bars", "trim_bars_batch", "upsert_bars_sync_states")
+    ]
+    assert writes == ["upsert_bars", "trim_bars_batch", "upsert_bars_sync_states"]

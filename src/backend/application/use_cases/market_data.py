@@ -351,11 +351,6 @@ class MarketDataManager:
                 )
                 bars_to_insert.extend(bars)
 
-        if sync_state_updates:
-            logger.debug("Starting DB upsert %d sync states", len(sync_state_updates))
-            await asyncio.to_thread(self.db.upsert_bars_sync_states, sync_state_updates)
-            logger.debug("Finished DB upsert %d sync states", len(sync_state_updates))
-
         if bars_to_insert:
             logger.debug("Starting DB upsert %d bars", len(bars_to_insert))
             await asyncio.to_thread(self.db.upsert_bars, bars_to_insert)
@@ -379,6 +374,13 @@ class MarketDataManager:
                     trim_before_date,
                     len(succeeded),
                 )
+
+        # Sync states last: readers cache bars by sync-state version, so the
+        # version must not change before the bars it describes are stored.
+        if sync_state_updates:
+            logger.debug("Starting DB upsert %d sync states", len(sync_state_updates))
+            await asyncio.to_thread(self.db.upsert_bars_sync_states, sync_state_updates)
+            logger.debug("Finished DB upsert %d sync states", len(sync_state_updates))
 
         return [sym for (sym, _, _), bars in zip(pending, results) if bars is None]
 

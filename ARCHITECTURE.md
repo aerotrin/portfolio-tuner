@@ -647,6 +647,17 @@ Synchronous library calls (e.g., `yfinance`, `pandas` Excel parsing) are offload
 
 The SQLAlchemy engine is configured with `pool_size=5` and `max_overflow=10`. `pool_pre_ping=True` detects stale connections before use, preventing errors from idle-timeout disconnections.
 
+### Bars Read Cache
+
+Daily bars are about 98% of what a page load reads from the database (roughly 4-5 MB for a research page), yet they change at most once a day, while every finished refresh makes the frontend reload its data. `PgMarketDataRepository` therefore reads bars through `BarsCache` (`infra/db/bars_cache.py`), an in-process cache keyed by symbol.
+
+- **Validity:** each entry carries the symbol's `(last_bar_date, last_success_at)` from `bars_sync_state` as its version. A read first fetches the versions of the requested symbols (one small query) and fetches bars only for symbols whose version changed or whose entry does not reach back to the requested start date.
+- **Write order:** `refresh_bars_async` stores bars, trims, and only then writes the sync states, so a version never changes before the bars it describes are in place.
+- **Shape:** entries hold plain tuples, not `Bar` objects, to keep a year of every symbol in tens of megabytes; `Bar` entities are built on the way out.
+- **Scope:** bars are shared, non-RLS data, so one cache serves all users. It is per backend process and empties on restart. Bars edited directly in the database are not noticed until the symbol's next refresh or a restart.
+
+With debug logging on, each read logs how many symbols came from the cache and how many rows were fetched.
+
 ### Frontend Caching
 
 Streamlit's `@st.cache_data` decorator is used on all backend-calling functions in `services/streamlit_data.py`. Data is cached keyed by function arguments (account ID, date range, symbol list), so multiple widgets referencing the same data on a single page render only trigger one API call. The cache is invalidated explicitly after import, account create/delete, and transaction operations.

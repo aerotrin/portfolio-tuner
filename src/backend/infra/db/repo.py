@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 from typing import List, Optional
 
 from sqlalchemy import func
@@ -24,14 +25,26 @@ from backend.infra.db.models import (
     QuoteDB,
 )
 from backend.infra.db.models import TransactionDB
+from backend.infra.db.bars_cache import (
+    DEFAULT_BARS_CACHE,
+    BarRow,
+    BarsCache,
+    BarsVersion,
+    to_bars,
+)
+
+logger = logging.getLogger(__name__)
 
 # 7 columns per bar keeps each statement well under the 65,535 bind-parameter limit
 UPSERT_BARS_CHUNK_SIZE = 5000
 
 
 class PgMarketDataRepository(MarketDataRepository):
-    def __init__(self, session: Session):
+    def __init__(
+        self, session: Session, bars_cache: BarsCache | None = DEFAULT_BARS_CACHE
+    ):
         self.session = session
+        self._bars_cache = bars_cache
 
     def read_securities_list(self) -> List[str]:
         rows = self.session.query(QuoteDB).all()
@@ -102,15 +115,7 @@ class PgMarketDataRepository(MarketDataRepository):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> List[Bar]:
-        filters = [BarDB.symbol == symbol]
-        if start_date:
-            filters.append(BarDB.date >= start_date)
-        if end_date:
-            filters.append(BarDB.date <= end_date)
-        rows = self.session.query(BarDB).filter(*filters).order_by(BarDB.date).all()
-        if not rows:
-            return []
-        return [Bar.model_validate(bar) for bar in rows]
+        return self.read_batch_bars([symbol], start_date, end_date)[symbol]
 
     def read_batch_bars(
         self,
@@ -118,21 +123,85 @@ class PgMarketDataRepository(MarketDataRepository):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> dict[str, List[Bar]]:
+        """Bars per symbol, date-ordered.
+
+        Bars change at most once a day but are read on every page load, so a
+        symbol is fetched from the database only when its sync-state version
+        has changed since it was cached (or the cache does not reach back to
+        `start_date`). The version check is one small query.
+        """
+        if not symbols:
+            return {}
+        cache = self._bars_cache
+        if cache is None:
+            rows = self._fetch_bar_rows(symbols, start_date)
+            return {s: to_bars(s, rows[s], start_date, end_date) for s in symbols}
+
+        versions = self._read_bar_versions(symbols)
+        result: dict[str, List[Bar]] = {}
+        misses: list[str] = []
+        for symbol in symbols:
+            hit = cache.get(symbol, versions[symbol], start_date, end_date)
+            if hit is None:
+                misses.append(symbol)
+            else:
+                result[symbol] = hit
+
+        fetched_rows = 0
+        if misses:
+            # No end filter: the entry must hold everything from start_date on
+            rows = self._fetch_bar_rows(misses, start_date)
+            for symbol in misses:
+                cache.put(symbol, versions[symbol], start_date, rows[symbol])
+                result[symbol] = to_bars(symbol, rows[symbol], start_date, end_date)
+                fetched_rows += len(rows[symbol])
+        logger.debug(
+            "Bars read: %d symbols from cache, %d from the database (%d rows)",
+            len(symbols) - len(misses),
+            len(misses),
+            fetched_rows,
+        )
+        return {symbol: result[symbol] for symbol in symbols}
+
+    def _fetch_bar_rows(
+        self, symbols: list[str], start_date: Optional[date]
+    ) -> dict[str, list[BarRow]]:
         filters = [BarDB.symbol.in_(symbols)]
         if start_date:
             filters.append(BarDB.date >= start_date)
-        if end_date:
-            filters.append(BarDB.date <= end_date)
         rows = (
-            self.session.query(BarDB)
+            self.session.query(
+                BarDB.symbol,
+                BarDB.date,
+                BarDB.open,
+                BarDB.high,
+                BarDB.low,
+                BarDB.close,
+                BarDB.volume,
+            )
             .filter(*filters)
             .order_by(BarDB.symbol, BarDB.date)
             .all()
         )
-        result: dict[str, List[Bar]] = {symbol: [] for symbol in symbols}
-        for row in rows:
-            result[row.symbol].append(Bar.model_validate(row))
+        result: dict[str, list[BarRow]] = {symbol: [] for symbol in symbols}
+        for symbol, *values in rows:
+            result[symbol].append(tuple(values))
         return result
+
+    def _read_bar_versions(self, symbols: list[str]) -> dict[str, BarsVersion]:
+        rows = (
+            self.session.query(
+                BarsSyncStateDB.symbol,
+                BarsSyncStateDB.last_bar_date,
+                BarsSyncStateDB.last_success_at,
+            )
+            .filter(BarsSyncStateDB.symbol.in_(symbols))
+            .all()
+        )
+        versions: dict[str, BarsVersion] = {symbol: (None, None) for symbol in symbols}
+        for symbol, last_bar_date, last_success_at in rows:
+            versions[symbol] = (last_bar_date, last_success_at)
+        return versions
 
     def read_first_bar_dates(self, symbols: list[str]) -> dict[str, date]:
         if not symbols:
