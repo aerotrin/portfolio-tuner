@@ -161,6 +161,59 @@ class PerformanceMetric(BaseModel):
     last_calculated: datetime = Field(default_factory=datetime.now)
 
 
+class MovingAverageSeries(BaseModel):
+    kind: str
+    period: int
+    values: List[Optional[float]]
+
+
+class PriceChartSeries(BaseModel):
+    """Columnar daily series; indicator warm-up rows are null."""
+
+    dates: List[dt_date]
+    open: List[Optional[float]]
+    high: List[Optional[float]]
+    low: List[Optional[float]]
+    close: List[Optional[float]]
+    volume: List[Optional[float]]
+    moving_averages: List[MovingAverageSeries]
+    bb_middle: List[Optional[float]]
+    bb_upper: List[Optional[float]]
+    bb_lower: List[Optional[float]]
+    rsi: List[Optional[float]]
+    macd: List[Optional[float]]
+    macd_signal: List[Optional[float]]
+    macd_histogram: List[Optional[float]]
+
+
+class PriceChartRange(BaseModel):
+    key: str
+    sessions: int
+    change: Optional[float] = None
+    change_percent: Optional[float] = None
+
+
+class PriceChartSummary(BaseModel):
+    symbol: str
+    name: Optional[str] = None
+    exchange: Optional[str] = None
+    currency: Optional[str] = None
+    last_price: Optional[float] = None
+    change_1d: Optional[float] = None
+    change_percent_1d: Optional[float] = None
+    high_52w: Optional[float] = None
+    low_52w: Optional[float] = None
+    volume: Optional[float] = None
+    market_cap: Optional[float] = None
+    last_trade: Optional[datetime] = None
+
+
+class PriceChart(BaseModel):
+    summary: PriceChartSummary
+    ranges: List[PriceChartRange]
+    series: PriceChartSeries
+
+
 class SecurityAnalyticsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

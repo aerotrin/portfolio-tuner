@@ -250,9 +250,14 @@ async def _run_refresh_job(
             db=repo,
         )
 
+        # Retention is set by the backend; the request's start_date is ignored
+        history_start = datetime.now(timezone.utc).date() - timedelta(
+            days=config.bars_history_days
+        )
+
         # Smart determination of pending work
         bars_pending, sync_states = market_man.pending_bars(
-            job.symbols, start_date, job.force
+            job.symbols, history_start, job.force
         )
         logger.debug("Bars pending: %d", len(bars_pending))
         profiles_pending = market_man.pending_profiles(job.symbols, job.force)
@@ -287,7 +292,7 @@ async def _run_refresh_job(
             failed += await market_man.refresh_bars_async(
                 bars_pending,
                 sync_states=sync_states,
-                trim_before_date=start_date,
+                trim_before_date=history_start,
                 max_concurrency=config.max_concurrency,
                 on_progress=on_progress,
             )

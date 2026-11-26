@@ -2,7 +2,12 @@ import pandas as pd
 import streamlit as st
 
 from frontend.shared.settings import MOVER_SHOW_COUNT
-from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
+from frontend.shared.styles import (
+    QUOTE_TABLE_CONFIG,
+    quote_table_styler,
+    with_symbol_links,
+)
+from frontend.widgets.price_chart import symbol_click_kwargs
 from frontend.widgets.treemaps import render_treemap_intraday
 
 MOST_ACTIVE = "Most Active"
@@ -30,6 +35,18 @@ def _volume_leaders(df: pd.DataFrame, count: int) -> pd.DataFrame:
     )
     by = "dollar_volume" if has_dollar_volume else "volume"
     return df.sort_values(by=by, ascending=False, na_position="last").head(count)
+
+
+def _render_quote_table(df: pd.DataFrame, key: str) -> None:
+    styler, config = with_symbol_links(quote_table_styler(df), QUOTE_TABLE_CONFIG)
+    st.dataframe(
+        styler,
+        hide_index=True,
+        height="content",
+        column_order=QUOTE_TABLE_CONFIG.keys(),
+        column_config=config,
+        **symbol_click_kwargs(key, df["symbol"].tolist()),
+    )
 
 
 def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
@@ -75,13 +92,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
     fig = render_treemap_intraday(volume_df, top_label=MOST_ACTIVE, has_weight=False)
     st.plotly_chart(fig)
     with st.expander(f"{MOST_ACTIVE} {t_str} Quote Table", icon=":material/table:"):
-        st.dataframe(
-            quote_table_styler(volume_df),
-            hide_index=True,
-            height="content",
-            column_order=QUOTE_TABLE_CONFIG.keys(),
-            column_config=QUOTE_TABLE_CONFIG,
-        )
+        _render_quote_table(volume_df, f"table-movers-{market_type}-active")
 
     up_df = (
         sub_df[sub_df["change_percent"] > 0]
@@ -93,13 +104,7 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
         fig = render_treemap_intraday(up_df, top_label="Top Gainers", has_weight=False)
         st.plotly_chart(fig)
         with st.expander(f"Top Gainers {t_str} Quote Table", icon=":material/table:"):
-            st.dataframe(
-                quote_table_styler(up_df),
-                hide_index=True,
-                height="content",
-                column_order=QUOTE_TABLE_CONFIG.keys(),
-                column_config=QUOTE_TABLE_CONFIG,
-            )
+            _render_quote_table(up_df, f"table-movers-{market_type}-gainers")
     else:
         st.info("No gainers found for the selected market")
 
@@ -113,12 +118,6 @@ def render_market_movers(market_data: pd.DataFrame, market_type: str) -> None:
         fig = render_treemap_intraday(down_df, top_label="Top Losers", has_weight=False)
         st.plotly_chart(fig)
         with st.expander(f"Top Losers {t_str} Quote Table", icon=":material/table:"):
-            st.dataframe(
-                quote_table_styler(down_df),
-                hide_index=True,
-                height="content",
-                column_order=QUOTE_TABLE_CONFIG.keys(),
-                column_config=QUOTE_TABLE_CONFIG,
-            )
+            _render_quote_table(down_df, f"table-movers-{market_type}-losers")
     else:
         st.info("No losers found for the selected market")

@@ -16,12 +16,14 @@ from frontend.shared.styles import (
     cash_table_styler,
     positions_table_styler,
     with_account_column,
+    with_symbol_links,
 )
 from frontend.widgets.kpis import (
     render_intraday_health_bar,
     render_portfolio_kpis,
     render_positions_health_bar,
 )
+from frontend.widgets.price_chart import symbol_click_kwargs
 from frontend.widgets.treemaps import (
     render_treemap_intraday,
     render_treemap_positions,
@@ -262,23 +264,36 @@ def render_portfolio_positions(
         _render_cash_section(cash_accounts or [], portfolio_total_value, hide_balances)
         if not equity_df.empty:
             st.markdown("###### Stocks & ETFs")
+            styler, config = with_symbol_links(
+                positions_table_styler(equity_df), equity_config
+            )
             st.dataframe(
-                positions_table_styler(equity_df),
+                styler,
                 hide_index=True,
                 column_order=balance_safe_column_order(equity_config, hide_balances),
-                column_config=equity_config,
+                column_config=config,
                 height="content",
-                key="table-holdings-open-stocks",
+                **symbol_click_kwargs(
+                    "table-holdings-open-stocks", equity_df["symbol"].tolist()
+                ),
             )
         if not option_df.empty:
             st.markdown("###### Options")
+            # An option row opens the chart of its underlying
+            styler, config = with_symbol_links(
+                positions_table_styler(option_df), option_config, "option_osi"
+            )
             st.dataframe(
-                positions_table_styler(option_df),
+                styler,
                 hide_index=True,
                 height="content",
                 column_order=balance_safe_column_order(option_config, hide_balances),
-                column_config=option_config,
-                key="table-holdings-open-options",
+                column_config=config,
+                **symbol_click_kwargs(
+                    "table-holdings-open-options",
+                    option_df["symbol"].tolist(),
+                    click_columns=("option_osi",),
+                ),
             )
             st.caption(
                 "⚠️ Option value shown here reflects only intrinsic value (not actual contract price). Market Value and P/L are based on intrinsic value alone. Intraday change for option price is also not supported."

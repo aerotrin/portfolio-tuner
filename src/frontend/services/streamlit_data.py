@@ -176,6 +176,13 @@ def load_security_data(
     return data
 
 
+@st.cache_data(show_spinner="Loading price history…", max_entries=64)
+def load_price_chart(symbol: str, ma_type: str, ma_periods: tuple[int, ...]) -> dict:
+    """Load the daily price chart for one symbol. Raises on failure so errors
+    are never cached; the caller reports them."""
+    return get_api_client().get_security_chart(symbol, ma_type, ma_periods)
+
+
 def load_single_security_quote(symbol: str) -> dict | None:
     api = get_api_client()
     try:

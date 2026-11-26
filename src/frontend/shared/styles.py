@@ -5,6 +5,7 @@ import streamlit as st
 from frontend.shared.settings import (
     GREEN,
     GREEN_BG,
+    LINK_COLOR,
     LOSS_LIMIT,
     NO_STYLE,
     RED,
@@ -43,6 +44,23 @@ def balance_safe_column_order(config: dict, hide_balances: bool) -> list[str]:
     if not hide_balances:
         return list(config)
     return [c for c in config if c not in BALANCE_COLUMNS]
+
+
+SYMBOL_LINK_LABELS = {"symbol": "Symbol", "option_osi": "OSI"}
+
+
+def with_symbol_links(
+    styler: Styler, config: dict, column: str = "symbol"
+) -> tuple[Styler, dict]:
+    """Mark a table's symbol column as clickable: link-coloured text and a
+    header tooltip. Returns the styler and a copy of the column config."""
+    styler = styler.map(lambda _: f"color: {LINK_COLOR};", subset=[column])
+    linked = dict(config)
+    linked[column] = st.column_config.TextColumn(
+        SYMBOL_LINK_LABELS.get(column, "Symbol"),
+        help="Click to open the daily price chart",
+    )
+    return styler, linked
 
 
 def with_account_column(config: dict, after: str) -> dict:

@@ -3,9 +3,14 @@ import streamlit as st
 
 from frontend.shared.symbols_loader import SymbolGroup
 from frontend.shared.settings import RETURN_HORIZONS
-from frontend.shared.styles import PERFORMANCE_TABLE_CONFIG, performance_table_styler
+from frontend.shared.styles import (
+    PERFORMANCE_TABLE_CONFIG,
+    performance_table_styler,
+    with_symbol_links,
+)
 from frontend.widgets.filters import render_group_facets, resolve_group_facets
 from frontend.widgets.growth_chart import render_growth_chart
+from frontend.widgets.price_chart import symbol_click_kwargs, symbol_table_key
 from frontend.widgets.risk_chart import render_risk_chart
 
 MISSING_STAT = "—"
@@ -108,7 +113,8 @@ def render_performance_view(
     # Streamlit writes widget state under this key before each rerun, so
     # reading it here gives the current selection before the widget renders.
     table_version = st.session_state.get(f"{key_prefix}-table-version", 0)
-    table_key = f"table-{key_prefix}-security-performance-v{table_version}"
+    table_base_key = f"table-{key_prefix}-security-performance-v{table_version}"
+    table_key = symbol_table_key(table_base_key)
 
     table_state = st.session_state.get(table_key, {})
     selected_rows = table_state.get("selection", {}).get("rows", [])
@@ -239,15 +245,21 @@ def render_performance_view(
 
     # ── Tables ─────────────────────────────────────────────────────
     st.markdown("##### Securities")
+    styler, config = with_symbol_links(
+        performance_table_styler(sub_metrics), PERFORMANCE_TABLE_CONFIG
+    )
+    # Checkboxes filter the charts above; a click on a symbol opens its chart
     event = st.dataframe(
-        performance_table_styler(sub_metrics),
+        styler,
         hide_index=True,
         column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-        column_config=PERFORMANCE_TABLE_CONFIG,
+        column_config=config,
         height="content",
-        key=table_key,
-        on_select="rerun",
-        selection_mode="multi-row",
+        **symbol_click_kwargs(
+            table_base_key,
+            sub_metrics["symbol"].tolist(),
+            row_selection="multi-row",
+        ),
     )
     n_selected = len(event.get("selection", {}).get("rows", []))
     selection_label = f" · {n_selected} selected" if n_selected else ""
@@ -270,13 +282,19 @@ def render_performance_view(
         )
 
     st.markdown("##### Benchmark")
+    styler, config = with_symbol_links(
+        performance_table_styler(benchmark_metrics), PERFORMANCE_TABLE_CONFIG
+    )
     st.dataframe(
-        performance_table_styler(benchmark_metrics),
+        styler,
         hide_index=True,
         height="content",
         column_order=PERFORMANCE_TABLE_CONFIG.keys(),
-        column_config=PERFORMANCE_TABLE_CONFIG,
-        key=f"table-{key_prefix}-benchmark-performance",
+        column_config=config,
+        **symbol_click_kwargs(
+            f"table-{key_prefix}-benchmark-performance",
+            benchmark_metrics["symbol"].tolist(),
+        ),
     )
 
     return chart_symbols

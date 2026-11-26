@@ -27,6 +27,7 @@ from frontend.widgets.fixed_income_form import (
     manage_fixed_income,
     reset_manage_state,
 )
+from frontend.widgets.price_chart import render_open_price_chart
 from frontend.widgets.transaction_form import transaction_form
 
 # -----------------------------------------------------------------------------
@@ -631,6 +632,9 @@ if st.session_state.get("show_session_state_toggle", False):
     st.divider()
     st.subheader("Debug Data")
     st.write(st.session_state)
+
+# Re-invoked on every run so the app refresh timer does not close it
+render_open_price_chart()
 
 # -----------------------------------------------------------------------------
 # Run Navigation (pages render after sidebar state is established)

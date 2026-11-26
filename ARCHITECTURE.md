@@ -177,7 +177,8 @@ Responsible for market data operations:
 - **Passthrough queries** — fetch a live quote, bars, or profile directly from the primary data source
 - **Cached reads** — read quotes, bars, profiles from the database
 - **Batch reads** — efficiently read data for multiple symbols
-- **Analytics computation** — compute metrics and indicators for a symbol or batch of symbols
+- **Analytics computation** — compute metrics and indicators for a symbol or batch of symbols. These read a one-year window by default (`ANALYTICS_LOOKBACK_DAYS`), whatever the stored history
+- **Price chart** — `compute_security_price_chart()` reads a symbol's full stored history and returns the daily series with indicators (see [Per-Security Analytics](#per-security-analytics))
 - **Async refresh** — fetch quotes, profiles, and bars for a list of symbols from the provider and upsert into the database; respects sync state to avoid redundant fetches; supports a `force` flag to re-fetch unconditionally
 - **Global rates** — read and refresh the risk-free rate and CAD/USD exchange rate
 
@@ -263,6 +264,7 @@ All routes are mounted under the `/api/v1` prefix. There are three routers:
 - `GET /securities/{symbol}/bars` — get OHLCV bars (with optional date range)
 - `GET /securities/{symbol}/metrics` — compute performance metrics
 - `GET /securities/{symbol}/indicators` — compute timeseries indicators
+- `GET /securities/{symbol}/chart` — daily price chart data: OHLCV, moving averages (`ma_type=sma|ema`, repeated `ma_periods`), Bollinger Bands, RSI, MACD, the price change for each range, and header figures. 404 for a symbol with no stored data, 400 for periods out of bounds
 - `POST /securities/batch-quotes` — batch quotes
 - `POST /securities/batch-profiles` — batch profiles
 - `POST /securities/batch-bars` — batch bars
@@ -317,6 +319,8 @@ Each page reads its required state from `st.session_state` at the top, and fails
 
 The navigation and sidebar always run before any page renders: `app.py` establishes the active account from the Portfolio page's scope selector (falling back to the last-selected account when the scope is All Accounts or on market pages), and the sidebar establishes the benchmark and other controls that all pages depend on. The transaction form dialog carries its own account selector (re-seeded to the active account on every open) and derives its validation data (symbols, equity quantities, cash, total value) from the cached per-account loaders *inside the dialog body* — `st.dialog` reruns like a fragment on in-dialog widget interaction, so switching the target account reloads the form in place.
 
+The daily price chart dialog (`widgets/price_chart.py`) is opened by a click on a symbol cell. Security tables enable `"single-cell"` selection next to any row selection, through `symbol_click_kwargs()`. The `on_select` callback resolves the clicked symbol and stores an open request in `st.session_state["price_chart_open"]`. It then moves the table to a new widget key (`symbol_table_key()`), carrying the ticked rows over both as the table's `selection_default` and in session state. The new key is what lets the same symbol be clicked again: the grid keeps a clicked cell selected and sends nothing for a second click on it, and clearing the cell through session state is unreliable because the browser ignores a repeated identical selection update. The carried rows go through `selection_default` because a value set in session state only reaches the browser if that run finishes, and closing the dialog quickly interrupts it. For the same reason the callback treats an event from a table that has already been replaced but is still on screen as a row change, unless it carries a different symbol cell (`resolve_symbol_click()`). `app.py` calls `render_open_price_chart()` on every run while the open request exists, because a full rerun — the app refresh timer fires every two minutes — closes a dialog that is not invoked again; the dialog's `on_dismiss` callback removes the request. The dialog's choices (range, chart type, overlays, moving-average settings) are kept in `price_chart_prefs` and pushed into its widgets on each opening, since widget state is dropped while the dialog is closed.
+
 ### Symbols Configuration
 
 Symbol sets for the market research pages, benchmarks, and the market snapshot header are configured in `symbols.yml` at the project root. The symbols loader (`shared/symbols_loader.py`) parses this YAML file into a validated `SymbolsConfig` Pydantic model. The bootstrap phase reads this file once and stores the derived symbol sets in session state. Changing symbols only requires editing the YAML file — no code changes.
@@ -354,9 +358,11 @@ All rendering logic lives in the `widgets/` directory, with one module per UI co
 | `correlation.py` | Correlation matrix heatmap; market pages compute the matrix client-side from loaded closes; notes symbols excluded for short history |
 | `optimizer.py` | Monte Carlo weight optimizer form and efficient frontier chart; results stored per context (account or research page); derives trailing 1M/3M period Sharpe metrics client-side from simulated window returns and annual volatility — when one is selected, the frontier chart and KPI cards render in that window's period space |
 | `growth_chart.py` | Normalised growth chart |
+| `price_chart.py` | Daily price chart dialog: symbol-click handling, controls, KPI strip and remembered choices |
+| `price_chart_figure.py` | Pure Plotly builder for the price chart: one shared x-axis with a stacked y-axis per panel (price, volume, RSI, MACD), so the unified hover spans all panels; non-trading days are hidden with range breaks |
 | `risk_chart.py` | Risk/return scatter chart |
 | `movers.py` | Top movers table grouped by category |
-| `intraday.py` | Intraday price chart |
+| `intraday.py` | Intraday market-map treemap and quote table |
 | `reports.py` | Transactions table, closed lots table, cash flows table |
 | `treemaps.py` | Treemap visualisations |
 | `account_dialogs.py` | Create/edit account dialogs |
@@ -379,12 +385,14 @@ The database is hosted on Supabase (Postgres). SQLAlchemy is used as the ORM wit
 | `accounts` | Brokerage accounts. `owner` is the Supabase user UUID; RLS policies restrict reads and writes to the owning user. |
 | `transactions` | Transaction records. FK to `accounts(id)` with `ON DELETE CASCADE`. Indexed on `account_number`. `instrument_terms` (nullable JSONB) holds the terms of a manually entered GIC or term deposit on its opening Buy row; it is null everywhere else, including on imported GIC rows, whose terms are derived from the description at replay. |
 | `quotes` | Latest quote snapshot per symbol (OHLCV, change, timestamp). One row per symbol, overwritten on refresh. |
-| `bars` | Daily OHLCV history. Composite primary key `(symbol, date)`. Composite index on `(symbol, date)`. |
+| `bars` | Daily OHLCV history, about two years per symbol (`BARS_HISTORY_DAYS`, default 730); older rows are trimmed on refresh. Composite primary key `(symbol, date)`. Composite index on `(symbol, date)`. |
 | `bars_sync_state` | Tracks the last successful bar fetch per symbol (`last_bar_date`, `last_checked_at`, status). Used for smart sync. |
 | `profiles` | Company profile data (sector, industry, beta, market cap, etc.). One row per symbol. |
 | `global_rates` | Current risk-free rate and CAD/USD FX rate. Single row, updated on refresh. `rf_rate` is stored as an annual decimal fraction (0.038 = 3.8%), regardless of provider. |
 
 The `bars_sync_state` table is particularly important for efficiency. Before fetching bars for a symbol, the system checks whether it has a recent successful sync. If so, it only fetches bars newer than `last_bar_date`, avoiding re-downloading redundant history on every refresh. The `force=True` flag bypasses this and re-fetches the full requested range.
+
+The retention window is set by the backend (`BARS_HISTORY_DAYS`), not by the client: the refresh job fetches and trims against it and ignores the `start_date` it is sent. A symbol whose earliest stored bar is more than ten days later than the window start is backfilled with one fetch of the whole window. The whole window is re-fetched, not just the missing part, because providers return prices adjusted as of the fetch date and a partial fetch would leave a step where old and new rows meet. A security listed more recently than the window repeats this fetch once a day.
 
 Market data tables (quotes, bars, profiles, global_rates) are not user-scoped — they are shared across all users. Only `accounts` and `transactions` are user-scoped with RLS.
 

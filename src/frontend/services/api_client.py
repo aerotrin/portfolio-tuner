@@ -218,6 +218,14 @@ class APIClient:
             params = {"start_date": start_date, "end_date": end_date}
         return self._get(f"/securities/{symbol}/indicators", params=params)
 
+    def get_security_chart(
+        self, symbol: str, ma_type: str = "sma", ma_periods: tuple[int, ...] = ()
+    ):
+        params: dict = {"ma_type": ma_type}
+        if ma_periods:
+            params["ma_periods"] = list(ma_periods)
+        return self._get(f"/securities/{symbol}/chart", params=params)
+
     def get_security_batch_quotes(self, symbols: list[str]):
         return self._post("/securities/batch-quotes", json={"symbols": symbols})
 

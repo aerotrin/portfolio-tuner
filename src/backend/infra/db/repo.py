@@ -1,6 +1,7 @@
 from datetime import date
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,9 @@ from backend.infra.db.models import (
     QuoteDB,
 )
 from backend.infra.db.models import TransactionDB
+
+# 7 columns per bar keeps each statement well under the 65,535 bind-parameter limit
+UPSERT_BARS_CHUNK_SIZE = 5000
 
 
 class PgMarketDataRepository(MarketDataRepository):
@@ -103,7 +107,7 @@ class PgMarketDataRepository(MarketDataRepository):
             filters.append(BarDB.date >= start_date)
         if end_date:
             filters.append(BarDB.date <= end_date)
-        rows = self.session.query(BarDB).filter(*filters).all()
+        rows = self.session.query(BarDB).filter(*filters).order_by(BarDB.date).all()
         if not rows:
             return []
         return [Bar.model_validate(bar) for bar in rows]
@@ -130,19 +134,32 @@ class PgMarketDataRepository(MarketDataRepository):
             result[row.symbol].append(Bar.model_validate(row))
         return result
 
+    def read_first_bar_dates(self, symbols: list[str]) -> dict[str, date]:
+        if not symbols:
+            return {}
+        rows = (
+            self.session.query(BarDB.symbol, func.min(BarDB.date))
+            .filter(BarDB.symbol.in_(symbols))
+            .group_by(BarDB.symbol)
+            .all()
+        )
+        return {symbol: first_date for symbol, first_date in rows}
+
     def upsert_bars(self, bars: List[Bar]) -> None:
         if not bars:
             return
         try:
-            stmt = pg_insert(BarDB).values([b.model_dump() for b in bars])
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["symbol", "date"],
-                set_={
-                    col: stmt.excluded[col]
-                    for col in ("open", "high", "low", "close", "volume")
-                },
-            )
-            self.session.execute(stmt)
+            for i in range(0, len(bars), UPSERT_BARS_CHUNK_SIZE):
+                chunk = bars[i : i + UPSERT_BARS_CHUNK_SIZE]
+                stmt = pg_insert(BarDB).values([b.model_dump() for b in chunk])
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["symbol", "date"],
+                    set_={
+                        col: stmt.excluded[col]
+                        for col in ("open", "high", "low", "close", "volume")
+                    },
+                )
+                self.session.execute(stmt)
             self.session.commit()
         except Exception:
             self.session.rollback()

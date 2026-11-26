@@ -66,6 +66,30 @@ def local_now(tz_name: str | None) -> datetime:
     return datetime.now(get_localzone())
 
 
+def format_last_trade(
+    time_in: str | datetime | None, tz_name: str | None = None
+) -> str:
+    """Last trade time in the given IANA zone (the browser's), else the server's.
+
+    A midnight timestamp is a daily close with no time of day, so only the
+    date is shown; naive timestamps are taken as UTC.
+    """
+    if not time_in:
+        return "N/A"
+    dt = datetime.fromisoformat(time_in) if isinstance(time_in, str) else time_in
+    if (dt.hour, dt.minute, dt.second) == (0, 0, 0):
+        return f"{dt:%a, %b} {dt.day}, {dt.year}"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    zone = None
+    if tz_name:
+        try:
+            zone = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    return format_clock(dt.astimezone(zone or get_localzone()))
+
+
 def format_clock(now: datetime) -> str:
     """e.g. 'Thu, Nov 19, 2026 · 2:35 PM EST' (%-I is not portable to Windows)."""
     hour = now.strftime("%I").lstrip("0")

@@ -29,6 +29,7 @@ Both services run in Docker containers orchestrated by `docker-compose`. See [AR
 | **Real-time valuation** | Combines ledger cost basis with live market quotes |
 | **Performance metrics** | MWRR (IRR-based), Sharpe ratio, volatility, returns across any date range |
 | **Technical indicators** | Timeseries indicators computed over historical OHLCV bars |
+| **Daily price chart** | Click any symbol in a table to open its chart: candles or line, SMA/EMA with your own periods, Bollinger Bands, volume, RSI and MACD over up to two years |
 | **Correlation matrix** | Inter-security return correlation for holdings and market research pages |
 | **Portfolio simulation** | Monte Carlo simulation across random weight distributions; optimise for Sharpe (1Y, 3M, or 1M), volatility, max drawdown, or 1Y return with an interactive efficient frontier chart |
 | **Market research pages** | ETF and stock screener views with movers, performance tables, intraday chart, and correlation and optimization tabs |

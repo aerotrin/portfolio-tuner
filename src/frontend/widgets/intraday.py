@@ -3,10 +3,15 @@ from functools import partial
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.styles import QUOTE_TABLE_CONFIG, quote_table_styler
+from frontend.shared.styles import (
+    QUOTE_TABLE_CONFIG,
+    quote_table_styler,
+    with_symbol_links,
+)
 from frontend.shared.symbols_loader import TYPE_ORDER, SymbolGroup, facet_sort_key
 from frontend.widgets.filters import sync_facets_to_drill
 from frontend.widgets.kpis import render_intraday_health_bar
+from frontend.widgets.price_chart import symbol_click_kwargs
 from frontend.widgets.treemaps import (
     CHANGE_COLOR_MAX,
     COLOR_CHANGE,
@@ -241,13 +246,16 @@ def render_market_intraday(
 
     heading = _quotes_heading(f"{t_str} Quotes", sel_types, drill_path)
     st.markdown(f"###### {heading}")
+    styler, config = with_symbol_links(quote_table_styler(flat), QUOTE_TABLE_CONFIG)
     st.dataframe(
-        quote_table_styler(flat),
+        styler,
         hide_index=True,
         height="content",
         column_order=QUOTE_TABLE_CONFIG.keys(),
-        column_config=QUOTE_TABLE_CONFIG,
-        key=f"{key_prefix}-table-intraday-viewer-quote",
+        column_config=config,
+        **symbol_click_kwargs(
+            f"{key_prefix}-table-intraday-viewer-quote", flat["symbol"].tolist()
+        ),
     )
     if drill_path:
         st.caption(f"{len(flat)} securities")

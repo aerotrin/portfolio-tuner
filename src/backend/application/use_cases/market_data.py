@@ -1,7 +1,7 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 import logging
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Sequence
 
 from backend.application.ports.market_data_provider import (
     MarketDataProvider,
@@ -9,11 +9,14 @@ from backend.application.ports.market_data_provider import (
 )
 from backend.application.ports.market_data_repo import MarketDataRepository
 from backend.domain.aggregates.security import Security
+from backend.domain.analytics.price_chart import MAType, build_price_chart
+from backend.domain.constants import PRICE_CHART_MA_PERIODS
 from backend.domain.entities.security import (
     Bar,
     BarsSyncState,
     GlobalRates,
     PerformanceMetric,
+    PriceChart,
     Profile,
     Quote,
     SecurityAnalyticsResponse,
@@ -24,6 +27,16 @@ logger = logging.getLogger(__name__)
 
 # A forced refresh re-fetches a profile only once it is this old
 PROFILE_MAX_AGE_DAYS = 7
+
+ANALYTICS_LOOKBACK_DAYS = 365
+# Slack for weekends/holidays before a short stored history triggers a backfill
+BACKFILL_GRACE_DAYS = 10
+
+
+def _default_analytics_start() -> date:
+    return datetime.now(tz=timezone.utc).date() - timedelta(
+        days=ANALYTICS_LOOKBACK_DAYS
+    )
 
 
 class MarketDataManager:
@@ -126,16 +139,35 @@ class MarketDataManager:
         effective_end = yesterday
         fetch_start_fallback = start_date or (today - timedelta(days=365))
         sync_states = self.db.read_bars_sync_states(symbols)
-        pending: list[tuple[str, date, date]] = []
-        for symbol in symbols:
-            state = sync_states[symbol]
-            if (
-                not force
-                and state.last_checked_at
+
+        def checked_today(state: BarsSyncState) -> bool:
+            return (
+                state.last_checked_at is not None
                 and state.last_checked_at.date() == today
-            ):
-                continue  # already evaluated today — skip
+            )
+
+        to_evaluate = [s for s in symbols if force or not checked_today(sync_states[s])]
+        backfill_candidates = (
+            []
+            if force
+            else [s for s in to_evaluate if sync_states[s].last_bar_date is not None]
+        )
+        first_bar_dates = (
+            self.db.read_first_bar_dates(backfill_candidates)
+            if backfill_candidates
+            else {}
+        )
+        backfill_cutoff = fetch_start_fallback + timedelta(days=BACKFILL_GRACE_DAYS)
+        pending: list[tuple[str, date, date]] = []
+        for symbol in to_evaluate:
+            state = sync_states[symbol]
             if force or state.last_bar_date is None:
+                pending.append((symbol, fetch_start_fallback, effective_end))
+                continue
+            first_bar_date = first_bar_dates.get(symbol)
+            if first_bar_date is None or first_bar_date > backfill_cutoff:
+                # Stored history is shorter than the window: re-fetch all of it,
+                # since provider prices are adjusted as of fetch time
                 pending.append((symbol, fetch_start_fallback, effective_end))
             elif state.last_bar_date < yesterday:
                 pending.append(
@@ -471,6 +503,8 @@ class MarketDataManager:
         end_date: Optional[date] = None,
         rates: Optional[GlobalRates] = None,
     ) -> Security:
+        if start_date is None:
+            start_date = _default_analytics_start()
         quote = self.read_security_quote(symbol)
         bars = self.read_security_bars(symbol, start_date, end_date)
         profile = self.read_security_profile(symbol)
@@ -491,6 +525,8 @@ class MarketDataManager:
     ) -> dict[str, Security]:
         if not symbols:
             return {}
+        if start_date is None:
+            start_date = _default_analytics_start()
         if rates is None:
             rates = self.read_global_rates()
         quotes_list, bars_map, profiles_list = await asyncio.gather(
@@ -581,3 +617,19 @@ class MarketDataManager:
                 indicators=sec.indicators,
             )
         return result
+
+    def compute_security_price_chart(
+        self,
+        symbol: str,
+        ma_type: MAType = "sma",
+        ma_periods: Sequence[int] = PRICE_CHART_MA_PERIODS,
+    ) -> PriceChart | None:
+        """Daily chart over the full stored history; None for an unknown symbol."""
+        return build_price_chart(
+            symbol,
+            self.read_security_bars(symbol),
+            self.read_security_quote(symbol),
+            self.read_security_profile(symbol),
+            ma_type=ma_type,
+            ma_periods=ma_periods,
+        )

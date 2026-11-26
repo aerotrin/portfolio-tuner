@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -8,9 +8,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.application.use_cases.market_data import MarketDataManager
+from backend.domain.constants import PRICE_CHART_MA_PERIODS
 from backend.domain.entities.security import (
     Bar,
     PerformanceMetric,
+    PriceChart,
     Profile,
     Quote,
     SecurityAnalyticsResponse,
@@ -247,6 +249,32 @@ def compute_security_indicators(
                 detail=f"Indicators not found for symbol '{symbol}'.",
             )
         return indicators
+    except HTTPException:
+        raise
+    except Exception as e:
+        _raise_http_error(e)
+
+
+@router.get(
+    "/securities/{symbol}/chart",
+    response_model=PriceChart,
+)
+def compute_security_price_chart(
+    symbol: str,
+    ma_type: Literal["sma", "ema"] = Query(default="sma"),
+    ma_periods: list[int] = Query(default=list(PRICE_CHART_MA_PERIODS)),
+    market_man: MarketDataManager = Depends(get_market_data_manager),
+):
+    """Get daily OHLCV with moving averages, Bollinger Bands, RSI and MACD
+    over the full stored history, plus the price change for each chart range."""
+    try:
+        chart = market_man.compute_security_price_chart(symbol, ma_type, ma_periods)
+        if chart is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No price history found for symbol '{symbol}'.",
+            )
+        return chart
     except HTTPException:
         raise
     except Exception as e:

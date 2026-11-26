@@ -60,6 +60,9 @@ HEIGHT_RISK_RETURN_CHART = 450
 HEIGHT_EFFICIENT_FRONTIER_CHART = 400
 HEIGHT_MARKET_SNAPSHOT = 140
 HEIGHT_ACCOUNT_DONUT = 72
+# [Price chart] px per panel, so the price panel keeps its size as panels are added
+HEIGHT_PRICE_CHART_PANELS = {"price": 340, "volume": 90, "rsi": 110, "macd": 110}
+HEIGHT_PRICE_CHART_GAP = 20
 
 # [Market/Portfolio] Short display names for Market Snapshot cards.
 # Unmapped symbols fall back to the provider name (full name shown in tooltip).
@@ -113,6 +116,7 @@ GREEN = "#4CAF50"  # softer green for dark mode
 RED = "#F44336"  # softer red for dark mode
 GREEN_BG = "rgba(76,175,80,0.08)"
 RED_BG = "rgba(244,67,54,0.08)"
+LINK_COLOR = "#3987e5"  # clickable symbol cells; readable on light and dark
 NO_STYLE = ""  # fallback style
 SPARKLINE_WIDTH = 120
 

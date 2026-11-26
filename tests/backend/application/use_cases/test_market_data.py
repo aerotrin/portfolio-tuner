@@ -6,8 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.backend.application.use_cases.market_data import MarketDataManager
-from src.backend.domain.entities.security import Bar, BarsSyncState
+from src.backend.application.use_cases.market_data import (
+    ANALYTICS_LOOKBACK_DAYS,
+    MarketDataManager,
+)
+from src.backend.domain.entities.security import Bar, BarsSyncState, Quote
 from tests.backend.conftest import build_global_rates, build_quote
 
 # ---------------------------------------------------------------------------
@@ -29,14 +32,29 @@ def _bar(symbol: str, d: date) -> Bar:
 
 
 class FakeDB:
-    def __init__(self, sync_states: dict[str, BarsSyncState] | None = None):
+    def __init__(
+        self,
+        sync_states: dict[str, BarsSyncState] | None = None,
+        first_bar_dates: dict[str, date] | None = None,
+    ):
+        """first_bar_dates=None means every synced symbol already covers START_DATE."""
         self._states: dict[str, BarsSyncState] = sync_states or {}
+        self._first_bar_dates = first_bar_dates
+        self.first_bar_calls: list[list[str]] = []
         self.upserted_states: list[BarsSyncState] = []
         self.upserted_bars: list[Bar] = []
         self.trimmed: list[tuple[list[str], date]] = []
 
     def read_bars_sync_states(self, symbols: list[str]) -> dict[str, BarsSyncState]:
         return {s: self._states.get(s, BarsSyncState(symbol=s)) for s in symbols}
+
+    def read_first_bar_dates(self, symbols: list[str]) -> dict[str, date]:
+        self.first_bar_calls.append(list(symbols))
+        if self._first_bar_dates is None:
+            return {s: START_DATE for s in symbols}
+        return {
+            s: self._first_bar_dates[s] for s in symbols if s in self._first_bar_dates
+        }
 
     def upsert_bars_sync_states(self, states: list[BarsSyncState]) -> None:
         self.upserted_states.extend(states)
@@ -213,6 +231,151 @@ class TestPendingBars:
         pending_syms = {p[0] for p in pending}
         assert pending_syms == {"STALE", "NEW"}
         assert set(sync_states.keys()) == {"STALE", "NEW"}
+
+
+# ---------------------------------------------------------------------------
+# TestPendingBarsBackfill — stored history shorter than the window is re-fetched
+# ---------------------------------------------------------------------------
+class TestPendingBarsBackfill:
+    LATE_FIRST_BAR = START_DATE + timedelta(days=11)
+    GRACE_FIRST_BAR = START_DATE + timedelta(days=10)
+
+    def test_late_first_bar_yields_full_range(self):
+        """Stale symbol whose history starts too late → full window, not incremental."""
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=TWO_DAYS_AGO, status="ok"
+                )
+            },
+            first_bar_dates={"AAPL": self.LATE_FIRST_BAR},
+        )
+        pending, sync_states = _manager(db, FakePrimary()).pending_bars(
+            ["AAPL"], start_date=START_DATE
+        )
+        assert pending == [("AAPL", START_DATE, YESTERDAY)]
+        assert "AAPL" in sync_states
+
+    def test_up_to_date_symbol_with_late_first_bar_still_backfills(self):
+        """last_bar_date == yesterday does not exempt a short history."""
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=YESTERDAY, status="ok"
+                )
+            },
+            first_bar_dates={"AAPL": self.LATE_FIRST_BAR},
+        )
+        pending, sync_states = _manager(db, FakePrimary()).pending_bars(
+            ["AAPL"], start_date=START_DATE
+        )
+        assert pending == [("AAPL", START_DATE, YESTERDAY)]
+        assert "AAPL" in sync_states
+
+    def test_first_bar_within_grace_is_not_backfilled(self):
+        """First bar up to 10 days after the window start → normal classification."""
+        db = FakeDB(
+            {
+                "UPTODATE": BarsSyncState(
+                    symbol="UPTODATE", last_bar_date=YESTERDAY, status="ok"
+                ),
+                "STALE": BarsSyncState(
+                    symbol="STALE", last_bar_date=TWO_DAYS_AGO, status="ok"
+                ),
+            },
+            first_bar_dates={
+                "UPTODATE": self.GRACE_FIRST_BAR,
+                "STALE": self.GRACE_FIRST_BAR,
+            },
+        )
+        pending, _ = _manager(db, FakePrimary()).pending_bars(
+            ["UPTODATE", "STALE"], start_date=START_DATE
+        )
+        assert pending == [("STALE", TWO_DAYS_AGO + timedelta(days=1), YESTERDAY)]
+
+    def test_missing_first_bar_entry_yields_full_range(self):
+        """Sync state says bars exist but none are stored → full window."""
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=YESTERDAY, status="ok"
+                )
+            },
+            first_bar_dates={},
+        )
+        pending, _ = _manager(db, FakePrimary()).pending_bars(
+            ["AAPL"], start_date=START_DATE
+        )
+        assert pending == [("AAPL", START_DATE, YESTERDAY)]
+
+    def test_already_checked_today_is_not_backfilled_or_queried(self):
+        checked_today = datetime.now(tz=timezone.utc)
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL",
+                    last_checked_at=checked_today,
+                    last_bar_date=YESTERDAY,
+                    status="ok",
+                )
+            },
+            first_bar_dates={"AAPL": self.LATE_FIRST_BAR},
+        )
+        pending, sync_states = _manager(db, FakePrimary()).pending_bars(
+            ["AAPL"], start_date=START_DATE
+        )
+        assert pending == []
+        assert sync_states == {}
+        assert db.first_bar_calls == []
+
+    def test_first_bar_query_skipped_without_candidates(self):
+        """Symbols with no bars yet need no first-bar lookup."""
+        db = FakeDB(
+            {"NEW": BarsSyncState(symbol="NEW", last_bar_date=None, status="pending")}
+        )
+        pending, _ = _manager(db, FakePrimary()).pending_bars(
+            ["NEW"], start_date=START_DATE
+        )
+        assert pending == [("NEW", START_DATE, YESTERDAY)]
+        assert db.first_bar_calls == []
+
+    def test_first_bar_query_limited_to_candidates(self):
+        checked_today = datetime.now(tz=timezone.utc)
+        db = FakeDB(
+            {
+                "CHECKED": BarsSyncState(
+                    symbol="CHECKED",
+                    last_checked_at=checked_today,
+                    last_bar_date=YESTERDAY,
+                    status="ok",
+                ),
+                "NEW": BarsSyncState(
+                    symbol="NEW", last_bar_date=None, status="pending"
+                ),
+                "STALE": BarsSyncState(
+                    symbol="STALE", last_bar_date=TWO_DAYS_AGO, status="ok"
+                ),
+            }
+        )
+        _manager(db, FakePrimary()).pending_bars(
+            ["CHECKED", "NEW", "STALE"], start_date=START_DATE
+        )
+        assert db.first_bar_calls == [["STALE"]]
+
+    def test_force_yields_full_range_without_first_bar_query(self):
+        db = FakeDB(
+            {
+                "AAPL": BarsSyncState(
+                    symbol="AAPL", last_bar_date=YESTERDAY, status="ok"
+                )
+            },
+            first_bar_dates={"AAPL": START_DATE},
+        )
+        pending, _ = _manager(db, FakePrimary()).pending_bars(
+            ["AAPL"], start_date=START_DATE, force=True
+        )
+        assert pending == [("AAPL", START_DATE, YESTERDAY)]
+        assert db.first_bar_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +699,58 @@ class TestBuildSecurities:
         assert sec.bars[0].close == pytest.approx(42.0)
         assert len(sec.indicators) == 1
 
+    def test_batch_defaults_start_date_to_analytics_lookback(self):
+        manager = self._manager_with_db(
+            quotes=[build_quote("ANT", close=42.0)], bars_map={"ANT": []}
+        )
+
+        asyncio.run(
+            manager.build_securities_batch_async(["ANT"], rates=build_global_rates())
+        )
+
+        manager.db.read_batch_bars.assert_called_once_with(
+            ["ANT"], TODAY - timedelta(days=ANALYTICS_LOOKBACK_DAYS), None
+        )
+
+    def test_batch_keeps_explicit_start_date(self):
+        manager = self._manager_with_db(
+            quotes=[build_quote("ANT", close=42.0)], bars_map={"ANT": []}
+        )
+
+        asyncio.run(
+            manager.build_securities_batch_async(
+                ["ANT"], start_date=TWO_DAYS_AGO, rates=build_global_rates()
+            )
+        )
+
+        manager.db.read_batch_bars.assert_called_once_with(["ANT"], TWO_DAYS_AGO, None)
+
+    def test_single_defaults_start_date_to_analytics_lookback(self):
+        db = MagicMock()
+        db.read_quote.return_value = build_quote("ANT", close=42.0)
+        db.read_bars.return_value = []
+        db.read_profile.return_value = None
+        manager = MarketDataManager(ds_primary=MagicMock(), ds_backup=None, db=db)
+
+        manager._build_security("ANT", rates=build_global_rates())
+
+        db.read_bars.assert_called_once_with(
+            "ANT", TODAY - timedelta(days=ANALYTICS_LOOKBACK_DAYS), None
+        )
+
+    def test_single_keeps_explicit_start_date(self):
+        db = MagicMock()
+        db.read_quote.return_value = build_quote("ANT", close=42.0)
+        db.read_bars.return_value = []
+        db.read_profile.return_value = None
+        manager = MarketDataManager(ds_primary=MagicMock(), ds_backup=None, db=db)
+
+        manager._build_security(
+            "ANT", start_date=TWO_DAYS_AGO, rates=build_global_rates()
+        )
+
+        db.read_bars.assert_called_once_with("ANT", TWO_DAYS_AGO, None)
+
     def test_missing_quote_still_raises(self):
         manager = self._manager_with_db(
             quotes=[], bars_map={"ANT": [_bar("ANT", YESTERDAY)]}
@@ -547,3 +762,42 @@ class TestBuildSecurities:
                     ["ANT"], rates=build_global_rates()
                 )
             )
+
+
+# ── Price chart ─────────────────────────────────────────────────────────────
+
+
+def _chart_manager(bars: list[Bar], quote: Quote | None) -> MarketDataManager:
+    db = MagicMock()
+    db.read_bars.return_value = bars
+    db.read_quote.return_value = quote
+    db.read_profile.return_value = None
+    return MarketDataManager(ds_primary=MagicMock(), ds_backup=None, db=db)
+
+
+def test_price_chart_is_none_for_unknown_symbol() -> None:
+    assert _chart_manager([], None).compute_security_price_chart("NOPE") is None
+
+
+def test_price_chart_reads_full_stored_history() -> None:
+    bars = [
+        Bar(
+            symbol="AAA",
+            open=10.0,
+            high=11.0,
+            low=9.0,
+            close=10.0 + i,
+            volume=100.0,
+            date=date(2024, 1, 1) + timedelta(days=i),
+        )
+        for i in range(3)
+    ]
+    manager = _chart_manager(bars, None)
+
+    chart = manager.compute_security_price_chart("AAA", "ema", [2])
+
+    assert chart is not None
+    manager.db.read_bars.assert_called_once_with("AAA", None, None)
+    assert chart.series.close == [10.0, 11.0, 12.0]
+    assert chart.series.moving_averages[0].kind == "ema"
+    assert chart.series.moving_averages[0].period == 2

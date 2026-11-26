@@ -228,6 +228,8 @@ A detailed view of all open positions in the account. A toggle in the section he
 - **Options table** (if options are held) — Columns: OSI, Name, 1Y sparkline, Underlying, Und. Day, Right, DTE, Intrinsic Value ⚠️, Total P/L (CAD), Total P/L %, Market Value (CAD), Weight %, Quantity, Break-even Price, Book Value (CAD), Expiry, Strike, FX Exposure, Days Held, Type, Open Date, Last Trade. **Underlying** and **Und. Day** are the underlying security's price and change today, shown and coloured like Price and Day above.
 - **Fixed Income table** (if GICs or term deposits are held) — Columns: Name, Status (Active or Matured), Rate, Interest Paid, Weight %, Principal, Currency, Maturity, Days to Maturity, Accrued Interest, Interest Received, Value (CAD), Maturity Value, Total P/L (CAD), Total P/L %, Book Value (CAD), FX Exposure, Issue Date, Days Held, Type, Key. The table is read-only: to record a redemption or an interest payment, use **Manage GIC / Term Deposit** in the sidebar (see [Managing GICs and Term Deposits](#managing-gics-and-term-deposits)).
 
+Click a symbol in the Stocks & ETFs table, or an OSI in the Options table, to open the [daily price chart](#daily-price-chart) (an option opens the chart of its underlying).
+
 > **Note:** Option market value and P/L are calculated from intrinsic value only, not the actual contract price. Intraday change for options is not supported.
 
 > **Note:** A GIC or term deposit has no market price. Its value is the principal plus the interest earned to date that has not been paid out, so it rises a little every day until maturity. Interest is counted from the issue date up to and including today, which is how banks report a deposit's current value. It appears in both treemaps, the KPIs and all portfolio totals. In the Intraday treemap it is a neutral tile of the same size as in Total Return, so the layout stays the same when you toggle between the two views. Its tile shows value, total P/L (`No intraday chg` in the Intraday view), rate and time left (`2.45% · 15 d left`, or `matured`), weight and maturity date (`Mat. 2026-12-09`). It is left out of the Best/Worst Intraday KPIs, the up/down bar under the Intraday treemap and the quote table.
@@ -245,6 +247,7 @@ A tabbed view with performance analytics:
 - **Growth chart** — normalised price history of holdings vs. the selected benchmark
 - **Performance metrics table** — Sharpe ratio, CAGR, volatility, max drawdown, Sortino, Calmar for each holding and the portfolio
 - **Signal display options** — toggle additional overlays (e.g., trade signals) on the chart
+- **Daily price chart** — click a symbol in the Securities or Benchmark table to open its [daily price chart](#daily-price-chart). Ticking a row's checkbox still narrows the charts above; only a click on the symbol itself opens the chart
 
 GICs and term deposits count in the **Portfolio** line and statistics as a steady asset, which lowers portfolio volatility in proportion to their weight. They are not listed as securities and have no line of their own; a note under the Securities table names them. An account holding only fixed income shows near-zero volatility and a Sharpe ratio that is not meaningful.
 
@@ -374,6 +377,26 @@ A standalone research dashboard for the ETF symbols configured in `symbols.yml` 
 
 Use the date range selector to change the historical window for charts and metrics.
 
+#### Daily price chart
+
+Symbols shown in blue are clickable. Click one in any quote, performance or holdings table (Movers, Intraday, Performance, and the Portfolio page's Positions and Performance tabs) to open a pop-out chart of its daily prices. Checkboxes in the Performance table keep their role of filtering the charts.
+
+| Control | What it does |
+|---|---|
+| **Symbol** | Switch to another symbol from the table you clicked in; type to search |
+| **Range** | 5D, 1M, 3M, 6M, YTD, 1Y or MAX (up to two years). Ranges count trading sessions (5, 21, 63, 126, 252), so they match the Return columns in the performance tables |
+| **Chart** | Candles or a line of closing prices |
+| **Show** | Turn on or off: moving averages, Bollinger Bands (20-day, 2 standard deviations), the volume panel, the RSI 14 panel (band between 30 and 70), the MACD (12, 26, 9) panel, and price tags at the right edge |
+| **⚙ settings** | Moving-average type (SMA or EMA) and up to five periods between 2 and 250 days; type a number to add your own. Default: SMA 20, 50 and 200 |
+
+Above the chart: **Last** price with the change since the previous close, the change over the selected range (measured from the close before its first session), the 52-week high and low (from daily highs and lows over the last 252 sessions), today's volume and the market cap. A figure the provider does not supply shows as "—". The footer shows the last trade time in your browser's time zone.
+
+Hover anywhere on the chart to read every panel's values for that day. Weekends and market holidays are left out, so candles sit side by side. Indicators are calculated over the whole stored history, so a moving average is complete from the left edge of a short range; an average that needs more history than is stored (for example SMA 200 on a recently listed security) is left off and noted under the chart. Your choices are remembered until you sign out, and the chart stays open while the page refreshes in the background.
+
+> **Note:** Prices are the provider's adjusted daily prices, so historical candles and 52-week levels can differ slightly from unadjusted figures quoted elsewhere.
+
+> **Screenshot placeholder — Daily price chart with volume, RSI and MACD panels**
+
 **Filtering by region and group**
 
 The Performance tab has one filter: a multiselect listing every group on the Intraday treemap, named by its region (**US / Sectors**). Pick several to compare them side by side, e.g. **US / Sectors** with **Canada / Sectors**, which the treemap cannot show at once. Leaving the filter empty shows every group. To narrow to individual securities, tick rows in the metrics table.
@@ -466,6 +489,8 @@ The system automatically checks symbol availability on each page load. If any re
 A symbol only needs a current quote to be shown. A **newly listed security** (for example on its IPO day) has no daily price history yet, so it appears with its price, market value, and weight straight away, while its performance columns (returns, volatility, Sharpe, correlation) stay blank and fill in as daily history builds up. It joins the correlation matrix once it has 40 days of price history. Until then it counts as flat in the portfolio's own performance figures, and an account holding only such securities shows "—" for its Performance statistics.
 
 On subsequent loads, the smart sync only fetches data newer than the last successful bar date for each symbol — making incremental refreshes fast.
+
+About two years of daily prices are kept per symbol (`BARS_HISTORY_DAYS` in `.env`, default 730 days). A symbol holding less than that is topped up with one full download on its next refresh, so the first refresh after an upgrade or after raising the setting takes longer than usual.
 
 ### Auto Refresh Toggle
 

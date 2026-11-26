@@ -31,6 +31,9 @@ class Config(BaseSettings):
     # yfinance: Yahoo requests per minute, spread evenly
     yf_rate_limit: int = 600
 
+    # Market data retention
+    bars_history_days: int = 730
+
     # Logging
     log_level: str = "WARNING"
 
