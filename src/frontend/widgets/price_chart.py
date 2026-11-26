@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 from typing import Any, Mapping, Sequence
 
@@ -232,6 +233,18 @@ def _seed_widgets(prefs: dict[str, Any]) -> None:
         st.session_state[key] = prefs[pref]
 
 
+def _default_prefs() -> dict[str, Any]:
+    return deepcopy(PRICE_CHART_DEFAULTS)
+
+
+def _reset_prefs() -> None:
+    """Put the view (range, chart type, overlays, moving averages) back to
+    the defaults. The symbol being viewed is kept."""
+    prefs = _default_prefs()
+    st.session_state[PREFS_KEY] = prefs
+    _seed_widgets(prefs)
+
+
 def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]):
     last = summary.get("last_price")
     change_1d = summary.get("change_1d")
@@ -271,7 +284,7 @@ def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]
     on_dismiss=_close_price_chart,
 )
 def _price_chart_dialog(symbols: list[str]) -> None:
-    prefs = st.session_state.setdefault(PREFS_KEY, dict(PRICE_CHART_DEFAULTS))
+    prefs = st.session_state.setdefault(PREFS_KEY, _default_prefs())
     if st.session_state.get(SYMBOL_KEY) not in symbols:
         st.session_state[SYMBOL_KEY] = symbols[0]
     if any(key not in st.session_state for key in PREF_WIDGET_KEYS.values()):
@@ -318,6 +331,13 @@ def _price_chart_dialog(symbols: list[str]) -> None:
                 f"{PRICE_CHART_MA_MIN_PERIOD} and {PRICE_CHART_MA_MAX_PERIOD} days. "
                 "Type a number to add your own.",
             )
+        st.button(
+            ":material/restart_alt:",
+            type="tertiary",
+            help="Reset the chart to its default view",
+            key="price_chart_reset",
+            on_click=_reset_prefs,
+        )
     periods = parse_ma_periods(raw_periods)
     prefs.update(
         range=range_key,
@@ -382,8 +402,6 @@ def render_open_price_chart() -> None:
     if not request or not request.get("symbols"):
         return
     if not request.get("seeded"):
-        _seed_widgets(
-            st.session_state.setdefault(PREFS_KEY, dict(PRICE_CHART_DEFAULTS))
-        )
+        _seed_widgets(st.session_state.setdefault(PREFS_KEY, _default_prefs()))
         request["seeded"] = True
     _price_chart_dialog(request["symbols"])

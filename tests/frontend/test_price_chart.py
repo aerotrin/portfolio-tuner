@@ -367,3 +367,43 @@ def test_click_on_another_column_forgets_the_last_symbol() -> None:
 )
 def test_parse_ma_periods(values, expected) -> None:
     assert parse_ma_periods(values) == expected
+
+
+# ── Reset to defaults ───────────────────────────────────────────────────────
+
+
+def test_reset_restores_the_default_view_and_keeps_the_symbol() -> None:
+    import streamlit as st
+
+    from frontend.settings import PRICE_CHART_DEFAULTS
+    from frontend.widgets import price_chart as pc
+
+    st.session_state.clear()
+    st.session_state[pc.SYMBOL_KEY] = "NVDA"
+    st.session_state[pc.PREFS_KEY] = {"range": "5D", "type": "Line", "show": []}
+    st.session_state["price_chart_range"] = "5D"
+    st.session_state["price_chart_show"] = ["MACD"]
+
+    pc._reset_prefs()
+
+    assert st.session_state[pc.PREFS_KEY] == PRICE_CHART_DEFAULTS
+    for pref, key in pc.PREF_WIDGET_KEYS.items():
+        assert st.session_state[key] == PRICE_CHART_DEFAULTS[pref]
+    assert st.session_state[pc.SYMBOL_KEY] == "NVDA"
+    st.session_state.clear()
+
+
+def test_reset_does_not_share_lists_with_the_settings() -> None:
+    import streamlit as st
+
+    from frontend.settings import PRICE_CHART_DEFAULTS
+    from frontend.widgets import price_chart as pc
+
+    st.session_state.clear()
+    pc._reset_prefs()
+    st.session_state[pc.PREFS_KEY]["show"].append("MACD")
+    st.session_state[pc.PREFS_KEY]["ma_periods"].append(7)
+
+    assert "MACD" not in PRICE_CHART_DEFAULTS["show"]
+    assert 7 not in PRICE_CHART_DEFAULTS["ma_periods"]
+    st.session_state.clear()

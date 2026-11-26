@@ -388,6 +388,7 @@ Symbols shown in blue are clickable. Click one in any quote, performance or hold
 | **Chart** | Candles or a line of closing prices |
 | **Show** | Turn on or off: moving averages, Bollinger Bands (20-day, 2 standard deviations), the volume panel, the RSI 14 panel (band between 30 and 70), the MACD (12, 26, 9) panel, and price tags at the right edge |
 | **⚙ settings** | Moving-average type (SMA or EMA) and up to five periods between 2 and 250 days; type a number to add your own. Default: SMA 20, 50 and 200 |
+| **↺ reset** | Puts range, chart type, overlays and moving averages back to the default view (`PRICE_CHART_DEFAULTS` in `src/frontend/settings.py`). The symbol you are viewing stays |
 
 Above the chart: **Last** price with the change since the previous close, the change over the selected range (measured from the close before its first session), the 52-week high and low (from daily highs and lows over the last 252 sessions), today's volume and the market cap. A figure the provider does not supply shows as "—". The footer shows the last trade time in your browser's time zone.
 
