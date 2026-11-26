@@ -3,7 +3,10 @@ from datetime import date, datetime, timedelta, timezone
 import logging
 from typing import Callable, List, Optional
 
-from backend.application.ports.market_data_provider import MarketDataProvider
+from backend.application.ports.market_data_provider import (
+    MarketDataProvider,
+    ProviderRateLimitError,
+)
 from backend.application.ports.market_data_repo import MarketDataRepository
 from backend.domain.aggregates.security import Security
 from backend.domain.entities.security import (
@@ -18,6 +21,9 @@ from backend.domain.entities.security import (
 )
 
 logger = logging.getLogger(__name__)
+
+# A forced refresh re-fetches a profile only once it is this old
+PROFILE_MAX_AGE_DAYS = 7
 
 
 class MarketDataManager:
@@ -82,7 +88,8 @@ class MarketDataManager:
                 logger.error("Failed to fetch single bars for %s. Giving up.", symbol)
                 return None
 
-    # --- Refresh and Sync to DB use cases -> Return Nothing---
+    # --- Refresh and Sync to DB use cases ---
+    # The async refreshers return the symbols they could not fetch.
 
     def refresh_global_rates(self):
         self.db.upsert_global_rates(self.ds_primary.fetch_global_rates())
@@ -90,8 +97,21 @@ class MarketDataManager:
     def pending_profiles(self, symbols: list[str], force: bool = False) -> list[str]:
         if not symbols:
             return []
-        existing_syms = {p.symbol for p in self.db.read_profiles(symbols)}
-        return [s for s in symbols if force or s not in existing_syms]
+        existing = {p.symbol: p for p in self.db.read_profiles(symbols)}
+        if not force:
+            return [s for s in symbols if s not in existing]
+        # Profiles change slowly and cost several provider requests each
+        stale_before = datetime.now(tz=timezone.utc) - timedelta(
+            days=PROFILE_MAX_AGE_DAYS
+        )
+
+        def is_stale(profile: Profile) -> bool:
+            fetched = profile.date
+            if fetched.tzinfo is None:
+                fetched = fetched.replace(tzinfo=timezone.utc)
+            return fetched < stale_before
+
+        return [s for s in symbols if s not in existing or is_stale(existing[s])]
 
     def pending_bars(
         self,
@@ -133,9 +153,9 @@ class MarketDataManager:
         pending: list[str],
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
-    ) -> None:
+    ) -> list[str]:
         if not pending:
-            return
+            return []
 
         sem = asyncio.Semaphore(max_concurrency)
 
@@ -185,6 +205,7 @@ class MarketDataManager:
             logger.debug("Starting DB upsert %d profiles", len(profiles))
             await asyncio.to_thread(self.db.upsert_profiles_batch, profiles)
             logger.debug("Finished DB upsert %d profiles", len(profiles))
+        return [s for s, p in zip(pending, results) if p is None]
 
     async def refresh_bars_async(
         self,
@@ -193,12 +214,15 @@ class MarketDataManager:
         trim_before_date: date | None = None,
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
-    ) -> None:
+    ) -> list[str]:
         if not pending:
-            return
+            return []
 
         now = datetime.now(tz=timezone.utc)
         sem = asyncio.Semaphore(max_concurrency)
+        # Rate-limited symbols: the data may exist, so they are not recorded
+        # as checked and the next refresh tries them again.
+        rate_limited: set[str] = set()
 
         async def fetch_one(
             symbol: str, fetch_start: date, fetch_end: date
@@ -217,7 +241,9 @@ class MarketDataManager:
                         bars = await asyncio.to_thread(
                             self.ds_primary.fetch_bars, symbol, fetch_start, fetch_end
                         )
-                    except Exception:
+                    except Exception as primary_exc:
+                        if isinstance(primary_exc, ProviderRateLimitError):
+                            rate_limited.add(symbol)
                         logger.warning(
                             "Bars fetching failed for %s on primary. Trying alternate.",
                             symbol,
@@ -237,7 +263,10 @@ class MarketDataManager:
                                     fetch_start,
                                     fetch_end,
                                 )
-                            except Exception:
+                                rate_limited.discard(symbol)
+                            except Exception as backup_exc:
+                                if isinstance(backup_exc, ProviderRateLimitError):
+                                    rate_limited.add(symbol)
                                 logger.error(
                                     "Bars fetching failed for %s on alternate. Logging as error.",
                                     symbol,
@@ -259,6 +288,8 @@ class MarketDataManager:
         bars_to_insert: list[Bar] = []
         for (symbol, _, _), bars in zip(pending, results):
             if bars is None:
+                if symbol in rate_limited:
+                    continue
                 if sync_states[symbol].last_success_at is not None:
                     sync_state_updates.append(
                         BarsSyncState(
@@ -317,15 +348,17 @@ class MarketDataManager:
                     len(succeeded),
                 )
 
+        return [sym for (sym, _, _), bars in zip(pending, results) if bars is None]
+
     async def refresh_quotes_async(
         self,
         symbols: list[str],
         batch_size: int = 5,  # FTRK-496: provides smoother UI progress bar updating
         max_concurrency: int = 10,
         on_progress: Optional[Callable[[str], None]] = None,
-    ) -> None:
+    ) -> list[str]:
         if not symbols:
-            return
+            return []
 
         batches = [
             symbols[i : i + batch_size] for i in range(0, len(symbols), batch_size)
@@ -387,6 +420,8 @@ class MarketDataManager:
         logger.debug("Starting DB upsert %d quotes", len(all_quotes))
         await asyncio.to_thread(self.db.upsert_quotes_batch, all_quotes)
         logger.debug("Finished DB upsert %d quotes", len(all_quotes))
+        fetched = {q.symbol for q in all_quotes}
+        return [s for s in symbols if s not in fetched]
 
     # --- Read raw use cases ---
 

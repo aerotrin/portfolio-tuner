@@ -14,9 +14,13 @@ class RateLimiterConfig:
     """
     Args:
         max_per_minute: Maximum requests allowed in any 60-second window.
+        min_interval_sec: Minimum gap between two granted slots. 0 lets the
+            whole window's budget go out at once; a positive value spreads
+            requests evenly.
     """
 
     max_per_minute: int
+    min_interval_sec: float = 0.0
 
 
 class RateLimiter:
@@ -43,15 +47,25 @@ class RateLimiter:
         self._lock = threading.Lock()
         self._timestamps: deque[float] = deque()
         self._backoff_until: float = 0.0
+        self._next_slot_at: float = 0.0
 
-    def acquire_slot(self) -> None:
-        """Block until a request slot is available, then consume it."""
+    def acquire_slot(self, cost: int = 1) -> None:
+        """Block until `cost` request slots are available, then consume them.
+
+        Use a cost above 1 for a call that makes several upstream requests.
+        """
+        for _ in range(cost):
+            self._acquire_one()
+
+    def _acquire_one(self) -> None:
         while True:
             with self._lock:
                 now = time.monotonic()
 
                 if now < self._backoff_until:
                     sleep_for = self._backoff_until - now
+                elif now < self._next_slot_at:
+                    sleep_for = self._next_slot_at - now
                 else:
                     cutoff = now - 60.0
                     while self._timestamps and self._timestamps[0] < cutoff:
@@ -59,6 +73,7 @@ class RateLimiter:
 
                     if len(self._timestamps) < self.cfg.max_per_minute:
                         self._timestamps.append(now)
+                        self._next_slot_at = now + self.cfg.min_interval_sec
                         return
 
                     # Window full — sleep until the oldest slot expires

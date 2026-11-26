@@ -4,6 +4,14 @@ from typing import Optional, Protocol
 from backend.domain.entities.security import Bar, Profile, Quote, GlobalRates
 
 
+class ProviderRateLimitError(Exception):
+    """The provider is still refusing requests after the adapter's retries.
+
+    The failure is transient: the data may exist, so callers should not
+    record the symbol as checked.
+    """
+
+
 class MarketDataProvider(Protocol):
     def fetch_global_rates(self) -> GlobalRates: ...
     def fetch_quote(self, symbol: str) -> Quote: ...

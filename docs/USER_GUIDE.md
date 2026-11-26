@@ -478,7 +478,7 @@ Two manual refresh options are available:
 | Button | Location | Behaviour |
 |---|---|---|
 | **Refresh Data** | Top-right of each page | Re-runs smart sync for the current page's symbols (incremental), in the background — the page stays interactive |
-| **Force Data Refresh** | Sidebar | Re-fetches the full date range for **every** symbol the app uses — both market research lists plus the holdings of all accounts — ignoring sync state. A confirmation dialog shows the unique symbol count first; the job can take a few minutes and blocks the page while running |
+| **Force Data Refresh** | Sidebar | Re-fetches quotes and the full date range of daily prices for **every** symbol the app uses — both market research lists plus the holdings of all accounts — ignoring sync state. Company profiles are re-fetched only when older than 7 days. A confirmation dialog shows the unique symbol count first; the job can take a few minutes and blocks the page while running |
 
 On the Portfolio page, "the current page's symbols" means the holdings of **all** your accounts plus the benchmark/header symbols — one refresh keeps every account scope current. Market research pages refresh only their own symbol lists.
 
@@ -489,6 +489,8 @@ Use **Force Data Refresh** when quotes appear stale, after changing the date ran
 Background refreshes (the **Refresh Data** button and the **Auto** toggle) show a live progress bar under **Refresh Status** at the bottom of the sidebar; the page reloads with fresh data when the job finishes.
 
 Blocking refreshes (missing-symbol bootstrap and **Force Data Refresh**) show a progress banner at the top of the page and pause rendering until the job completes. After a Force Data Refresh, every page is marked as refreshed.
+
+Requests to Yahoo Finance are paced (`YF_RATE_LIMIT` in `.env`, default 600 per minute). If Yahoo still answers "Too Many Requests", the refresh pauses for 30 to 120 seconds and retries, so the progress bar can stand still for a while. If some symbols could not be updated when the job ends, a warning names them; refresh again to retry them. If this happens often, lower `YF_RATE_LIMIT`.
 
 > **Screenshot placeholder — Refresh job progress banner**
 

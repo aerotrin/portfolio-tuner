@@ -1,13 +1,17 @@
 """Yahoo Finance market data adapter (yfinance)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 import logging
-from typing import Optional
+from typing import Any, Callable, Optional, TypeVar
 
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 
-from backend.application.ports.market_data_provider import MarketDataProvider
+from backend.application.ports.market_data_provider import (
+    MarketDataProvider,
+    ProviderRateLimitError,
+)
 from backend.domain.entities.security import (
     Bar,
     GlobalRates,
@@ -16,6 +20,7 @@ from backend.domain.entities.security import (
     SecurityType,
     finite_or_zero,
 )
+from backend.infra.adapters.rate_limiter import RateLimiter, RateLimiterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +34,50 @@ _QUOTE_TYPE_MAP: dict[str, SecurityType] = {
 }
 
 
+T = TypeVar("T")
+
+DEFAULT_MAX_PER_MINUTE = 600
+# Upstream requests behind one call, charged to the rate limiter:
+# fast_info loads daily and intraday price history; info loads the quote
+# summary, the v7 quote and key statistics.
+QUOTE_REQUESTS = 2
+PROFILE_REQUESTS = 3
+
+
+def paced_limiter_config(max_per_minute: int) -> RateLimiterConfig:
+    """Spread the minute's budget evenly instead of sending it in one burst."""
+    return RateLimiterConfig(
+        max_per_minute=max_per_minute, min_interval_sec=60.0 / max_per_minute
+    )
+
+
 @dataclass
 class YFinanceConfig:
     default_days_back: int = 365
+    rate_limiter: RateLimiterConfig = field(
+        default_factory=lambda: paced_limiter_config(DEFAULT_MAX_PER_MINUTE)
+    )
+    max_retries: int = 3
+    # Yahoo sends no Retry-After; the limiter multiplies this by 2, 4 and 8
+    retry_base_sec: int = 15
+
+
+def _market_time(value: Any) -> datetime:
+    """Last trade time from the history metadata: epoch seconds or a datetime."""
+    if isinstance(value, (int, float)) and value:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc)
 
 
 class YFinanceClient(MarketDataProvider):
     """
     Thin wrapper around yfinance that satisfies the MarketDataProvider protocol.
+
+    Every Yahoo call goes through `_call`, which paces requests with a
+    `RateLimiter`, and on "Too Many Requests" backs off and retries. The
+    backoff is shared, so all threads pause while Yahoo is refusing.
 
     fetch_global_rates uses:
       - ^IRX  (13-week T-bill yield) for the risk-free rate
@@ -45,22 +86,59 @@ class YFinanceClient(MarketDataProvider):
 
     def __init__(self, config: YFinanceConfig | None = None):
         self.cfg = config or YFinanceConfig()
+        self._rate_limiter = RateLimiter(self.cfg.rate_limiter)
+
+    def _call(self, fn: Callable[[], T], *, cost: int = 1) -> T:
+        """Run a Yahoo call under the rate limiter, retrying when rate limited.
+
+        `fn` must do all its network access before returning (yfinance loads
+        lazily). Raises ProviderRateLimitError once retries are used up.
+        """
+        attempt = 0
+        while True:
+            self._rate_limiter.acquire_slot(cost)
+            try:
+                return fn()
+            except YFRateLimitError:
+                attempt += 1
+                if attempt > self.cfg.max_retries:
+                    raise ProviderRateLimitError(
+                        f"Yahoo still rate limiting after {self.cfg.max_retries} retries"
+                    ) from None
+                self._rate_limiter.handle_rate_limit(self.cfg.retry_base_sec, attempt)
 
     # -------------------------------------------------------------------------
     # Protocol methods
     # -------------------------------------------------------------------------
 
     def fetch_quote(self, symbol: str) -> Quote:
-        try:
+        def load() -> dict[str, Any]:
+            # Name and trade time come from the price-history metadata that
+            # fast_info has already loaded; ticker.info would cost three more
+            # requests per quote.
             ticker = yf.Ticker(symbol)
             fi = ticker.fast_info
-            info = ticker.info
+            return {
+                "previous_close": fi.regular_market_previous_close,
+                "last_price": fi.last_price,
+                "open": fi.open,
+                "high": fi.day_high,
+                "low": fi.day_low,
+                "volume": fi.last_volume,
+                "exchange": fi.exchange,
+                "currency": fi.currency,
+                "meta": ticker.get_history_metadata() or {},
+            }
+
+        try:
+            raw = self._call(load, cost=QUOTE_REQUESTS)
+            meta = raw["meta"]
 
             # fast_info yields None or NaN for fields the market has not
             # published yet (premarket last price, previous close); NaN is
             # truthy, so `or 0.0` alone would let it through.
-            previous_close: float = finite_or_zero(fi.regular_market_previous_close)
-            last_price: float = finite_or_zero(fi.last_price)
+            previous_close: float = finite_or_zero(raw["previous_close"])
+            last_price: float = finite_or_zero(raw["last_price"])
             change = (
                 last_price - previous_close if previous_close and last_price else 0.0
             )
@@ -72,22 +150,19 @@ class YFinanceClient(MarketDataProvider):
         try:
             return Quote(
                 symbol=symbol,
-                name=info.get("longName") or info.get("shortName") or "",
-                exchange=fi.exchange or "",
-                open=finite_or_zero(fi.open),
-                high=finite_or_zero(fi.day_high),
-                low=finite_or_zero(fi.day_low),
+                name=meta.get("longName") or meta.get("shortName") or "",
+                exchange=raw["exchange"] or "",
+                open=finite_or_zero(raw["open"]),
+                high=finite_or_zero(raw["high"]),
+                low=finite_or_zero(raw["low"]),
                 close=last_price,
-                currency=fi.currency or ("CAD" if symbol.endswith(".TO") else "USD"),
-                volume=finite_or_zero(fi.last_volume),
+                currency=raw["currency"]
+                or ("CAD" if symbol.endswith(".TO") else "USD"),
+                volume=finite_or_zero(raw["volume"]),
                 change=change,
                 change_percent=change_pct,
                 previousClose=previous_close,
-                timestamp=(
-                    datetime.fromtimestamp(info["regularMarketTime"], tz=timezone.utc)
-                    if info.get("regularMarketTime")
-                    else datetime.now(timezone.utc)
-                ),
+                timestamp=_market_time(meta.get("regularMarketTime")),
             )
         except Exception as e:
             logger.warning("Quote build failed for %s: %s", symbol, e)
@@ -116,7 +191,7 @@ class YFinanceClient(MarketDataProvider):
                 (to_date + timedelta(days=1)) if to_date else date.today()
             )  # FTRK-498: yFinance end date is exclusive, so add 1 day
 
-            df = yf.Ticker(symbol).history(start=start, end=end)
+            df = self._call(lambda: yf.Ticker(symbol).history(start=start, end=end))
 
             if df.empty:
                 raise RuntimeError(f"No bars data for {symbol}")
@@ -145,11 +220,19 @@ class YFinanceClient(MarketDataProvider):
     def fetch_global_rates(self) -> GlobalRates:
         try:
             # Risk-free rate: 13-week T-bill (^IRX), yield returned as a percentage
-            rf_raw: float | None = yf.Ticker("^IRX").fast_info.last_price
+            rf_raw: float | None = self._call(
+                lambda: yf.Ticker("^IRX").fast_info.last_price, cost=QUOTE_REQUESTS
+            )
             rf_rate = (rf_raw / 100.0) if rf_raw is not None else 0.0
 
             # FX rate: USD/CAD
-            fx_rate: float = yf.Ticker("USDCAD=X").fast_info.last_price or 0.0
+            fx_rate: float = (
+                self._call(
+                    lambda: yf.Ticker("USDCAD=X").fast_info.last_price,
+                    cost=QUOTE_REQUESTS,
+                )
+                or 0.0
+            )
 
             return GlobalRates(
                 date=datetime.now(timezone.utc),
@@ -162,7 +245,9 @@ class YFinanceClient(MarketDataProvider):
 
     def fetch_stock_profile(self, symbol: str) -> Profile:
         try:
-            info: dict = yf.Ticker(symbol).info
+            info: dict = self._call(
+                lambda: yf.Ticker(symbol).info, cost=PROFILE_REQUESTS
+            )
         except Exception as e:
             logger.warning("Profile request failed for %s: %s", symbol, e)
             raise

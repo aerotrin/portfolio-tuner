@@ -441,6 +441,8 @@ Refresh operations follow a two-phase pattern:
 1. **Pending determination** — `pending_quotes()`, `pending_bars()`, and `pending_profiles()` inspect the current database state and return only the work items that actually need fetching (e.g., symbols with no cached profile, or bar ranges not yet stored). `pending_bars()` leverages `BarsSyncState` to return per-symbol `(symbol, fetch_start, fetch_end)` tuples, requesting only the missing date range. The `force=True` flag bypasses this check and re-fetches the full requested range.
 2. **Async execution** — `refresh_quotes_async()`, `refresh_bars_async()`, and `refresh_profiles_async()` accept the pending work lists produced above and execute the fetches concurrently, upserting results into the database as each symbol completes.
 
+The refreshers return the symbols they could not fetch. A bar fetch that ended in `ProviderRateLimitError` writes no sync-state row, so the symbol is not recorded as checked today and the next refresh tries it again; a symbol with no data keeps its `error` row as before. With `force`, `pending_profiles()` returns only profiles that are missing or older than `PROFILE_MAX_AGE_DAYS` (7), since profiles change slowly and cost three requests each.
+
 Each fetch uses a two-tier fallback: the primary provider is attempted first; if it returns no data, the backup provider is tried. Both tiers returning nothing results in a silent skip for that symbol rather than an exception, so a single unavailable symbol does not abort the entire refresh job.
 
 A symbol counts as **available** once it has a cached quote; daily bars are not required. A newly listed security has a quote before its first daily bar exists, so `MarketDataManager` builds its `Security` from the quote alone (one price point, metrics empty) and `pending_bars()` keeps retrying its history on each refresh until bars arrive. When combining holdings into the `PORTF` series, `_calc_portfolio_weighted_close` holds a short-history security flat at its first price for earlier dates, so it contributes zero return there instead of blanking the portfolio series.
@@ -529,6 +531,10 @@ sequenceDiagram
 
 The `RateLimiter` adapter uses a thread-safe sliding-window algorithm: it tracks request timestamps in a deque and blocks until the oldest request ages out of the 60-second window. On HTTP 429 responses, the `FMPClient` calls `handle_rate_limit(retry_after, attempt)`, which sets a backoff period of `max(retry_after, 2) * min(2^attempt, 8)` seconds; any subsequent `acquire_slot()` call sleeps through this period before checking the window. `FMPClient` retries up to 3 times before giving up. API keys are redacted from all log output and error messages.
 
+`YFinanceClient` uses the same `RateLimiter`. Yahoo publishes no limit, so the pace is a setting: `YF_RATE_LIMIT` requests per minute (default 600), with `min_interval_sec` set so they are spread evenly instead of sent as one burst. Every Yahoo call goes through `_call`, which takes one limiter slot per upstream request the call makes (a quote is 2, a profile is 3, a bar fetch is 1). On Yahoo's "Too Many Requests" it calls `handle_rate_limit` with a 15-second base (Yahoo sends no `Retry-After`), giving 30, 60 and 120 seconds, and retries up to 3 times. The backoff lives in the shared limiter, so every thread pauses while Yahoo is refusing. When retries run out the adapter raises `ProviderRateLimitError` (defined with the provider port), which tells the use case the failure is transient.
+
+Quotes are built from `fast_info` and the price-history metadata it has already loaded (name, last trade time). They do not read `ticker.info`, which would add three requests per quote.
+
 ---
 
 ## 11. Analytics Engine
@@ -595,8 +601,9 @@ The backend uses FastAPI's `BackgroundTasks` to schedule refresh work after the 
 3. `_run_refresh_job` is scheduled as a background task. The HTTP response returns immediately with the job ID.
 4. The background task first calls `pending_quotes()`, `pending_bars()`, and `pending_profiles()` to determine exactly which fetch operations are needed across all data types. The sum of these becomes `job.work_total`. It then executes the refresh in order: global rates → quotes → bars → profiles, decrementing `job.work_remaining` via an `on_progress()` callback after each symbol is processed.
 5. The frontend polls `GET /jobs/{job_id}` (driven by `streamlit_autorefresh`) to track progress and display a progress bar (`work_completed = work_total - work_remaining`).
-6. When the job finishes (success or error), the frontend clears job state, invalidates its data cache, and reruns.
-7. Because the registry is in-memory, a backend restart loses running jobs. A `404` on the poll makes the frontend drop the stale job id and show a "Refresh interrupted" toast (a blocking refresh for missing symbols restarts itself); connection errors during the restart window are ignored and polling continues.
+6. The job refreshes quotes first, then bars, then profiles, so the slower stages cannot use up the provider's allowance before prices are current. Symbols that could not be refreshed are collected in `failed_symbols` on the job; the job still ends as `success`.
+7. When the job finishes (success or error), the frontend clears job state, invalidates its data cache, and reruns. If `failed_symbols` is not empty it shows a warning naming them.
+8. Because the registry is in-memory, a backend restart loses running jobs. A `404` on the poll makes the frontend drop the stale job id and show a "Refresh interrupted" toast (a blocking refresh for missing symbols restarts itself); connection errors during the restart window are ignored and polling continues.
 
 A cooldown timer (`_LAST_REFRESH`, 3 seconds) prevents the endpoint from being hammered with duplicate requests.
 

@@ -13,6 +13,21 @@ logger = logging.getLogger(__name__)
 ALL_DATA_PAGES = ["market_etf", "market_stock", "portfolio"]
 
 
+FAILED_SYMBOLS_SHOWN = 5
+
+
+def failed_symbols_message(failed: list[str]) -> str:
+    """Toast text for a refresh that finished without some symbols."""
+    shown = ", ".join(failed[:FAILED_SYMBOLS_SHOWN])
+    more = len(failed) - FAILED_SYMBOLS_SHOWN
+    names = f"{shown} and {more} more" if more > 0 else shown
+    count = "1 symbol" if len(failed) == 1 else f"{len(failed)} symbols"
+    return (
+        f"Refresh finished, but {count} could not be updated: {names}. "
+        "Refresh again to retry."
+    )
+
+
 def _clear_job_state() -> None:
     for k in [
         "job_id",
@@ -235,6 +250,7 @@ def check_job_status() -> None:
             "forced" if st.session_state.get("job_force") else "smart"
         )
         st.session_state["job_just_completed"] = True
+        st.session_state["last_job_failed_symbols"] = job.get("failed_symbols") or []
 
         page = st.session_state.get("job_page")
         pages = st.session_state.get("job_refreshed_pages") or ([page] if page else [])
@@ -283,7 +299,11 @@ def render_refresh_job_ui(active_page: str) -> None:
         * show a sidebar progress fragment that polls without page reruns
     """
     if st.session_state.pop("job_just_completed", False):
-        st.toast("Refresh complete", icon="✅")
+        failed = st.session_state.pop("last_job_failed_symbols", [])
+        if failed:
+            st.toast(failed_symbols_message(failed), icon="⚠️", duration="long")
+        else:
+            st.toast("Refresh complete", icon="✅")
 
     if st.session_state.pop("job_just_failed", False):
         st.toast("Refresh job failed", icon="❌")

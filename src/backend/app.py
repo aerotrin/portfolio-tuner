@@ -8,7 +8,11 @@ from sqlalchemy.orm import sessionmaker
 from backend.infra.adapters.excel_pandas_client import ExcelPandasClient
 from backend.infra.adapters.fmp_client import FMPClient, FMPConfig
 from backend.infra.adapters.rate_limiter import RateLimiterConfig
-from backend.infra.adapters.yfinance_client import YFinanceClient
+from backend.infra.adapters.yfinance_client import (
+    YFinanceClient,
+    YFinanceConfig,
+    paced_limiter_config,
+)
 from backend.infra.api.v1.routers import accounts as accounts_routers
 from backend.infra.api.v1.routers import admin as admin_routers
 from backend.infra.api.v1.routers import optimizer as optimizer_routers
@@ -35,6 +39,9 @@ async def lifespan(app):
     # Client setup
     records_importer = ExcelPandasClient()
 
+    yfinance_config = YFinanceConfig(
+        rate_limiter=paced_limiter_config(config.yf_rate_limit)
+    )
     if config.enable_fmp_as_primary:
         primary_ds = FMPClient(
             FMPConfig(
@@ -42,9 +49,9 @@ async def lifespan(app):
                 rate_limiter=RateLimiterConfig(max_per_minute=config.fmp_rate_limit),
             )
         )
-        backup_ds = YFinanceClient()
+        backup_ds = YFinanceClient(yfinance_config)
     else:
-        primary_ds = YFinanceClient()
+        primary_ds = YFinanceClient(yfinance_config)
         backup_ds = None
 
     app.state.engine = engine

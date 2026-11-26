@@ -28,6 +28,9 @@ class Config(BaseSettings):
     fmp_api_key: str = Field(default="")
     fmp_rate_limit: int = 100
 
+    # yfinance: Yahoo requests per minute, spread evenly
+    yf_rate_limit: int = 600
+
     # Logging
     log_level: str = "WARNING"
 

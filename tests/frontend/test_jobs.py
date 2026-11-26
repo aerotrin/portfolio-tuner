@@ -95,3 +95,29 @@ def test_success_defaults_to_job_page(api):
     assert st.session_state["last_refresh_by_page"] == {
         "market_etf": "2026-11-23T10:00:00"
     }
+
+
+def test_success_remembers_symbols_that_failed(api):
+    api.get_refresh_job.return_value = {
+        "status": "success",
+        "finished_at": "2026-11-23T10:00:00",
+        "failed_symbols": ["SPY", "QQQ"],
+    }
+
+    with pytest.raises(_Rerun):
+        jobs.check_job_status()
+
+    assert st.session_state["last_job_failed_symbols"] == ["SPY", "QQQ"]
+
+
+def test_failed_symbols_message_names_a_single_symbol():
+    assert jobs.failed_symbols_message(["SPY"]) == (
+        "Refresh finished, but 1 symbol could not be updated: SPY. "
+        "Refresh again to retry."
+    )
+
+
+def test_failed_symbols_message_truncates_a_long_list():
+    message = jobs.failed_symbols_message(["A", "B", "C", "D", "E", "F", "G"])
+
+    assert "7 symbols could not be updated: A, B, C, D, E and 2 more." in message

@@ -56,6 +56,7 @@ class RefreshJob:
     finished_at: datetime | None = None
     work_total: int = 0
     work_remaining: int = 0
+    failed_symbols: list[str] = field(default_factory=list)
 
 
 _JOBS: dict[str, RefreshJob] = {}
@@ -78,6 +79,7 @@ class RefreshJobResponse(BaseModel):
     work_completed: int
     progress_percent: int
     progress_ratio: float
+    failed_symbols: list[str] = []
 
 
 class RefreshSecuritiesResponse(BaseModel):
@@ -270,9 +272,19 @@ async def _run_refresh_job(
         # Start refresh sequence
         market_man.refresh_global_rates()
 
+        # Quotes first: they are what the pages show, so the slower stages
+        # cannot use up the provider's allowance before prices are current.
+        failed: list[str] = []
+        logger.debug(f"Refreshing {len(quotes_pending)} quotes...")
+        failed += await market_man.refresh_quotes_async(
+            quotes_pending,
+            max_concurrency=config.max_concurrency,
+            on_progress=on_progress,
+        )
+
         if len(bars_pending) > 0:
             logger.debug(f"Refreshing {len(bars_pending)} bars...")
-            await market_man.refresh_bars_async(
+            failed += await market_man.refresh_bars_async(
                 bars_pending,
                 sync_states=sync_states,
                 trim_before_date=start_date,
@@ -282,19 +294,20 @@ async def _run_refresh_job(
 
         if len(profiles_pending) > 0:
             logger.debug(f"Refreshing {len(profiles_pending)} profiles...")
-            await market_man.refresh_profiles_async(
+            failed += await market_man.refresh_profiles_async(
                 profiles_pending,
                 max_concurrency=config.max_concurrency,
                 on_progress=on_progress,
             )
 
-        logger.debug(f"Refreshing {len(quotes_pending)} quotes...")
-        await market_man.refresh_quotes_async(
-            quotes_pending,
-            max_concurrency=config.max_concurrency,
-            on_progress=on_progress,
-        )
-
+        job.failed_symbols = sorted(set(failed))
+        if job.failed_symbols:
+            logger.warning(
+                "Securities refresh job %s could not refresh %d symbols: %s",
+                job_id,
+                len(job.failed_symbols),
+                job.failed_symbols,
+            )
         job.status = "success"
         logger.debug("Securities refresh job %s completed successfully", job_id)
 
@@ -415,4 +428,5 @@ def get_refresh_job(job_id: str):
         work_completed=work_completed,
         progress_percent=int(progress_percent),
         progress_ratio=progress_ratio,
+        failed_symbols=job.failed_symbols,
     )
