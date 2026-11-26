@@ -5,6 +5,11 @@ import numpy as np
 import pandas as pd
 
 from backend.domain.constants import (
+    EMA_LONG_SPAN,
+    MACD_FAST,
+    MACD_SIGNAL,
+    MACD_SLOW,
+    RSI_SIGNAL_WINDOW,
     HYP_GROWTH_START,
     MIN_RETURN_OBS,
     NEAR_HIGH_LOW_PCT,
@@ -50,14 +55,14 @@ def compute_portfolio_timeseries_indicators(
     assert close_matrix is not None
 
     daily = close_matrix.pct_change(fill_method=None)
-    ema12 = close_matrix.ewm(span=12, adjust=False).mean()
-    ema26 = close_matrix.ewm(span=26, adjust=False).mean()
-    ema100 = close_matrix.ewm(span=100, adjust=False).mean()
+    ema12 = close_matrix.ewm(span=MACD_FAST, adjust=False).mean()
+    ema26 = close_matrix.ewm(span=MACD_SLOW, adjust=False).mean()
+    ema100 = close_matrix.ewm(span=EMA_LONG_SPAN, adjust=False).mean()
     macd_12_26 = ema12 - ema26
-    macd_signal_9 = macd_12_26.ewm(span=9, adjust=False).mean()
+    macd_signal_9 = macd_12_26.ewm(span=MACD_SIGNAL, adjust=False).mean()
     macd_histogram = macd_12_26 - macd_signal_9
     rsi = _calc_rsi(close_matrix, RSI_WINDOW)
-    rsi_signal_5 = rsi.rolling(window=5).mean()
+    rsi_signal_5 = rsi.rolling(window=RSI_SIGNAL_WINDOW).mean()
     close_norm = close_matrix / close_matrix.iloc[0] * HYP_GROWTH_START
 
     out = []
@@ -91,14 +96,14 @@ def compute_timeseries_indicators(df: pd.DataFrame) -> pd.DataFrame:
     close: pd.Series = df["close"].tail(TRADING_DAYS)
 
     daily_return = close.pct_change(fill_method=None)
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-    ema100 = close.ewm(span=100, adjust=False).mean()
+    ema12 = close.ewm(span=MACD_FAST, adjust=False).mean()
+    ema26 = close.ewm(span=MACD_SLOW, adjust=False).mean()
+    ema100 = close.ewm(span=EMA_LONG_SPAN, adjust=False).mean()
     macd_12_26 = ema12 - ema26
-    macd_signal_9 = macd_12_26.ewm(span=9, adjust=False).mean()
+    macd_signal_9 = macd_12_26.ewm(span=MACD_SIGNAL, adjust=False).mean()
     macd_histogram = macd_12_26 - macd_signal_9
     rsi = _calc_rsi(close, RSI_WINDOW)
-    rsi_signal_5 = rsi.rolling(window=5).mean()
+    rsi_signal_5 = rsi.rolling(window=RSI_SIGNAL_WINDOW).mean()
     close_norm = close / close.iloc[0] * HYP_GROWTH_START
 
     out = pd.DataFrame(
@@ -396,7 +401,7 @@ def compute_performance_metrics_batch(
     return out
 
 
-def _calc_rsi(close: pd.Series, period: int = 14) -> pd.Series:
+def _calc_rsi(close: pd.Series, period: int = RSI_WINDOW) -> pd.Series:
     """
     Calculate the Relative Strength Index (RSI) from a daily return series.
     """

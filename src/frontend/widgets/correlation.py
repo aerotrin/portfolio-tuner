@@ -4,11 +4,12 @@ import plotly.express as px
 import streamlit as st
 
 from frontend.shared.dataframe import compute_correlation_matrix
-from frontend.shared.settings import MIN_RETURN_OBS
+from frontend.shared.constants import MIN_RETURN_OBS, TRADING_DAYS_PER_YEAR
+from frontend.settings import CORRELATION_COLOR_SCALE, CORRELATION_TOP_PAIRS
 
 
 def _top_corr_pairs(
-    corr: pd.DataFrame, n: int = 3
+    corr: pd.DataFrame, n: int = CORRELATION_TOP_PAIRS
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     # keep only upper triangle (exclude diagonal)
     upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
@@ -78,7 +79,7 @@ def render_correlation_matrix(
                 y=matrix.index,
                 zmin=-1,
                 zmax=1,
-                color_continuous_scale="RdYlGn_r",
+                color_continuous_scale=CORRELATION_COLOR_SCALE,
                 aspect="auto",
                 # text_auto=True,
             )
@@ -145,6 +146,6 @@ def render_market_correlation(closes: pd.DataFrame, symbols: list[str]) -> None:
 
     render_correlation_matrix(matrix, excluded)
     st.caption(
-        "Daily-return correlation, trailing 252 trading days. "
+        f"Daily-return correlation, trailing {TRADING_DAYS_PER_YEAR} trading days. "
         "Scope follows the Performance tab's group filter and row selection."
     )

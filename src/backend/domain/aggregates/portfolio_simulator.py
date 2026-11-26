@@ -11,13 +11,13 @@ from backend.domain.analytics.security import (
     compute_portfolio_timeseries_indicators,
     count_return_observations,
 )
-from backend.domain.constants import MIN_RETURN_OBS
+from backend.domain.constants import MIN_RETURN_OBS, NUM_PORTFOLIOS
 from backend.domain.entities.security import GlobalRates
 
 
 class SimulatePortfolioRequest(BaseModel):
     symbols: List[str]
-    n_p: int = Field(default=5000, ge=1, le=5000)
+    n_p: int = Field(default=NUM_PORTFOLIOS, ge=1, le=NUM_PORTFOLIOS)
     seed: int | None = None
 
 

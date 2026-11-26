@@ -8,9 +8,19 @@ import requests
 import streamlit as st
 
 from frontend.services.streamlit_data import get_api_client
-from frontend.shared.settings import (
-    MIN_RETURN_OBS,
+from frontend.settings import (
+    BENCHMARK_COLOR,
     HEIGHT_EFFICIENT_FRONTIER_CHART,
+    MAX_OPTIMIZER_SYMBOLS,
+    OPTIMIZER_PORTFOLIOS_DEFAULT,
+    OPTIMIZER_PORTFOLIOS_MIN,
+    OPTIMIZER_PORTFOLIOS_STEP,
+    WARN_OPTIMIZER_SYMBOLS,
+)
+from frontend.shared.constants import (
+    MIN_RETURN_OBS,
+    OPTIMIZER_PORTFOLIOS_MAX,
+    PERIOD_SHARPE_WINDOWS,
     TRADING_DAYS_PER_YEAR,
 )
 
@@ -111,11 +121,6 @@ ALL_METRIC_CONFIG: dict[str, dict[str, Any]] = {
 # Dirichlet weight sampling over many assets produces near-uniform weights, so
 # simulated portfolios cluster together and the frontier loses meaning. The
 # response payload also grows with n_p × symbols.
-WARN_OPTIMIZER_SYMBOLS = 25
-MAX_OPTIMIZER_SYMBOLS = 50
-
-# Trailing windows (trading days) for frontend-derived period Sharpe ratios.
-PERIOD_SHARPE_WINDOWS = {"1M": 21, "3M": 63}
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +272,7 @@ def _build_frontier_chart(
     """
     theme = st.context.theme.type
     base_color = "white" if theme == "dark" else "black"
-    benchmark_color = "magenta"
+    benchmark_color = BENCHMARK_COLOR
 
     scale = (horizon_days / TRADING_DAYS_PER_YEAR) ** 0.5
     rf_period = (1.0 + risk_free_rate) ** (horizon_days / TRADING_DAYS_PER_YEAR) - 1.0
@@ -590,10 +595,10 @@ def render_optimizer(
     with st.container(border=True):
         n_p: int = st.slider(
             "Select number of iterations",
-            min_value=1000,
-            max_value=5000,
-            step=500,
-            value=2500,
+            min_value=OPTIMIZER_PORTFOLIOS_MIN,
+            max_value=OPTIMIZER_PORTFOLIOS_MAX,
+            step=OPTIMIZER_PORTFOLIOS_STEP,
+            value=OPTIMIZER_PORTFOLIOS_DEFAULT,
             key=f"optimizer-{context_id}-n-p-slider",
         )
 

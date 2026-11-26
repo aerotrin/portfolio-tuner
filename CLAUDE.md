@@ -105,7 +105,8 @@ This is a **Hexagonal Architecture (Ports & Adapters)** Python monorepo managed 
 - `pages/` — Streamlit multi-page app (auto-discovered)
 - `services/streamlit_data.py` — `@st.cache_data`-wrapped API loaders
 - `widgets/` — UI rendering components (one per concept: kpis, positions, optimizer, filters, etc.)
-- `shared/` — config, dataframe helpers, symbol loading from `symbols.yml`
+- `settings.py` — user-tunable display settings (colours, limits, sizes, defaults); new tunables go here, not in widgets
+- `shared/` — config, dataframe helpers, symbol loading from `symbols.yml`; `shared/constants.py` holds copies of backend values and internals (kept equal to the backend by `tests/test_settings_sync.py`)
 
 ### Database
 

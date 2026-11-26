@@ -1,23 +1,25 @@
 from datetime import datetime
-from typing import Final, Literal
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import humanize
 import pandas as pd
 from tzlocal import get_localzone
+from frontend.settings import (
+    REFRESH_BADGE_FRESH_COLOR,
+    REFRESH_BADGE_STALE_COLOR,
+    REFRESH_STALE_MINUTES,
+)
 
 UTC = ZoneInfo("UTC")
 M_TO_SEC = 60
-MINS_STALE = 60
-COLOR_FRESH: Final = "blue"
-COLOR_STALE: Final = "yellow"
 
 
 def humanize_timestamp(
     time_in: str | datetime | pd.Timestamp | None,
 ) -> tuple[str, int, Literal["blue", "yellow"]]:
     if time_in is None or time_in is pd.NaT:
-        return "N/A", -1, COLOR_STALE
+        return "N/A", -1, REFRESH_BADGE_STALE_COLOR
 
     # Parse / normalize to aware UTC datetime
     if isinstance(time_in, str):
@@ -48,10 +50,10 @@ def humanize_timestamp(
     stale_mins = int((now_utc - time_in_dt).total_seconds() / M_TO_SEC)
     natural_timestamp = humanize.naturaltime(time_in_dt)
 
-    if stale_mins < MINS_STALE:
-        color = COLOR_FRESH
+    if stale_mins < REFRESH_STALE_MINUTES:
+        color = REFRESH_BADGE_FRESH_COLOR
     else:
-        color = COLOR_STALE
+        color = REFRESH_BADGE_STALE_COLOR
 
     return natural_timestamp, stale_mins, color
 

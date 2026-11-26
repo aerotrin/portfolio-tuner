@@ -6,7 +6,8 @@ import pandas as pd
 
 from frontend.services.streamlit_data import PortfolioData, SecurityData
 from frontend.shared.accounts import FIXED_INCOME
-from frontend.shared.settings import MIN_RETURN_OBS, TRADING_DAYS_PER_YEAR
+from frontend.shared.constants import MIN_RETURN_OBS, TRADING_DAYS_PER_YEAR
+from frontend.settings import RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_TREND
 
 
 def make_scalar_wide_df(data: dict[str, Any]) -> pd.DataFrame:
@@ -110,7 +111,7 @@ def add_last_indicators(df: pd.DataFrame, indicators: pd.DataFrame) -> pd.DataFr
 def add_trade_signal(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     macd_pos = df["macd_histogram"] > 0
-    rsi_pos = df["rsi"] > 50
+    rsi_pos = df["rsi"] > RSI_TREND
     rsi_up = df["rsi_slope"] > 0
 
     df["signal"] = np.select(
@@ -120,7 +121,7 @@ def add_trade_signal(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     df["signal"] += np.select(
-        [df["rsi"] > 70, df["rsi"] < 30],
+        [df["rsi"] > RSI_OVERBOUGHT, df["rsi"] < RSI_OVERSOLD],
         ["⚠", "▽"],
         default="",
     )

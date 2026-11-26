@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from frontend.shared.settings import GREEN, RED
+from frontend.settings import GREEN, RED
 from frontend.shared.styles import (
     PERFORMANCE_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,

@@ -2,6 +2,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from frontend.settings import BENCHMARK_COLOR
 
 
 def render_growth_chart(*args: pd.DataFrame) -> go.Figure:
@@ -13,7 +14,7 @@ def render_growth_chart(*args: pd.DataFrame) -> go.Figure:
     # Detect Streamlit theme (dark/light)
     theme = st.context.theme.type
     base_color = "white" if theme == "dark" else "black"
-    benchmark_color = "magenta"
+    benchmark_color = BENCHMARK_COLOR
 
     fig = px.line(
         df,

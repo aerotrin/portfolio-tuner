@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.settings import HEIGHT_RISK_RETURN_CHART, TRADING_DAYS_PER_YEAR
+from frontend.settings import BENCHMARK_COLOR, HEIGHT_RISK_RETURN_CHART
+from frontend.shared.constants import TRADING_DAYS_PER_YEAR
 
 
 def render_risk_chart(
@@ -22,7 +23,7 @@ def render_risk_chart(
     # ----------------------------
     theme = st.context.theme.type
     base_color = "white" if theme == "dark" else "black"
-    benchmark_color = "magenta"
+    benchmark_color = BENCHMARK_COLOR
 
     n = horizon_trading_days  # use horizon_days for calendar days
 

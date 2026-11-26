@@ -120,6 +120,17 @@ The market research pages and benchmark lists are driven by `symbols.yml` in the
 
 ---
 
+### Where to Change Things
+
+| Where | What it holds |
+|---|---|
+| `.env` | Secrets, URLs and per-machine tuning: provider rate limits, days of price history kept, refresh intervals |
+| `src/frontend/settings.py` | How the app looks and what it defaults to: colours, row-highlight limits, treemap colour ranges, chart sizes, price chart defaults, optimizer limits. Change freely |
+| `src/frontend/shared/styles.py` | Table columns: order, labels and number formats |
+| `src/backend/domain/constants.py` | How numbers are computed: indicator periods, return windows, thresholds. Changing these changes results |
+| `src/frontend/shared/constants.py` | Frontend copies of backend values (for labels and input limits) and other internals. Not meant to be changed alone; `tests/test_settings_sync.py` fails when a copy differs from the backend |
+| `symbols.yml` | Which symbols appear on the research pages, benchmarks and the snapshot row |
+
 ## Project Structure
 
 ```

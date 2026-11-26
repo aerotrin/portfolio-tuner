@@ -6,12 +6,13 @@ history (e.g. a newly listed security), so the formatters must not raise.
 
 import pytest
 
-from frontend.widgets.performance import MISSING_STAT, _fmt_stat, _fmt_stat_delta
+from frontend.shared.constants import MISSING_VALUE
+from frontend.widgets.performance import _fmt_stat, _fmt_stat_delta
 
 
 @pytest.mark.parametrize("missing", [None, float("nan")])
 def test_fmt_stat_missing_value_renders_dash(missing):
-    assert _fmt_stat(missing, ".1%") == MISSING_STAT
+    assert _fmt_stat(missing, ".1%") == MISSING_VALUE
 
 
 def test_fmt_stat_formats_present_value():

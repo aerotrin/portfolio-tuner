@@ -3,7 +3,7 @@ from typing import Any, NamedTuple, Sequence
 import pandas as pd
 import plotly.graph_objects as go
 
-from frontend.shared.settings import (
+from frontend.settings import (
     CHART_CATEGORICAL_DARK,
     CHART_CATEGORICAL_LIGHT,
     CHART_OTHER_COLOR,
@@ -11,7 +11,11 @@ from frontend.shared.settings import (
     HEIGHT_PRICE_CHART_GAP,
     HEIGHT_PRICE_CHART_PANELS,
     RED,
+    RSI_OVERBOUGHT,
+    RSI_OVERSOLD,
+    RSI_TREND,
 )
+from frontend.shared.constants import BOLLINGER_LABEL, MACD_LABEL, RSI_LABEL
 
 PANEL_PRICE = "price"
 PANEL_VOLUME = "volume"
@@ -20,8 +24,8 @@ PANEL_MACD = "macd"
 PANEL_ORDER = (PANEL_PRICE, PANEL_VOLUME, PANEL_RSI, PANEL_MACD)
 PANEL_LABELS = {
     PANEL_VOLUME: "Volume",
-    PANEL_RSI: "RSI 14",
-    PANEL_MACD: "MACD (12, 26, 9)",
+    PANEL_RSI: RSI_LABEL,
+    PANEL_MACD: MACD_LABEL,
 }
 
 CHART_CANDLES = "candles"
@@ -43,7 +47,6 @@ SERIES_COLUMNS = (
 )
 MARGIN_TOP = 36
 MARGIN_BOTTOM = 28
-RSI_BAND = (30, 70)
 
 
 class Panel(NamedTuple):
@@ -192,7 +195,7 @@ def build_price_chart_figure(
             go.Scatter(
                 x=x,
                 y=df["bb_lower"],
-                name="Bollinger (20, 2)",
+                name=BOLLINGER_LABEL,
                 mode="lines",
                 line=band,
                 fill="tonexty",
@@ -286,7 +289,7 @@ def build_price_chart_figure(
             go.Scatter(
                 x=x,
                 y=df["rsi"],
-                name="RSI 14",
+                name=RSI_LABEL,
                 mode="lines",
                 line=dict(color=palette[6], width=1.2),
                 yaxis=axes[PANEL_RSI],
@@ -300,8 +303,8 @@ def build_price_chart_figure(
                 yref=axes[PANEL_RSI],
                 x0=0,
                 x1=1,
-                y0=RSI_BAND[0],
-                y1=RSI_BAND[1],
+                y0=RSI_OVERSOLD,
+                y1=RSI_OVERBOUGHT,
                 fillcolor="rgba(128,128,128,0.12)",
                 line=dict(width=0),
                 layer="below",
@@ -355,7 +358,11 @@ def build_price_chart_figure(
         elif panel.name == PANEL_VOLUME:
             axis.update(hoverformat=".3s", tickformat=".2s", nticks=3)
         elif panel.name == PANEL_RSI:
-            axis.update(range=[0, 100], tickvals=[30, 50, 70], hoverformat=".1f")
+            axis.update(
+                range=[0, 100],
+                tickvals=[RSI_OVERSOLD, RSI_TREND, RSI_OVERBOUGHT],
+                hoverformat=".1f",
+            )
         elif panel.name == PANEL_MACD:
             axis.update(hoverformat=".2f", nticks=4)
         axis_layout[panel.layout_key] = axis

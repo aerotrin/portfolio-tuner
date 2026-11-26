@@ -29,6 +29,8 @@ from frontend.widgets.fixed_income_form import (
 )
 from frontend.widgets.price_chart import render_open_price_chart
 from frontend.widgets.transaction_form import transaction_form
+from frontend.settings import PAGE_MAX_WIDTH
+from frontend.shared.constants import DEFAULT_LOOKBACK_DAYS
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -59,7 +61,7 @@ def apply_compact_css() -> None:
                 padding-bottom: 2rem;
                 padding-left: 2rem;
                 padding-right: 2rem;
-                max-width: 1200px;
+                max-width: PAGE_MAX_WIDTH_PX;
             }
 
             div[data-testid="stMetricLabel"] {
@@ -88,7 +90,7 @@ def apply_compact_css() -> None:
                 margin-top: 0.4rem;
             }
         </style>
-        """,
+        """.replace("PAGE_MAX_WIDTH_PX", f"{PAGE_MAX_WIDTH}px"),
         unsafe_allow_html=True,
     )
 
@@ -196,9 +198,9 @@ def bootstrap_once() -> None:
     # --- Date range defaults (only if missing) ---
     if "start_date" not in st.session_state or "end_date" not in st.session_state:
         now = datetime.now()
-        st.session_state["start_date"] = (now - timedelta(days=365)).strftime(
-            "%Y-%m-%d"
-        )
+        st.session_state["start_date"] = (
+            now - timedelta(days=DEFAULT_LOOKBACK_DAYS)
+        ).strftime("%Y-%m-%d")
         st.session_state["end_date"] = now.strftime("%Y-%m-%d")
 
     # --- Load symbols config once and derive symbol sets once ---

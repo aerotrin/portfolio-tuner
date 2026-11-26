@@ -5,16 +5,18 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.settings import (
+from frontend.settings import (
     ALLOCATION_TOP_HOLDINGS,
     CHART_CATEGORICAL_DARK,
     CHART_CATEGORICAL_LIGHT,
     CHART_OTHER_COLOR,
     DONUT_CASH_COLOR,
+    HEIGHT_ALLOCATION_BAR_ROW,
     HEIGHT_ALLOCATION_CHART,
-    MASKED_VALUE,
+    HEIGHT_BREAKDOWN_DONUT,
     TRADE_SIZING_GUIDE,
 )
+from frontend.shared.constants import MASKED_VALUE
 
 CASH_LABEL = "Cash"
 OTHER_LABEL = "Other"
@@ -27,8 +29,6 @@ DIMENSION_LABELS = {
     "account": "Account",
 }
 RISK_MEASURES = ["Weight", "Risk share"]
-BAR_ROW_HEIGHT = 24
-HEIGHT_BREAKDOWN_DONUT = 240
 
 
 def _palette(dark: bool) -> list[str]:
@@ -249,7 +249,7 @@ def _build_ranked_bar(df: pd.DataFrame, dark: bool, hide_balances: bool) -> alt.
         align="left", dx=4, color="white" if dark else "black"
     ).encode(text=alt.Text("weight:Q", format=".1%"))
     return (bars + text).properties(
-        height=max(HEIGHT_ALLOCATION_CHART, BAR_ROW_HEIGHT * len(df))
+        height=max(HEIGHT_ALLOCATION_CHART, HEIGHT_ALLOCATION_BAR_ROW * len(df))
     )
 
 

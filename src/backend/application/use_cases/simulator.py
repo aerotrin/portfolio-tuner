@@ -4,6 +4,7 @@ from typing import Any, List
 
 from backend.application.use_cases.market_data import MarketDataManager
 from backend.domain.aggregates.portfolio_simulator import SimPortfolios
+from backend.domain.constants import NUM_PORTFOLIOS
 
 
 class PortfolioSimulatorManager:
@@ -18,7 +19,7 @@ class PortfolioSimulatorManager:
     async def _build_sim_portfolios(
         self,
         symbols: List[str],
-        n_p: int = 5000,
+        n_p: int = NUM_PORTFOLIOS,
         seed: int | None = None,
     ) -> SimPortfolios:
         rates = await asyncio.to_thread(self.market_man.read_global_rates)
@@ -33,7 +34,7 @@ class PortfolioSimulatorManager:
     async def get_optimal_portfolio(
         self,
         symbols: List[str],
-        n_p: int = 5000,
+        n_p: int = NUM_PORTFOLIOS,
         seed: int | None = None,
     ) -> tuple[list[dict[str, Any]], datetime, list[str]]:
         """Returns the optimal portfolio, the run time, and the symbols left
@@ -47,7 +48,7 @@ class PortfolioSimulatorManager:
     async def get_all_portfolios(
         self,
         symbols: List[str],
-        n_p: int = 5000,
+        n_p: int = NUM_PORTFOLIOS,
         seed: int | None = None,
     ) -> tuple[list[dict[str, Any]], datetime, list[str]]:
         simulations = await self._build_sim_portfolios(symbols, n_p, seed=seed)

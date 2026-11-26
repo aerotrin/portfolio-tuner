@@ -2,25 +2,33 @@ import pandas as pd
 from pandas.io.formats.style import Styler
 import streamlit as st
 
-from frontend.shared.settings import (
+from frontend.settings import (
     GREEN,
     GREEN_BG,
     LINK_COLOR,
     LOSS_LIMIT,
-    NO_STYLE,
     RED,
     RED_BG,
+    RSI_OVERBOUGHT,
+    RSI_OVERSOLD,
+    RSI_TREND,
     SPARKLINE_WIDTH,
     TAKE_PROFIT_LIMIT,
 )
+from frontend.shared.constants import (
+    DAY_CHANGE_HELP,
+    MISSING_VALUE,
+    NO_STYLE,
+    REL_VOLUME_HELP,
+)
 
 SIGNAL_HELP = (
-    "●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > 50 + up trend | "
-    "⚠ = RSI > 70 (overbought) | ▽ = RSI < 30 (oversold)"
+    f"●●● = Strong | ●●○ = MACD > 0 | ●○○ = RSI > {RSI_TREND} + up trend | "
+    f"⚠ = RSI > {RSI_OVERBOUGHT} (overbought) | ▽ = RSI < {RSI_OVERSOLD} (oversold)"
 )
 
 PRICE_HELP = "In the security's own currency; green or red by today's move."
-DAY_HELP = "Change since the previous close."
+DAY_HELP = f"{DAY_CHANGE_HELP}."
 
 # Columns that reveal account size — dropped from tables when Hide Balances is on
 BALANCE_COLUMNS = (
@@ -88,7 +96,7 @@ QUOTE_TABLE_CONFIG = {
     "rsi": st.column_config.NumberColumn("RSI", format="%.0f"),
     "volume": st.column_config.NumberColumn("Volume", format="compact"),
     "relative_volume": st.column_config.NumberColumn(
-        "Rel Vol", format="%.1f×", help="Today's volume ÷ 20-day average volume"
+        "Rel Vol", format="%.1f×", help=REL_VOLUME_HELP
     ),
     "dollar_volume": st.column_config.NumberColumn(
         "$ Vol",
@@ -125,9 +133,9 @@ def quote_table_styler(df: pd.DataFrame) -> Styler:
         # RSI coloring
         rsi = row.get("rsi")
         if "rsi" in style.index and not pd.isna(rsi):
-            if rsi > 70:
+            if rsi > RSI_OVERBOUGHT:
                 style["rsi"] = f"color: {RED};"
-            elif rsi < 30:
+            elif rsi < RSI_OVERSOLD:
                 style["rsi"] = f"color: {GREEN};"
 
         if "close" in style.index and "change_percent" in style.index:
@@ -149,7 +157,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "change_percent": st.column_config.NumberColumn("Day", help=DAY_HELP),
     "signal": st.column_config.TextColumn("Signal", help=SIGNAL_HELP),
     "relative_volume": st.column_config.NumberColumn(
-        "Rel Vol", format="%.1f×", help="Today's volume ÷ 20-day average volume"
+        "Rel Vol", format="%.1f×", help=REL_VOLUME_HELP
     ),
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
@@ -267,7 +275,7 @@ def _day_change_text(value: float) -> str:
     """0.0414 -> "▲ 4.14%", -0.0414 -> "▼ 4.14%"; a dash before any change
     is published (premarket)."""
     if pd.isna(value):
-        return "—"
+        return MISSING_VALUE
     arrow = "▲ " if value > 0 else "▼ " if value < 0 else ""
     return f"{arrow}{abs(value):.2%}"
 
@@ -418,9 +426,9 @@ def performance_table_styler(df: pd.DataFrame) -> Styler:
         # RSI coloring
         rsi = row["rsi"]
         if not pd.isna(rsi):
-            if rsi > 70:
+            if rsi > RSI_OVERBOUGHT:
                 style["rsi"] = f"{row_bg} color: {RED}".strip()
-            elif rsi < 30:
+            elif rsi < RSI_OVERSOLD:
                 style["rsi"] = f"{row_bg} color: {GREEN}".strip()
             else:
                 style["rsi"] = row_bg

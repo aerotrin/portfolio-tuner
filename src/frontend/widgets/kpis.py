@@ -6,14 +6,14 @@ import streamlit as st
 
 from frontend.shared.accounts import FIXED_INCOME
 from frontend.shared.jobs import render_auto_refresh_toggle
-from frontend.shared.settings import (
+from frontend.settings import (
     DONUT_CASH_COLOR,
     DONUT_SECURITIES_COLOR,
     HEIGHT_ACCOUNT_DONUT,
     HEIGHT_MARKET_SNAPSHOT,
-    MASKED_VALUE,
     SNAPSHOT_DISPLAY_NAMES,
 )
+from frontend.shared.constants import MASKED_VALUE
 from frontend.shared.time import format_clock, humanize_timestamp, local_now
 
 

@@ -4,7 +4,7 @@ import pytest
 
 from frontend.services.streamlit_data import PortfolioData, SecurityData
 from frontend.shared.dataframe import build_holdings_view, compute_correlation_matrix
-from frontend.shared.settings import TRADING_DAYS_PER_YEAR
+from frontend.shared.constants import TRADING_DAYS_PER_YEAR
 
 
 def _closes(data: dict[str, list[float]], periods: int) -> pd.DataFrame:

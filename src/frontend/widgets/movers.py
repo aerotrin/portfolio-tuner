@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from frontend.shared.settings import MOVER_SHOW_COUNT
+from frontend.settings import MOVER_SHOW_COUNT
 from frontend.shared.styles import (
     QUOTE_TABLE_CONFIG,
     quote_table_styler,

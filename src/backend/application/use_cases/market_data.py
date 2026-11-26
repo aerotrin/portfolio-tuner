@@ -137,7 +137,9 @@ class MarketDataManager:
         today = datetime.now(tz=timezone.utc).date()
         yesterday = today - timedelta(days=1)
         effective_end = yesterday
-        fetch_start_fallback = start_date or (today - timedelta(days=365))
+        fetch_start_fallback = start_date or (
+            today - timedelta(days=ANALYTICS_LOOKBACK_DAYS)
+        )
         sync_states = self.db.read_bars_sync_states(symbols)
 
         def checked_today(state: BarsSyncState) -> bool:

@@ -8,7 +8,7 @@ from frontend.services.streamlit_data import (
 )
 from frontend.shared.accounts import market_priced_symbols
 from frontend.shared.dto import Currency, TransactionCreate, TransactionKind
-from frontend.shared.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
+from frontend.settings import DEFAULT_TRADING_FEE, TRADE_SIZING_GUIDE
 
 
 def _load_account_form_data(

@@ -10,6 +10,7 @@ from backend.domain.analytics.security import (
     compute_dollar_volume,
     compute_volume_metrics,
 )
+from backend.domain.constants import TRADING_DAYS
 from backend.domain.entities.security import (
     Bar,
     GlobalRates,
@@ -61,7 +62,7 @@ class Security:
             bars_df = bars_df.drop_duplicates(subset="date", keep="last")
             bars_df = (
                 bars_df.sort_values(by="date", ascending=True)
-                .tail(252)
+                .tail(TRADING_DAYS)
                 .set_index("date")
             )
 

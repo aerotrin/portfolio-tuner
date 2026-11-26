@@ -1,4 +1,4 @@
-from frontend.shared.settings import LOSS_LIMIT, TAKE_PROFIT_LIMIT
+from frontend.settings import LOSS_LIMIT, TAKE_PROFIT_LIMIT
 from frontend.widgets.positions import holdings_shading_key
 from frontend.widgets.treemaps import format_cap
 

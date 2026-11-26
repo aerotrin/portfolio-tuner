@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from frontend.shared.settings import (
+from frontend.settings import (
     CHART_CATEGORICAL_LIGHT,
     CHART_OTHER_COLOR,
     DONUT_CASH_COLOR,

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from frontend.shared.settings import HEIGHT_PRICE_CHART_PANELS
+from frontend.settings import HEIGHT_PRICE_CHART_PANELS
 from frontend.widgets.price_chart import (
     parse_ma_periods,
     resolve_symbol_click,

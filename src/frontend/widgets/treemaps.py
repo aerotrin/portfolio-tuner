@@ -4,23 +4,23 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from frontend.shared.accounts import FIXED_INCOME
-from frontend.shared.settings import HEIGHT_TREEMAP, MASKED_VALUE
+from frontend.settings import (
+    AGE_DOT_BUCKETS,
+    CHANGE_COLOR_MAX,
+    CHANGE_COLOR_SCALE,
+    HEIGHT_TREEMAP,
+    REL_VOLUME_COLOR_MAX,
+    REL_VOLUME_COLOR_SCALE,
+    TOTAL_RETURN_COLOR_MAX,
+    TREEMAP_TILES_PER_ROW,
+)
+from frontend.shared.constants import MASKED_VALUE, REL_VOLUME_WINDOW
 from frontend.shared.time import humanize_timestamp
 
 COLOR_CHANGE = "change_percent"
 COLOR_REL_VOLUME = "relative_volume"
-REL_VOLUME_COLOR_MAX = 3.0
-# Change colours saturate at a fixed move, so one outlier cannot wash out the
-# map and a shade means the same move every day.
-CHANGE_COLOR_MAX = 0.04
-TOTAL_RETURN_COLOR_MAX = 0.25
-CHANGE_COLOR_NEUTRAL = "#ECEFF1"
-# Red and green differ in lightness so they stay apart under red-green colour
-# blindness; tiles also print the signed change, so colour is never the only cue
-CHANGE_COLOR_SCALE = ["#D32F2F", CHANGE_COLOR_NEUTRAL, "#15803D"]
 
 
-AGE_DOT_BUCKETS = (30, 90, 180, 365)
 AGE_DOT_FILLED = "●"
 AGE_DOT_EMPTY = "○"
 
@@ -82,7 +82,7 @@ def intraday_map_key() -> str:
         f"down or up {cap} or more today; light grey is flat. Fixed income has "
         "no intraday price, so it stays grey.\n\n"
         "**Volume:** `Vol. 1.2M · 1.5×` is shares traded today, then today's "
-        "volume as a multiple of the 20-day average (1.5× = half again as busy "
+        f"volume as a multiple of the {REL_VOLUME_WINDOW}-day average (1.5× = half again as busy "
         "as usual). The multiple reads low early in the session."
     )
 
@@ -113,7 +113,10 @@ def compact_number(value: float) -> str:
 
 
 def _size_treemap(
-    elements: int, per_row: int = 12, row_px: int = HEIGHT_TREEMAP, base_px: int = 0
+    elements: int,
+    per_row: int = TREEMAP_TILES_PER_ROW,
+    row_px: int = HEIGHT_TREEMAP,
+    base_px: int = 0,
 ) -> int:
     """Dynamically adjust height based on number of elements."""
     rows = (elements + per_row - 1) // per_row
@@ -286,7 +289,7 @@ def render_treemap_intraday(
         # No traded volume (indices, FX) sits at the quiet end of the scale
         df["_color"] = rel_volume.fillna(0.0).clip(upper=REL_VOLUME_COLOR_MAX)
         base_config["color"] = "_color"
-        base_config["color_continuous_scale"] = "Blues"
+        base_config["color_continuous_scale"] = REL_VOLUME_COLOR_SCALE
         base_config["range_color"] = (0, REL_VOLUME_COLOR_MAX)
     else:
         base_config.update(_diverging_color("change_percent", CHANGE_COLOR_MAX))

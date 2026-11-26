@@ -8,13 +8,15 @@ from streamlit_autorefresh import st_autorefresh
 
 from frontend.services.streamlit_data import get_api_client
 from frontend.shared.env_loader import config
+from frontend.settings import (
+    AUTO_REFRESH_TICK_SEC,
+    FAILED_SYMBOLS_SHOWN,
+    REFRESH_POLL_SEC,
+)
 
 logger = logging.getLogger(__name__)
 
 ALL_DATA_PAGES = ["market_etf", "market_stock", "portfolio"]
-
-
-FAILED_SYMBOLS_SHOWN = 5
 
 
 def failed_symbols_message(failed: list[str]) -> str:
@@ -277,8 +279,6 @@ def check_job_status() -> None:
         st.rerun()
 
 
-REFRESH_POLL_SEC = 1
-AUTO_REFRESH_TICK_SEC = 10
 REFRESH_PROGRESS_WIDTH = 170
 
 

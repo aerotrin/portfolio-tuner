@@ -701,7 +701,20 @@ The project uses `uv` as the package manager with a workspace layout: the root `
 
 ### Configuration
 
-All configuration is environment-variable-driven, loaded via Pydantic `BaseSettings`. The backend reads a shared `.env` file and ignores any frontend-specific variables. The frontend similarly reads the `.env` file but uses only its own subset. A single `.env` file serves both services without duplication.
+Settings live in a small number of places, split by who changes them and what a change affects:
+
+| Where | What it holds |
+|---|---|
+| `.env` | Secrets, URLs and per-machine tuning: provider rate limits, days of price history kept, refresh intervals |
+| `src/frontend/settings.py` | How the app looks and what it defaults to: colours, row-highlight limits, treemap colour ranges, chart sizes, price chart defaults, optimizer limits. Change freely |
+| `src/frontend/shared/styles.py` | Table columns: order, labels and number formats |
+| `src/backend/domain/constants.py` | How numbers are computed: indicator periods, return windows, thresholds. Changing these changes results |
+| `src/frontend/shared/constants.py` | Frontend copies of backend values (for labels and input limits) and other internals. Not meant to be changed alone; `tests/test_settings_sync.py` fails when a copy differs from the backend |
+| `symbols.yml` | Which symbols appear on the research pages, benchmarks and the snapshot row |
+
+The frontend never imports backend modules, so values both sides need (trading days, price chart ranges and moving-average limits, indicator periods shown in labels) are repeated in `frontend/shared/constants.py`. Labels such as "RSI 14" are built from those copies, and `tests/test_settings_sync.py` imports both sides and fails when they differ. New tunable display values go in `frontend/settings.py`; a widget keeps a constant of its own only when it is code, not a choice (option keys, internal labels).
+
+Deployment configuration is environment-variable-driven, loaded via Pydantic `BaseSettings`. The backend reads a shared `.env` file and ignores any frontend-specific variables. The frontend similarly reads the `.env` file but uses only its own subset. A single `.env` file serves both services without duplication.
 
 ---
 

@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from frontend.shared.symbols_loader import SymbolGroup
-from frontend.shared.settings import RETURN_HORIZONS
+from frontend.shared.constants import GROWTH_LABEL, MISSING_VALUE, RETURN_HORIZONS
 from frontend.shared.styles import (
     PERFORMANCE_TABLE_CONFIG,
     performance_table_styler,
@@ -13,12 +13,10 @@ from frontend.widgets.growth_chart import render_growth_chart
 from frontend.widgets.price_chart import symbol_click_kwargs, symbol_table_key
 from frontend.widgets.risk_chart import render_risk_chart
 
-MISSING_STAT = "—"
-
 
 def _fmt_stat(value: float | None, spec: str) -> str:
     """Format a metric, or a dash when it is missing (too little price history)."""
-    return MISSING_STAT if pd.isna(value) else format(value, spec)
+    return MISSING_VALUE if pd.isna(value) else format(value, spec)
 
 
 def _fmt_stat_delta(
@@ -135,7 +133,7 @@ def render_performance_view(
 
     h = st.columns(2)
     with h[0]:
-        st.markdown("##### :material/stacked_line_chart: Growth of $10,000")
+        st.markdown(f"##### :material/stacked_line_chart: {GROWTH_LABEL}")
 
     with h[1]:
         rh = st.columns([9, 1], vertical_alignment="center")

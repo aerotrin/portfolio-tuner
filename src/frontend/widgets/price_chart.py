@@ -19,13 +19,21 @@ from frontend.widgets.price_chart_figure import (
     slice_to_range,
 )
 from frontend.widgets.treemaps import compact_number
+from frontend.settings import PRICE_CHART_DEFAULTS, PRICE_CHART_MA_PERIOD_OPTIONS
+from frontend.shared.constants import (
+    DAY_CHANGE_HELP,
+    MISSING_VALUE,
+    PRICE_CHART_MA_MAX_COUNT,
+    PRICE_CHART_MA_MAX_PERIOD,
+    PRICE_CHART_MA_MIN_PERIOD,
+    PRICE_CHART_RANGES,
+)
 
 OPEN_KEY = "price_chart_open"
 PREFS_KEY = "price_chart_prefs"
 SYMBOL_KEY = "price_chart_symbol"
 SYMBOL_CLICK_COLUMNS = ("symbol",)
 
-RANGES = ("5D", "1M", "3M", "6M", "YTD", "1Y", "MAX")
 CHART_TYPES = {"Candles": CHART_CANDLES, "Line": CHART_LINE}
 SHOW_MA = "Moving averages"
 SHOW_BOLLINGER = "Bollinger bands"
@@ -36,21 +44,6 @@ SHOW_TAGS = "Price tags"
 SHOW_OPTIONS = (SHOW_MA, SHOW_BOLLINGER, SHOW_VOLUME, SHOW_RSI, SHOW_MACD, SHOW_TAGS)
 SHOW_PANELS = {SHOW_VOLUME: PANEL_VOLUME, SHOW_RSI: PANEL_RSI, SHOW_MACD: PANEL_MACD}
 MA_TYPES = ("SMA", "EMA")
-MA_PERIOD_OPTIONS = (10, 20, 50, 100, 200)
-MA_MIN_PERIOD = 2
-MA_MAX_PERIOD = 250
-MA_MAX_COUNT = 5
-MISSING = "—"
-
-# Widget state is dropped while the dialog is closed, so the choices live in
-# PREFS_KEY and seed the widgets each time it opens.
-DEFAULT_PREFS: dict[str, Any] = {
-    "range": "1Y",
-    "type": "Candles",
-    "show": [SHOW_MA, SHOW_VOLUME],
-    "ma_type": "SMA",
-    "ma_periods": [20, 50, 200],
-}
 
 
 def symbol_from_selection(
@@ -80,9 +73,9 @@ def parse_ma_periods(values: Sequence[Any]) -> tuple[int, ...]:
             period = int(str(value).strip())
         except ValueError:
             continue
-        if MA_MIN_PERIOD <= period <= MA_MAX_PERIOD:
+        if PRICE_CHART_MA_MIN_PERIOD <= period <= PRICE_CHART_MA_MAX_PERIOD:
             periods.add(period)
-    return tuple(sorted(periods)[:MA_MAX_COUNT])
+    return tuple(sorted(periods)[:PRICE_CHART_MA_MAX_COUNT])
 
 
 def symbol_table_key(base_key: str) -> str:
@@ -209,12 +202,12 @@ def _close_price_chart() -> None:
 
 
 def _fmt(value: float | None, spec: str) -> str:
-    return MISSING if value is None or pd.isna(value) else format(value, spec)
+    return MISSING_VALUE if value is None or pd.isna(value) else format(value, spec)
 
 
 def _compact(value: float | None) -> str:
     return (
-        MISSING
+        MISSING_VALUE
         if value is None or pd.isna(value) or not value
         else compact_number(value)
     )
@@ -252,7 +245,7 @@ def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]
                 if change_1d is None
                 else f"{change_1d:+,.2f} ({_fmt(pct_1d, '+.2%')})"
             ),
-            help="Change since the previous close",
+            help=DAY_CHANGE_HELP,
         )
         st.metric(
             f"{range_key} change",
@@ -278,7 +271,7 @@ def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]
     on_dismiss=_close_price_chart,
 )
 def _price_chart_dialog(symbols: list[str]) -> None:
-    prefs = st.session_state.setdefault(PREFS_KEY, dict(DEFAULT_PREFS))
+    prefs = st.session_state.setdefault(PREFS_KEY, dict(PRICE_CHART_DEFAULTS))
     if st.session_state.get(SYMBOL_KEY) not in symbols:
         st.session_state[SYMBOL_KEY] = symbols[0]
     if any(key not in st.session_state for key in PREF_WIDGET_KEYS.values()):
@@ -287,7 +280,11 @@ def _price_chart_dialog(symbols: list[str]) -> None:
     with st.container(horizontal=True, vertical_alignment="bottom"):
         symbol = st.selectbox("Symbol", symbols, key=SYMBOL_KEY, width=200)
         range_key = st.segmented_control(
-            "Range", RANGES, key="price_chart_range", required=True, width="content"
+            "Range",
+            PRICE_CHART_RANGES,
+            key="price_chart_range",
+            required=True,
+            width="content",
         )
     with st.container(horizontal=True, vertical_alignment="bottom"):
         chart_type = st.segmented_control(
@@ -313,12 +310,13 @@ def _price_chart_dialog(symbols: list[str]) -> None:
             )
             raw_periods = st.multiselect(
                 "Periods (days)",
-                MA_PERIOD_OPTIONS,
+                PRICE_CHART_MA_PERIOD_OPTIONS,
                 key="price_chart_ma_periods",
                 accept_new_options=True,
-                max_selections=MA_MAX_COUNT,
-                help=f"Up to {MA_MAX_COUNT} periods between {MA_MIN_PERIOD} and "
-                f"{MA_MAX_PERIOD} days. Type a number to add your own.",
+                max_selections=PRICE_CHART_MA_MAX_COUNT,
+                help=f"Up to {PRICE_CHART_MA_MAX_COUNT} periods between "
+                f"{PRICE_CHART_MA_MIN_PERIOD} and {PRICE_CHART_MA_MAX_PERIOD} days. "
+                "Type a number to add your own.",
             )
     periods = parse_ma_periods(raw_periods)
     prefs.update(
@@ -384,6 +382,8 @@ def render_open_price_chart() -> None:
     if not request or not request.get("symbols"):
         return
     if not request.get("seeded"):
-        _seed_widgets(st.session_state.setdefault(PREFS_KEY, dict(DEFAULT_PREFS)))
+        _seed_widgets(
+            st.session_state.setdefault(PREFS_KEY, dict(PRICE_CHART_DEFAULTS))
+        )
         request["seeded"] = True
     _price_chart_dialog(request["symbols"])

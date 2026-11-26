@@ -25,7 +25,7 @@ from frontend.shared.jobs import (
     render_refresh_job_ui,
     set_page_symbols,
 )
-from frontend.shared.settings import MASKED_VALUE
+from frontend.shared.constants import MASKED_VALUE
 from frontend.widgets.allocation import render_portfolio_allocation
 from frontend.widgets.correlation import render_correlation_matrix
 from frontend.widgets.export_summary import (

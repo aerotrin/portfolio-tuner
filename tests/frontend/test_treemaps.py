@@ -5,11 +5,7 @@ import pandas as pd
 import pytest
 
 from frontend.widgets.treemaps import (
-    CHANGE_COLOR_MAX,
-    CHANGE_COLOR_NEUTRAL,
     COLOR_REL_VOLUME,
-    REL_VOLUME_COLOR_MAX,
-    TOTAL_RETURN_COLOR_MAX,
     _age_dots,
     intraday_map_key,
     total_return_map_key,
@@ -17,6 +13,12 @@ from frontend.widgets.treemaps import (
     format_cap,
     render_treemap_intraday,
     render_treemap_positions,
+)
+from frontend.settings import (
+    CHANGE_COLOR_MAX,
+    CHANGE_COLOR_NEUTRAL,
+    REL_VOLUME_COLOR_MAX,
+    TOTAL_RETURN_COLOR_MAX,
 )
 
 GROUPS = ["region", "group_label"]

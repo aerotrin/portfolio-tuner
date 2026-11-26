@@ -1,12 +1,13 @@
 from typing import Any, cast
 
 from frontend.shared.accounts import FIXED_INCOME
-from frontend.shared.settings import (
+from frontend.settings import (
+    HEIGHT_CASH_DONUT,
     HEIGHT_POSITIONS_TREEMAP_ROW,
     LOSS_LIMIT,
-    MASKED_VALUE,
     TAKE_PROFIT_LIMIT,
 )
+from frontend.shared.constants import MASKED_VALUE
 from frontend.shared.styles import (
     POSITIONS_CASH_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
@@ -34,8 +35,6 @@ from frontend.widgets.treemaps import (
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-
-HEIGHT_CASH_DONUT = 160
 
 
 def holdings_shading_key() -> str:

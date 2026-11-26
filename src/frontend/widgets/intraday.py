@@ -13,14 +13,14 @@ from frontend.widgets.filters import sync_facets_to_drill
 from frontend.widgets.kpis import render_intraday_health_bar
 from frontend.widgets.price_chart import symbol_click_kwargs
 from frontend.widgets.treemaps import (
-    CHANGE_COLOR_MAX,
     COLOR_CHANGE,
     COLOR_REL_VOLUME,
-    REL_VOLUME_COLOR_MAX,
     format_cap,
     leaf_labels,
     render_treemap_intraday,
 )
+from frontend.settings import CHANGE_COLOR_MAX, REL_VOLUME_COLOR_MAX
+from frontend.shared.constants import REL_VOLUME_WINDOW
 
 DRILL_COLS = ["region", "group_label"]
 METRIC_LABELS = {COLOR_CHANGE: "Change %", COLOR_REL_VOLUME: "Rel. volume"}
@@ -235,7 +235,7 @@ def render_market_intraday(
     render_intraday_health_bar(flat, show_squares=False)
     if color_by == COLOR_REL_VOLUME:
         st.caption(
-            "Colour: today's volume ÷ 20-day average, darkest at "
+            f"Colour: today's volume ÷ {REL_VOLUME_WINDOW}-day average, darkest at "
             f"{REL_VOLUME_COLOR_MAX:.0f}× or more. Reads low early in the session."
         )
     else:
