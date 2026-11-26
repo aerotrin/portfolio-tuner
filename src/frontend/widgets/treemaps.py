@@ -10,6 +10,28 @@ from frontend.shared.time import humanize_timestamp
 COLOR_CHANGE = "change_percent"
 COLOR_REL_VOLUME = "relative_volume"
 REL_VOLUME_COLOR_MAX = 3.0
+# Change colours saturate at a fixed move, so one outlier cannot wash out the
+# map and a shade means the same move every day.
+CHANGE_COLOR_MAX = 0.04
+TOTAL_RETURN_COLOR_MAX = 0.25
+CHANGE_COLOR_NEUTRAL = "#ECEFF1"
+# Red and green differ in lightness so they stay apart under red-green colour
+# blindness; tiles also print the signed change, so colour is never the only cue
+CHANGE_COLOR_SCALE = ["#D32F2F", CHANGE_COLOR_NEUTRAL, "#15803D"]
+
+
+def format_cap(fraction: float) -> str:
+    """0.04 -> "4%", 0.025 -> "2.5%": a colour cap as written, not rounded."""
+    return f"{round(fraction * 100, 2):g}%"
+
+
+def _diverging_color(column: str, cap: float) -> dict:
+    """Red below zero, neutral at zero, green above; full colour at ±cap."""
+    return {
+        "color": column,
+        "color_continuous_scale": CHANGE_COLOR_SCALE,
+        "range_color": (-cap, cap),
+    }
 
 
 def compact_number(value: float) -> str:
@@ -200,9 +222,7 @@ def render_treemap_intraday(
         base_config["color_continuous_scale"] = "Blues"
         base_config["range_color"] = (0, REL_VOLUME_COLOR_MAX)
     else:
-        base_config["color"] = "change_percent"
-        base_config["color_continuous_scale"] = "RdYlGn"
-        base_config["color_continuous_midpoint"] = 0
+        base_config.update(_diverging_color("change_percent", CHANGE_COLOR_MAX))
 
     if has_weight:
         base_config["values"] = "weight"
@@ -321,9 +341,7 @@ def render_treemap_positions(
         data_frame=df,
         path=path,
         values="weight",
-        color="gain_pct",
-        color_continuous_scale="RdYlGn",
-        color_continuous_midpoint=0,
+        **_diverging_color("gain_pct", TOTAL_RETURN_COLOR_MAX),
         custom_data=["display_text"],
         hover_data=(
             ["name", "timestamp"]

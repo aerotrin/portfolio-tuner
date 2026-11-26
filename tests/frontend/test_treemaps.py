@@ -5,9 +5,13 @@ import pandas as pd
 import pytest
 
 from frontend.widgets.treemaps import (
+    CHANGE_COLOR_MAX,
+    CHANGE_COLOR_NEUTRAL,
     COLOR_REL_VOLUME,
     REL_VOLUME_COLOR_MAX,
+    TOTAL_RETURN_COLOR_MAX,
     compact_number,
+    format_cap,
     render_treemap_intraday,
     render_treemap_positions,
 )
@@ -43,8 +47,17 @@ def _leaf_colors(fig) -> dict[str, float]:
 def test_default_colour_is_change_percent_diverging():
     fig = render_treemap_intraday(_frame([1.0, 2.0, np.nan]), group_cols=GROUPS)
 
-    assert fig.layout.coloraxis.cmid == 0
+    axis = fig.layout.coloraxis
+    assert (axis.cmin, axis.cmax) == (-CHANGE_COLOR_MAX, CHANGE_COLOR_MAX)
+    assert axis.colorscale[1] == (0.5, CHANGE_COLOR_NEUTRAL)
     assert _leaf_colors(fig)["BBB"] == -0.01
+
+
+def test_total_return_colour_has_its_own_wider_range():
+    axis = render_treemap_positions(_positions_frame()).layout.coloraxis
+
+    assert (axis.cmin, axis.cmax) == (-TOTAL_RETURN_COLOR_MAX, TOTAL_RETURN_COLOR_MAX)
+    assert axis.colorscale[1] == (0.5, CHANGE_COLOR_NEUTRAL)
 
 
 def test_relative_volume_colour_is_sequential_and_clipped():
@@ -67,6 +80,14 @@ def test_tile_text_shows_the_multiple_only_when_known():
 
     assert "Vol. 100 · 1.5×<br>" in text["AAA"]
     assert "×" not in text["CCC"]
+
+
+@pytest.mark.parametrize(
+    "fraction, text",
+    [(0.04, "4%"), (0.05, "5%"), (0.025, "2.5%"), (0.07, "7%"), (0.25, "25%")],
+)
+def test_format_cap_keeps_half_steps(fraction, text):
+    assert format_cap(fraction) == text
 
 
 def test_compact_number():

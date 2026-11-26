@@ -9,9 +9,11 @@ from frontend.shared.symbols_loader import TYPE_ORDER, SymbolGroup, facet_sort_k
 from frontend.widgets.filters import sync_facets_to_drill
 from frontend.widgets.kpis import render_intraday_health_bar
 from frontend.widgets.treemaps import (
+    CHANGE_COLOR_MAX,
     COLOR_CHANGE,
     COLOR_REL_VOLUME,
     REL_VOLUME_COLOR_MAX,
+    format_cap,
     leaf_labels,
     render_treemap_intraday,
 )
@@ -231,6 +233,11 @@ def render_market_intraday(
         st.caption(
             "Colour: today's volume ÷ 20-day average, darkest at "
             f"{REL_VOLUME_COLOR_MAX:.0f}× or more. Reads low early in the session."
+        )
+    else:
+        st.caption(
+            "Colour: day change, full red or green at "
+            f"±{format_cap(CHANGE_COLOR_MAX)} or more."
         )
 
     heading = _quotes_heading(f"{t_str} Quotes", sel_types, drill_path)
