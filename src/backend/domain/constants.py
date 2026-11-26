@@ -19,6 +19,4 @@ HYP_GROWTH_START = 10000
 
 # ── Visualizer and Optimizer ────────────────────────────────────
 NUM_PORTFOLIOS = 5000
-TAKE_PROFIT_LIMIT = 0.25
 COR_PAIRS = 20
-LOSS_LIMIT = -0.15

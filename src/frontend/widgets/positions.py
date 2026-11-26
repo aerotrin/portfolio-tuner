@@ -1,7 +1,12 @@
 from typing import Any, cast
 
 from frontend.shared.accounts import FIXED_INCOME
-from frontend.shared.settings import HEIGHT_POSITIONS_TREEMAP_ROW, MASKED_VALUE
+from frontend.shared.settings import (
+    HEIGHT_POSITIONS_TREEMAP_ROW,
+    LOSS_LIMIT,
+    MASKED_VALUE,
+    TAKE_PROFIT_LIMIT,
+)
 from frontend.shared.styles import (
     POSITIONS_CASH_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
@@ -22,6 +27,7 @@ from frontend.widgets.kpis import (
 from frontend.widgets.treemaps import (
     render_treemap_intraday,
     render_treemap_positions,
+    format_cap,
     intraday_map_key,
     total_return_map_key,
 )
@@ -30,6 +36,16 @@ import plotly.graph_objects as go
 import streamlit as st
 
 HEIGHT_CASH_DONUT = 160
+
+
+def holdings_shading_key() -> str:
+    """What the green/red row shading in the holdings tables means."""
+    return (
+        "**Row shading:** green when a position's total gain is "
+        f"+{format_cap(TAKE_PROFIT_LIMIT)} or more (take-profit level), red at "
+        f"−{format_cap(abs(LOSS_LIMIT))} or worse (stop-loss level). Gain and "
+        "change figures are coloured green or red by sign."
+    )
 
 
 def _cash_by_account_donut(df: pd.DataFrame, hide_balances: bool) -> go.Figure:
@@ -245,7 +261,7 @@ def render_portfolio_positions(
             )
 
         # Positions Table
-        st.markdown("##### Holdings")
+        st.markdown("##### Holdings", help=holdings_shading_key())
         _render_cash_section(cash_accounts or [], portfolio_total_value, hide_balances)
         if not equity_df.empty:
             st.markdown("###### Stocks & ETFs")
