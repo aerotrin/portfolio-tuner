@@ -1,6 +1,11 @@
 import pandas as pd
 
-from frontend.widgets.intraday import _drill_filter, _next_level, _quotes_heading
+from frontend.widgets.intraday import (
+    _drill_filter,
+    _next_level,
+    _quotes_heading,
+    _sort_quotes,
+)
 
 TOP = "ETF Market"
 
@@ -113,3 +118,37 @@ def test_quotes_heading():
         _quotes_heading("ETF Quotes", ["Fixed Income", "Forex"], "US")
         == "ETF Quotes (Fixed Income, Forex) · US"
     )
+
+
+# Sort ----------------------------------------------------------------------------
+
+
+def _quotes() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "change_percent": [0.03, -0.01, 0.02, 0.01],
+            "relative_volume": [0.5, 2.5, None, 1.2],
+            "dollar_volume": [9e6, 2e6, None, 5e6],
+        },
+        index=pd.Index(["AAA", "BBB", "IDX", "CCC"], name="symbol"),
+    )
+
+
+def test_sort_by_change_percent():
+    out = _sort_quotes(_quotes(), "change_percent")
+    assert list(out.index) == ["AAA", "IDX", "CCC", "BBB"]
+
+
+def test_sort_by_relative_volume_puts_missing_last():
+    out = _sort_quotes(_quotes(), "relative_volume")
+    assert list(out.index) == ["BBB", "CCC", "AAA", "IDX"]
+
+
+def test_sort_falls_back_to_change_percent_without_the_metric():
+    out = _sort_quotes(_quotes().drop(columns="relative_volume"), "relative_volume")
+    assert list(out.index) == ["AAA", "IDX", "CCC", "BBB"]
+
+
+def test_sort_by_dollar_volume_puts_missing_last():
+    out = _sort_quotes(_quotes(), "dollar_volume")
+    assert list(out.index) == ["AAA", "CCC", "BBB", "IDX"]

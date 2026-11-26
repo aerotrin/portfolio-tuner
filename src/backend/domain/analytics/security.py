@@ -260,6 +260,15 @@ def compute_volume_metrics(volume: pd.Series) -> Dict[str, Optional[float]]:
     return {"avg_volume": avg, "relative_volume": float(today) / avg}
 
 
+def compute_dollar_volume(volume: float, close: float) -> Optional[float]:
+    """Value traded today (volume x price) in the security's own currency.
+    None with no traded volume (indices, FX)."""
+    if pd.isna(volume) or pd.isna(close):
+        return None
+    value = float(volume) * float(close)
+    return value if np.isfinite(value) and value > 0 else None
+
+
 def compute_performance_metrics(
     df: pd.DataFrame, rf_rate: float = RISK_FREE_RATE
 ) -> pd.DataFrame:

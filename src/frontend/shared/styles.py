@@ -70,6 +70,11 @@ QUOTE_TABLE_CONFIG = {
     "relative_volume": st.column_config.NumberColumn(
         "Rel Vol", format="%.1f×", help="Today's volume ÷ 20-day average volume"
     ),
+    "dollar_volume": st.column_config.NumberColumn(
+        "$ Vol",
+        format="compact",
+        help="Today's volume × price, in the security's own currency",
+    ),
     # "open": st.column_config.NumberColumn("Open", format="accounting"),
     "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),

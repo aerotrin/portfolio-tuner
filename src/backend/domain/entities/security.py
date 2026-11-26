@@ -157,6 +157,7 @@ class PerformanceMetric(BaseModel):
     near_52wk_lo: bool = Field(default=False)
     avg_volume: Optional[float] = Field(default=None)
     relative_volume: Optional[float] = Field(default=None)
+    dollar_volume: Optional[float] = Field(default=None)
     last_calculated: datetime = Field(default_factory=datetime.now)
 
 

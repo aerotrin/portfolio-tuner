@@ -17,7 +17,19 @@ from frontend.widgets.treemaps import (
 )
 
 DRILL_COLS = ["region", "group_label"]
-COLOR_LABELS = {COLOR_CHANGE: "Change %", COLOR_REL_VOLUME: "Rel. volume"}
+METRIC_LABELS = {COLOR_CHANGE: "Change %", COLOR_REL_VOLUME: "Rel. volume"}
+SORT_DOLLAR_VOLUME = "dollar_volume"
+SORT_LABELS = {COLOR_CHANGE: "Change %", SORT_DOLLAR_VOLUME: "Dollar volume"}
+
+
+def _sort_quotes(df: pd.DataFrame, sort_by: str) -> pd.DataFrame:
+    """Highest first, securities without the metric last. Tiles are equal
+    sized, so this row order is the tile order within each group."""
+    if sort_by not in df.columns:
+        sort_by = COLOR_CHANGE
+    return df.sort_values(
+        by=sort_by, ascending=False, na_position="last", kind="stable"
+    )
 
 
 def _tile_ids(sub: pd.DataFrame, top_label: str) -> tuple[list, list]:
@@ -114,7 +126,6 @@ def render_market_intraday(
 
     t_str = market_type if market_type.isupper() else market_type.title()
     df = market_data.copy()
-    df = df.sort_values(by="change_percent", ascending=False)
 
     st.markdown("#### :material/show_chart: Intraday")
     chart_key = f"{key_prefix}-chart-intraday-viewer"
@@ -124,6 +135,7 @@ def render_market_intraday(
     )
     sel_types = []
     color_by = COLOR_CHANGE
+    sort_by = COLOR_CHANGE
     with st.container(horizontal=True, horizontal_alignment="distribute"):
         if len(type_options) > 1:  # Stocks page is all-Equity — hide a one-chip row
             sel_types = (
@@ -137,19 +149,35 @@ def render_market_intraday(
                 )
                 or []
             )
-        # Snapshots cached before the metric existed carry no relative volume
-        if "relative_volume" in df.columns:
+        # Snapshots cached before a metric existed do not carry it
+        if COLOR_REL_VOLUME in df.columns:
             color_by = (
                 st.segmented_control(
                     ":material/palette: Colour",
-                    list(COLOR_LABELS),
-                    format_func=COLOR_LABELS.get,
+                    list(METRIC_LABELS),
+                    format_func=METRIC_LABELS.__getitem__,
                     default=COLOR_CHANGE,
                     key=f"{key_prefix}-intraday-color",
                     width="content",
                 )
                 or COLOR_CHANGE
             )
+        if SORT_DOLLAR_VOLUME in df.columns:
+            sort_by = (
+                st.segmented_control(
+                    ":material/sort: Sort",
+                    list(SORT_LABELS),
+                    format_func=SORT_LABELS.__getitem__,
+                    default=COLOR_CHANGE,
+                    key=f"{key_prefix}-intraday-sort",
+                    help="Orders the symbols inside each group, highest first. "
+                    "Dollar volume: today's volume × price, in the security's "
+                    "own currency.",
+                    width="content",
+                )
+                or COLOR_CHANGE
+            )
+    df = _sort_quotes(df, sort_by)
     typed_groups = [g for g in groups if g.type in set(sel_types or type_options)]
 
     # One row per (group, symbol): the treemap shows a symbol once per group it

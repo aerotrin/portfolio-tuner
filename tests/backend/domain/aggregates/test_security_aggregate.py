@@ -28,3 +28,9 @@ def test_relative_volume_is_none_with_short_history():
     security = _security(n_bars=3, quote_volume=2_000_000.0)
 
     assert security.metrics.relative_volume is None
+
+
+def test_metrics_carry_dollar_volume_from_quote():
+    security = _security(n_bars=30, quote_volume=2_000_000.0)
+
+    assert security.metrics.dollar_volume == pytest.approx(2_000_000.0 * 129.0)

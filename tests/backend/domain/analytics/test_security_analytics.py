@@ -20,6 +20,7 @@ from src.backend.domain.analytics.security import (
     compute_portfolio_timeseries_indicators,
     compute_return_statistics,
     compute_timeseries_indicators,
+    compute_dollar_volume,
     compute_volume_metrics,
 )
 from src.backend.domain.constants import (
@@ -397,3 +398,13 @@ def test_steady_assets_alone_build_a_series() -> None:
     assert len(portf) == 252
     assert portf["daily_return"].dropna().gt(0).all()
     assert (portf["symbol"] == "PORTF").all()
+
+
+def test_dollar_volume_is_volume_times_price() -> None:
+    assert compute_dollar_volume(1_000.0, 25.5) == pytest.approx(25_500.0)
+
+
+def test_dollar_volume_none_without_traded_volume() -> None:
+    assert compute_dollar_volume(0.0, 5_000.0) is None
+    assert compute_dollar_volume(float("nan"), 25.5) is None
+    assert compute_dollar_volume(1_000.0, float("nan")) is None
