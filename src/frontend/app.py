@@ -77,6 +77,15 @@ def apply_compact_css() -> None:
                 transform: scaleY(0.70);   /* 56px → ~24px; use 0.36 for 20px */
                 transform-origin: top left;
             }
+
+            /* Movers heading row: selector hugs the heading and centres on
+               its text (drops the hidden anchor-link slot beside the title) */
+            .st-key-market-movers-heading [data-testid="stHeaderActionElements"] {
+                display: none;
+            }
+            .st-key-market-movers-heading .stButtonGroup {
+                margin-top: 0.4rem;
+            }
         </style>
         """,
         unsafe_allow_html=True,
