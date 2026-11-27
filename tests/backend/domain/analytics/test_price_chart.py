@@ -298,6 +298,8 @@ def test_build_price_chart_summary_uses_quote_and_profile() -> None:
     assert summary.eps == 2.5
     assert summary.dividend_yield == pytest.approx(0.02)
     assert summary.last_trade == quote.timestamp
+    assert summary.day_high == 51.0
+    assert summary.day_low == 48.0
     assert summary.high_52w == 51.0
     assert summary.low_52w == 9.0
 
@@ -310,6 +312,20 @@ def test_build_price_chart_without_quote_uses_last_two_closes() -> None:
     assert chart.summary.change_percent_1d == pytest.approx(0.1)
     assert chart.summary.last_trade == datetime(2024, 1, 2)
     assert chart.summary.market_cap is None
+    # Last stored session when no quote is merged
+    assert chart.summary.day_high == 12.0
+    assert chart.summary.day_low == 10.0
+
+
+def test_build_price_chart_day_low_skips_a_zero_low() -> None:
+    bars = _bars([10, 11])
+    bars[-1] = bars[-1].model_copy(update={"low": 0.0})
+
+    chart = build_price_chart("AAA", bars, None, None)
+
+    assert chart is not None
+    assert chart.summary.day_low is None
+    assert chart.summary.day_high == 12.0
 
 
 def test_build_price_chart_52_week_levels_use_last_252_sessions() -> None:

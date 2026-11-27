@@ -224,6 +224,8 @@ class PriceChartSummary(BaseModel):
     last_price: Optional[float] = None
     change_1d: Optional[float] = None
     change_percent_1d: Optional[float] = None
+    day_high: Optional[float] = None
+    day_low: Optional[float] = None
     high_52w: Optional[float] = None
     low_52w: Optional[float] = None
     volume: Optional[float] = None

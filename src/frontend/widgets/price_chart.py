@@ -23,6 +23,7 @@ from frontend.widgets.treemaps import compact_number
 from frontend.settings import PRICE_CHART_DEFAULTS, PRICE_CHART_MA_PERIOD_OPTIONS
 from frontend.shared.constants import (
     DAY_CHANGE_HELP,
+    FUNDAMENTALS_HELP,
     MISSING_VALUE,
     PRICE_CHART_MA_MAX_COUNT,
     PRICE_CHART_MA_MAX_PERIOD,
@@ -245,12 +246,37 @@ def _reset_prefs() -> None:
     _seed_widgets(prefs)
 
 
+def _fmt_range(low: float | None, high: float | None) -> str:
+    if low is None or high is None or pd.isna(low) or pd.isna(high):
+        return MISSING_VALUE
+    return f"{low:,.2f} – {high:,.2f}"
+
+
+def _fundamental_cards(summary: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Valuation cards that have a value, as (label, text). A fund has no
+    forward P/E, so its row is shorter."""
+    if summary.get("market_cap") is None and summary.get("net_assets"):
+        size = ("Net assets", _compact(summary.get("net_assets")))
+    else:
+        size = ("Mkt cap", _compact(summary.get("market_cap")))
+    cards = [
+        size,
+        ("P/E", _fmt(summary.get("trailing_pe"), ",.1f")),
+        ("Fwd P/E", _fmt(summary.get("forward_pe"), ",.1f")),
+        ("EPS", _fmt(summary.get("eps"), ",.2f")),
+        ("Div yield", _fmt(summary.get("dividend_yield"), ".2%")),
+    ]
+    return [(label, text) for label, text in cards if text != MISSING_VALUE]
+
+
 def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]):
     last = summary.get("last_price")
     change_1d = summary.get("change_1d")
     pct_1d = summary.get("change_percent_1d")
-    with st.container(border=True, horizontal=True):
-        st.metric(
+    # Content width keeps a range from being cut short; the row wraps instead
+    metric = partial(st.metric, width="content")
+    with st.container(border=True, horizontal=True, horizontal_alignment="distribute"):
+        metric(
             "Last",
             _fmt(last, ",.2f"),
             (
@@ -260,7 +286,7 @@ def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]
             ),
             help=DAY_CHANGE_HELP,
         )
-        st.metric(
+        metric(
             f"{range_key} change",
             _fmt(change.get("change_percent"), "+.2%"),
             (
@@ -271,10 +297,19 @@ def _render_kpis(summary: dict[str, Any], range_key: str, change: dict[str, Any]
             help="Change over the selected range, measured from the close "
             "before its first session",
         )
-        st.metric("52-week high", _fmt(summary.get("high_52w"), ",.2f"))
-        st.metric("52-week low", _fmt(summary.get("low_52w"), ",.2f"))
-        st.metric("Volume", _compact(summary.get("volume")))
-        st.metric("Market cap", _compact(summary.get("market_cap")))
+        metric(
+            "Day range",
+            _fmt_range(summary.get("day_low"), summary.get("day_high")),
+        )
+        metric(
+            "52W range",
+            _fmt_range(summary.get("low_52w"), summary.get("high_52w")),
+            help="Lowest daily low and highest daily high over the last "
+            "252 sessions",
+        )
+        metric("Volume", _compact(summary.get("volume")))
+        for i, (label, text) in enumerate(_fundamental_cards(summary)):
+            metric(label, text, help=FUNDAMENTALS_HELP if i == 0 else None)
 
 
 @st.dialog(

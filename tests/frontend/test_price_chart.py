@@ -5,7 +5,10 @@ import pandas as pd
 import pytest
 
 from frontend.settings import HEIGHT_PRICE_CHART_PANELS
+from frontend.shared.constants import MISSING_VALUE
 from frontend.widgets.price_chart import (
+    _fmt_range,
+    _fundamental_cards,
     parse_ma_periods,
     resolve_symbol_click,
     symbol_from_selection,
@@ -407,3 +410,49 @@ def test_reset_does_not_share_lists_with_the_settings() -> None:
     assert "MACD" not in PRICE_CHART_DEFAULTS["show"]
     assert 7 not in PRICE_CHART_DEFAULTS["ma_periods"]
     st.session_state.clear()
+
+
+# ── KPI row ─────────────────────────────────────────────────────────────────
+
+
+def test_range_reads_low_to_high() -> None:
+    assert _fmt_range(1234.5, 2345.678) == "1,234.50 – 2,345.68"
+
+
+@pytest.mark.parametrize("low, high", [(None, 2.0), (1.0, None), (float("nan"), 2.0)])
+def test_range_with_a_missing_end_is_blank(low, high) -> None:
+    assert _fmt_range(low, high) == MISSING_VALUE
+
+
+def test_fundamental_cards_follow_the_table_order() -> None:
+    cards = _fundamental_cards(
+        {
+            "market_cap": 2.5e9,
+            "trailing_pe": 20.04,
+            "forward_pe": 12.5,
+            "eps": 2.5,
+            "dividend_yield": 0.021,
+        }
+    )
+
+    assert [label for label, _ in cards] == [
+        "Mkt cap",
+        "P/E",
+        "Fwd P/E",
+        "EPS",
+        "Div yield",
+    ]
+    assert dict(cards)["P/E"] == "20.0"
+    assert dict(cards)["Div yield"] == "2.10%"
+
+
+def test_fundamental_cards_for_a_fund_show_net_assets_and_skip_blanks() -> None:
+    cards = _fundamental_cards(
+        {"market_cap": None, "net_assets": 4.0e10, "dividend_yield": 0.015}
+    )
+
+    assert [label for label, _ in cards] == ["Net assets", "Div yield"]
+
+
+def test_fundamental_cards_are_empty_without_fundamentals() -> None:
+    assert _fundamental_cards({}) == []

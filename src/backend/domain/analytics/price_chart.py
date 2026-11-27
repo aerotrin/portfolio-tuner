@@ -212,6 +212,7 @@ def _summarize(
         change = last - float(close.iloc[-2])
         change_percent = change / float(close.iloc[-2])
 
+    session = frame.iloc[-1]
     year = frame.tail(TRADING_DAYS)
     lows = year["low"][year["low"] > 0]
     if quote_used and quote is not None:
@@ -229,9 +230,11 @@ def _summarize(
         last_price=last,
         change_1d=change,
         change_percent_1d=change_percent,
+        day_high=_finite(session["high"]) if session["high"] > 0 else None,
+        day_low=_finite(session["low"]) if session["low"] > 0 else None,
         high_52w=_finite(year["high"].max()),
         low_52w=_finite(lows.min()) if not lows.empty else None,
-        volume=_finite(frame["volume"].iloc[-1]),
+        volume=_finite(session["volume"]),
         **derive_fundamentals(profile, last).model_dump(),
         last_trade=last_trade,
     )
