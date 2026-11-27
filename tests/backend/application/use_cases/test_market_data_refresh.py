@@ -65,14 +65,7 @@ def _synced(symbol: str) -> BarsSyncState:
 # ── pending_profiles ────────────────────────────────────────────────────────
 
 
-def test_unforced_refresh_fetches_only_missing_profiles() -> None:
-    manager = _manager(MagicMock())
-    manager.db.read_profiles.return_value = [_profile("OLD", age_days=400)]
-
-    assert manager.pending_profiles(["OLD", "NEW"]) == ["NEW"]
-
-
-def test_forced_refresh_skips_recent_profiles() -> None:
+def test_refresh_fetches_missing_and_stale_profiles() -> None:
     manager = _manager(MagicMock())
     manager.db.read_profiles.return_value = [
         _profile("FRESH", age_days=PROFILE_MAX_AGE_DAYS - 1),
@@ -80,9 +73,7 @@ def test_forced_refresh_skips_recent_profiles() -> None:
         _profile("NAIVE_STALE", age_days=PROFILE_MAX_AGE_DAYS + 1, aware=False),
     ]
 
-    pending = manager.pending_profiles(
-        ["FRESH", "STALE", "NAIVE_STALE", "MISSING"], force=True
-    )
+    pending = manager.pending_profiles(["FRESH", "STALE", "NAIVE_STALE", "MISSING"])
 
     assert pending == ["STALE", "NAIVE_STALE", "MISSING"]
 

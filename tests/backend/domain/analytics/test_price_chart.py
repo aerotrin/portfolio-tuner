@@ -273,7 +273,15 @@ def test_build_price_chart_from_quote_only() -> None:
 
 def test_build_price_chart_summary_uses_quote_and_profile() -> None:
     quote = _quote(date(2024, 1, 3))
-    profile = Profile(symbol="AAA", date=datetime(2024, 1, 1), marketCap=2.5e9)
+    profile = Profile(
+        symbol="AAA",
+        date=datetime(2024, 1, 1),
+        marketCap=2.5e9,
+        epsTrailing=2.5,
+        epsForward=4.0,
+        dividendRate=1.0,
+        sharesOutstanding=1.0e8,
+    )
 
     chart = build_price_chart("AAA", _bars([10, 11]), quote, profile)
 
@@ -283,7 +291,12 @@ def test_build_price_chart_summary_uses_quote_and_profile() -> None:
     assert summary.currency == "USD"
     assert summary.last_price == 50.0
     assert summary.volume == 500.0
-    assert summary.market_cap == 2.5e9
+    # Derived from the quote price, not the stored market cap
+    assert summary.market_cap == pytest.approx(5.0e9)
+    assert summary.trailing_pe == pytest.approx(20.0)
+    assert summary.forward_pe == pytest.approx(12.5)
+    assert summary.eps == 2.5
+    assert summary.dividend_yield == pytest.approx(0.02)
     assert summary.last_trade == quote.timestamp
     assert summary.high_52w == 51.0
     assert summary.low_52w == 9.0

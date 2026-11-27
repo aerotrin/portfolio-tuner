@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 import logging
+import math
 from typing import Any, Callable, Optional, TypeVar
 
 import yfinance as yf
@@ -69,6 +70,27 @@ def _market_time(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     return datetime.now(timezone.utc)
+
+
+def _first_finite(info: dict, *keys: str) -> Optional[float]:
+    for key in keys:
+        value = info.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(value):
+            return float(value)
+    return None
+
+
+def _dividend_rate(info: dict) -> Optional[float]:
+    """Annual dividend per share. Funds publish a yield instead of a rate, so
+    theirs is recovered from the yield and the price it was quoted at."""
+    rate = _first_finite(info, "dividendRate")
+    if rate is not None:
+        return rate
+    fund_yield = _first_finite(info, "yield")
+    price = _first_finite(info, "regularMarketPrice", "previousClose")
+    if fund_yield is not None and price is not None:
+        return fund_yield * price
+    return None
 
 
 class YFinanceClient(MarketDataProvider):
@@ -281,6 +303,18 @@ class YFinanceClient(MarketDataProvider):
                 industry=info.get("industry"),
                 sector=info.get("sector"),
                 country=info.get("country"),
+                epsTrailing=_first_finite(
+                    info, "trailingEps", "epsTrailingTwelveMonths"
+                ),
+                epsForward=_first_finite(info, "forwardEps", "epsForward"),
+                dividendRate=_dividend_rate(info),
+                # Yahoo's share counts for funds do not match their net assets
+                sharesOutstanding=(
+                    _first_finite(info, "impliedSharesOutstanding", "sharesOutstanding")
+                    if quote_type == "EQUITY"
+                    else None
+                ),
+                netAssets=_first_finite(info, "netAssets", "totalAssets"),
             )
         except Exception as e:
             logger.warning("Profile build failed for %s: %s", symbol, e)

@@ -25,7 +25,7 @@ from backend.domain.entities.security import (
 
 logger = logging.getLogger(__name__)
 
-# A forced refresh re-fetches a profile only once it is this old
+# A refresh, forced or not, re-fetches a profile only once it is this old
 PROFILE_MAX_AGE_DAYS = 7
 
 ANALYTICS_LOOKBACK_DAYS = 365
@@ -107,12 +107,10 @@ class MarketDataManager:
     def refresh_global_rates(self):
         self.db.upsert_global_rates(self.ds_primary.fetch_global_rates())
 
-    def pending_profiles(self, symbols: list[str], force: bool = False) -> list[str]:
+    def pending_profiles(self, symbols: list[str]) -> list[str]:
         if not symbols:
             return []
         existing = {p.symbol: p for p in self.db.read_profiles(symbols)}
-        if not force:
-            return [s for s in symbols if s not in existing]
         # Profiles change slowly and cost several provider requests each
         stale_before = datetime.now(tz=timezone.utc) - timedelta(
             days=PROFILE_MAX_AGE_DAYS

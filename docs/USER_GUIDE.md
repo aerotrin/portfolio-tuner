@@ -504,7 +504,7 @@ Two manual refresh options are available:
 | Button | Location | Behaviour |
 |---|---|---|
 | **Refresh Data** | Top-right of each page | Re-runs smart sync for the current page's symbols (incremental), in the background — the page stays interactive |
-| **Force Data Refresh** | Sidebar | Re-fetches quotes and the full date range of daily prices for **every** symbol the app uses — both market research lists plus the holdings of all accounts — ignoring sync state. Company profiles are re-fetched only when older than 7 days. A confirmation dialog shows the unique symbol count first; the job can take a few minutes and blocks the page while running |
+| **Force Data Refresh** | Sidebar | Re-fetches quotes and the full date range of daily prices for **every** symbol the app uses — both market research lists plus the holdings of all accounts — ignoring sync state. Company profiles are re-fetched only when older than 7 days, as on any other refresh. A confirmation dialog shows the unique symbol count first; the job can take a few minutes and blocks the page while running |
 
 On the Portfolio page, "the current page's symbols" means the holdings of **all** your accounts plus the benchmark/header symbols — one refresh keeps every account scope current. Market research pages refresh only their own symbol lists.
 

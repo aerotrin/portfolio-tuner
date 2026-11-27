@@ -4,6 +4,7 @@ from typing import List, Literal, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from backend.domain.analytics.fundamentals import derive_fundamentals
 from backend.domain.analytics.security import _calc_rsi
 from backend.domain.constants import (
     BOLLINGER_STD,
@@ -231,7 +232,7 @@ def _summarize(
         high_52w=_finite(year["high"].max()),
         low_52w=_finite(lows.min()) if not lows.empty else None,
         volume=_finite(frame["volume"].iloc[-1]),
-        market_cap=_finite(profile.marketCap) if profile else None,
+        **derive_fundamentals(profile, last).model_dump(),
         last_trade=last_trade,
     )
 

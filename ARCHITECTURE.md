@@ -129,7 +129,7 @@ The `AccountManager` use case builds a richer in-memory account representation (
 A `Security` aggregate combines everything known about a market instrument:
 
 - **Quote** — current price data (open, high, low, close, change, volume, timestamp)
-- **Profile** — static metadata (name, exchange, currency, sector, industry,  market cap, year-high/low)
+- **Profile** — slow-moving metadata (name, exchange, currency, sector, industry, market cap, year-high/low) plus the inputs for fundamentals: trailing and forward EPS, annual dividend rate, shares outstanding (all share classes, stocks only) and net assets (funds). `domain/analytics/fundamentals.py` divides these by the current price to give trailing P/E, forward P/E, dividend yield and market cap, so the ratios follow the quote without extra provider requests. Only the yfinance adapter supplies the inputs; with FMP as primary the ratios are empty
 - **Bars** — OHLCV history as a list of daily records
 - **Indicators** — computed timeseries (normalised close, daily return, and other derived series)
 - **Metrics** — scalar performance statistics (total return, annualised volatility, Sharpe ratio, max drawdown, Sortino ratio)
@@ -392,7 +392,7 @@ The database is hosted on Supabase (Postgres). SQLAlchemy is used as the ORM wit
 | `quotes` | Latest quote snapshot per symbol (OHLCV, change, timestamp). One row per symbol, overwritten on refresh. |
 | `bars` | Daily OHLCV history, about two years per symbol (`BARS_HISTORY_DAYS`, default 730); older rows are trimmed on refresh. Composite primary key `(symbol, date)`. Composite index on `(symbol, date)`. |
 | `bars_sync_state` | Tracks the last successful bar fetch per symbol (`last_bar_date`, `last_checked_at`, status). Used for smart sync. |
-| `profiles` | Company profile data (sector, industry, beta, market cap, etc.). One row per symbol. |
+| `profiles` | Company profile data (sector, industry, beta, market cap, EPS, dividend rate, share count, net assets, etc.). One row per symbol, re-fetched once it is 7 days old. |
 | `global_rates` | Current risk-free rate and CAD/USD FX rate. Single row, updated on refresh. `rf_rate` is stored as an annual decimal fraction (0.038 = 3.8%), regardless of provider. |
 
 The `bars_sync_state` table is particularly important for efficiency. Before fetching bars for a symbol, the system checks whether it has a recent successful sync. If so, it only fetches bars newer than `last_bar_date`, avoiding re-downloading redundant history on every refresh. The `force=True` flag bypasses this and re-fetches the full requested range.
@@ -451,10 +451,10 @@ Market data is fetched asynchronously in batches during refresh operations and s
 
 Refresh operations follow a two-phase pattern:
 
-1. **Pending determination** — `pending_quotes()`, `pending_bars()`, and `pending_profiles()` inspect the current database state and return only the work items that actually need fetching (e.g., symbols with no cached profile, or bar ranges not yet stored). `pending_bars()` leverages `BarsSyncState` to return per-symbol `(symbol, fetch_start, fetch_end)` tuples, requesting only the missing date range. The `force=True` flag bypasses this check and re-fetches the full requested range.
+1. **Pending determination** — `pending_quotes()`, `pending_bars()`, and `pending_profiles()` inspect the current database state and return only the work items that actually need fetching (e.g., symbols whose profile is missing or stale, or bar ranges not yet stored). `pending_bars()` leverages `BarsSyncState` to return per-symbol `(symbol, fetch_start, fetch_end)` tuples, requesting only the missing date range. The `force=True` flag bypasses this check for bars and re-fetches the full requested range.
 2. **Async execution** — `refresh_quotes_async()`, `refresh_bars_async()`, and `refresh_profiles_async()` accept the pending work lists produced above and execute the fetches concurrently, upserting results into the database as each symbol completes.
 
-The refreshers return the symbols they could not fetch. A bar fetch that ended in `ProviderRateLimitError` writes no sync-state row, so the symbol is not recorded as checked today and the next refresh tries it again; a symbol with no data keeps its `error` row as before. With `force`, `pending_profiles()` returns only profiles that are missing or older than `PROFILE_MAX_AGE_DAYS` (7), since profiles change slowly and cost three requests each.
+The refreshers return the symbols they could not fetch. A bar fetch that ended in `ProviderRateLimitError` writes no sync-state row, so the symbol is not recorded as checked today and the next refresh tries it again; a symbol with no data keeps its `error` row as before. `pending_profiles()` returns profiles that are missing or older than `PROFILE_MAX_AGE_DAYS` (7) on every refresh, forced or not, since profiles change slowly and cost three requests each.
 
 Each fetch uses a two-tier fallback: the primary provider is attempted first; if it returns no data, the backup provider is tried. Both tiers returning nothing results in a silent skip for that symbol rather than an exception, so a single unavailable symbol does not abort the entire refresh job.
 

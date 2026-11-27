@@ -69,6 +69,7 @@ This creates all tables, indexes, foreign keys, RLS policies, and role grants re
 | Script | Adds |
 |---|---|
 | [`001_instrument_terms.sql`](supabase/migrations/001_instrument_terms.sql) | `transactions.instrument_terms` — terms of manually entered GICs and term deposits |
+| [`002_profile_fundamentals.sql`](supabase/migrations/002_profile_fundamentals.sql) | `profiles.epsTrailing`, `epsForward`, `dividendRate`, `sharesOutstanding`, `netAssets` — inputs for P/E, dividend yield and live market cap. Run it before starting the upgraded backend |
 
 ### User Management
 

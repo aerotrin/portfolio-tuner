@@ -64,6 +64,21 @@ class Profile(BaseModel):
     industry: Optional[str] = Field(default=None)
     sector: Optional[str] = Field(default=None)
     country: Optional[str] = Field(default=None)
+    # Slow-moving inputs; price-sensitive ratios are derived from them
+    epsTrailing: Optional[float] = Field(default=None)
+    epsForward: Optional[float] = Field(default=None)
+    dividendRate: Optional[float] = Field(default=None)
+    sharesOutstanding: Optional[float] = Field(default=None)
+    netAssets: Optional[float] = Field(default=None)
+
+
+class Fundamentals(BaseModel):
+    market_cap: Optional[float] = None
+    net_assets: Optional[float] = None
+    trailing_pe: Optional[float] = None
+    forward_pe: Optional[float] = None
+    eps: Optional[float] = None
+    dividend_yield: Optional[float] = None
 
 
 class Quote(BaseModel):
@@ -205,6 +220,11 @@ class PriceChartSummary(BaseModel):
     low_52w: Optional[float] = None
     volume: Optional[float] = None
     market_cap: Optional[float] = None
+    net_assets: Optional[float] = None
+    trailing_pe: Optional[float] = None
+    forward_pe: Optional[float] = None
+    eps: Optional[float] = None
+    dividend_yield: Optional[float] = None
     last_trade: Optional[datetime] = None
 
 

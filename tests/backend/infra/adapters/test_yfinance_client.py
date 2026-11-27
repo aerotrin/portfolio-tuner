@@ -24,6 +24,7 @@ class FakeTicker:
     """yf.Ticker stand-in. `failures[symbol]` rate-limits that many calls."""
 
     failures: dict[str, int] = {}
+    info_payload: dict = {}
     info_reads: list[str] = []
     history_calls: list[tuple[str, dict]] = []
 
@@ -60,7 +61,11 @@ class FakeTicker:
     def info(self) -> dict:
         FakeTicker.info_reads.append(self.symbol)
         self._maybe_rate_limit()
-        return {"quoteType": "ETF", "longName": "Fund", "marketCap": 5.0e9}
+        return {
+            "quoteType": "ETF",
+            "longName": "Fund",
+            "marketCap": 5.0e9,
+        } | FakeTicker.info_payload
 
     def history(self, **kwargs) -> pd.DataFrame:
         FakeTicker.history_calls.append((self.symbol, kwargs))
@@ -97,6 +102,7 @@ def clock(monkeypatch) -> FakeClock:
 @pytest.fixture(autouse=True)
 def fake_yahoo(monkeypatch):
     FakeTicker.failures = {}
+    FakeTicker.info_payload = {}
     FakeTicker.info_reads = []
     FakeTicker.history_calls = []
     monkeypatch.setattr(yfc.yf, "Ticker", FakeTicker)
@@ -240,3 +246,58 @@ def test_profile_takes_three_slots(clock) -> None:
     client.fetch_stock_profile("QQQ")
 
     assert sum(clock.sleeps) == pytest.approx(60.05)
+
+
+def test_stock_profile_carries_the_fundamental_inputs(clock) -> None:
+    FakeTicker.info_payload = {
+        "quoteType": "EQUITY",
+        "trailingEps": 8.98,
+        "forwardEps": 10.57,
+        "dividendRate": 1.08,
+        "sharesOutstanding": 5.0e9,
+        "impliedSharesOutstanding": 1.2e10,
+    }
+
+    profile = _client().fetch_stock_profile("GOOGL")
+
+    assert profile.epsTrailing == 8.98
+    assert profile.epsForward == 10.57
+    assert profile.dividendRate == 1.08
+    # All share classes, not only the listed one
+    assert profile.sharesOutstanding == 1.2e10
+    assert profile.netAssets is None
+
+
+def test_fund_profile_recovers_the_dividend_rate_from_the_yield(clock) -> None:
+    FakeTicker.info_payload = {
+        "quoteType": "ETF",
+        "epsTrailingTwelveMonths": 2.87,
+        "yield": 0.02,
+        "regularMarketPrice": 50.0,
+        "sharesOutstanding": 3.5e8,
+        "netAssets": 2.3e10,
+    }
+
+    profile = _client().fetch_stock_profile("XIU.TO")
+
+    assert profile.epsTrailing == 2.87
+    assert profile.epsForward is None
+    assert profile.dividendRate == pytest.approx(1.0)
+    assert profile.sharesOutstanding is None
+    assert profile.netAssets == 2.3e10
+
+
+def test_profile_drops_non_finite_fundamentals(clock) -> None:
+    FakeTicker.info_payload = {
+        "quoteType": "EQUITY",
+        "trailingEps": float("nan"),
+        "epsTrailingTwelveMonths": 4.0,
+        "dividendRate": float("inf"),
+        "impliedSharesOutstanding": None,
+    }
+
+    profile = _client().fetch_stock_profile("AAA")
+
+    assert profile.epsTrailing == 4.0
+    assert profile.dividendRate is None
+    assert profile.sharesOutstanding is None

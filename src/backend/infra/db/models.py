@@ -100,6 +100,11 @@ class ProfileDB(Base):
     industry = mapped_column(String)
     sector = mapped_column(String)
     country = mapped_column(String)
+    epsTrailing = mapped_column(Float)
+    epsForward = mapped_column(Float)
+    dividendRate = mapped_column(Float)
+    sharesOutstanding = mapped_column(Float)
+    netAssets = mapped_column(Float)
 
 
 class TransactionDB(Base):

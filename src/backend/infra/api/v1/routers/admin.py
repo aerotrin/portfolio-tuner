@@ -260,7 +260,7 @@ async def _run_refresh_job(
             job.symbols, history_start, job.force
         )
         logger.debug("Bars pending: %d", len(bars_pending))
-        profiles_pending = market_man.pending_profiles(job.symbols, job.force)
+        profiles_pending = market_man.pending_profiles(job.symbols)
         logger.debug("Profiles pending: %d", len(profiles_pending))
         quotes_pending = market_man.pending_quotes(job.symbols)
         logger.debug("Quotes pending: %d", len(quotes_pending))

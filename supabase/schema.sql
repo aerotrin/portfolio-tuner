@@ -204,7 +204,12 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "cusip" "text",
     "industry" "text",
     "sector" "text",
-    "country" "text"
+    "country" "text",
+    "epsTrailing" double precision,
+    "epsForward" double precision,
+    "dividendRate" double precision,
+    "sharesOutstanding" double precision,
+    "netAssets" double precision
 );
 
 
