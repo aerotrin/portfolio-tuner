@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from frontend.shared.styles import (
+    drop_empty_columns,
     QUOTE_TABLE_CONFIG,
     quote_table_styler,
     with_symbol_links,
@@ -251,7 +252,7 @@ def render_market_intraday(
         styler,
         hide_index=True,
         height="content",
-        column_order=QUOTE_TABLE_CONFIG.keys(),
+        column_order=drop_empty_columns(QUOTE_TABLE_CONFIG, flat),
         column_config=config,
         **symbol_click_kwargs(
             f"{key_prefix}-table-intraday-viewer-quote", flat["symbol"].tolist()

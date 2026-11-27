@@ -173,6 +173,14 @@ class PerformanceMetric(BaseModel):
     avg_volume: Optional[float] = Field(default=None)
     relative_volume: Optional[float] = Field(default=None)
     dollar_volume: Optional[float] = Field(default=None)
+    high_52w: Optional[float] = Field(default=None)
+    low_52w: Optional[float] = Field(default=None)
+    market_cap: Optional[float] = Field(default=None)
+    net_assets: Optional[float] = Field(default=None)
+    trailing_pe: Optional[float] = Field(default=None)
+    forward_pe: Optional[float] = Field(default=None)
+    eps: Optional[float] = Field(default=None)
+    dividend_yield: Optional[float] = Field(default=None)
     last_calculated: datetime = Field(default_factory=datetime.now)
 
 

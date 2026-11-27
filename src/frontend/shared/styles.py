@@ -1,3 +1,5 @@
+from typing import Iterable
+
 import pandas as pd
 from pandas.io.formats.style import Styler
 import streamlit as st
@@ -17,6 +19,7 @@ from frontend.settings import (
 )
 from frontend.shared.constants import (
     DAY_CHANGE_HELP,
+    FUNDAMENTALS_HELP,
     MISSING_VALUE,
     NO_STYLE,
     REL_VOLUME_HELP,
@@ -81,6 +84,42 @@ def with_account_column(config: dict, after: str) -> dict:
     return result
 
 
+FUNDAMENTALS_CONFIG = {
+    "market_cap": st.column_config.NumberColumn(
+        "Mkt Cap", format="compact", help=FUNDAMENTALS_HELP
+    ),
+    "net_assets": st.column_config.NumberColumn(
+        "Net Assets", format="compact", help="Assets held by the fund"
+    ),
+    "trailing_pe": st.column_config.NumberColumn(
+        "P/E", format="%.1f", help=FUNDAMENTALS_HELP
+    ),
+    "forward_pe": st.column_config.NumberColumn(
+        "Fwd P/E", format="%.1f", help=FUNDAMENTALS_HELP
+    ),
+    "eps": st.column_config.NumberColumn(
+        "EPS", format="%.2f", help="Earnings per share, trailing twelve months"
+    ),
+    "dividend_yield": st.column_config.NumberColumn(
+        "Div Yield", format="percent", help=FUNDAMENTALS_HELP
+    ),
+}
+VALUATION_CONFIG = {
+    key: FUNDAMENTALS_CONFIG[key] for key in ("trailing_pe", "dividend_yield")
+}
+
+
+def drop_empty_columns(order: Iterable[str], df: pd.DataFrame) -> list[str]:
+    """Leave out fundamentals columns no row has a value for (market cap on a
+    table of funds, forward P/E when the provider supplies none)."""
+    return [
+        col
+        for col in order
+        if col not in FUNDAMENTALS_CONFIG
+        or (col in df.columns and df[col].notna().any())
+    ]
+
+
 QUOTE_TABLE_CONFIG = {
     "symbol": st.column_config.TextColumn("Symbol"),
     "name": st.column_config.TextColumn("Name", width="medium"),
@@ -103,10 +142,21 @@ QUOTE_TABLE_CONFIG = {
         format="compact",
         help="Today's volume × price, in the security's own currency",
     ),
+    **FUNDAMENTALS_CONFIG,
     # "open": st.column_config.NumberColumn("Open", format="accounting"),
     "previousClose": st.column_config.NumberColumn("Last Close", format="accounting"),
     "high": st.column_config.NumberColumn("High", format="accounting"),
     "low": st.column_config.NumberColumn("Low", format="accounting"),
+    "high_52w": st.column_config.NumberColumn(
+        "52W High",
+        format="accounting",
+        help="Highest daily high over the last 252 sessions",
+    ),
+    "low_52w": st.column_config.NumberColumn(
+        "52W Low",
+        format="accounting",
+        help="Lowest daily low over the last 252 sessions",
+    ),
     "volatility": st.column_config.NumberColumn("Volatility", format="percent"),
     "exchange": st.column_config.TextColumn("Exchange"),
     "timestamp": st.column_config.DatetimeColumn("Last Trade", format="distance"),
@@ -159,6 +209,7 @@ POSITIONS_EQUITY_TABLE_CONFIG = {
     "relative_volume": st.column_config.NumberColumn(
         "Rel Vol", format="%.1f×", help=REL_VOLUME_HELP
     ),
+    **VALUATION_CONFIG,
     "intraday_change": st.column_config.NumberColumn("Day P/L CAD", format="dollar"),
     "gain": st.column_config.NumberColumn("Total P/L CAD", format="dollar"),
     "gain_pct": st.column_config.NumberColumn("Total P/L %", format="percent"),
@@ -383,6 +434,7 @@ PERFORMANCE_TABLE_CONFIG = {
     "sortino": st.column_config.NumberColumn("Sortino", format="%.3f"),
     "max_drawdown": st.column_config.NumberColumn("MDD", format="percent"),
     "max_drawdown_date": st.column_config.DateColumn("MDD Date", format="YYYY-MM-DD"),
+    **VALUATION_CONFIG,
     "exchange": st.column_config.TextColumn("Exchange"),
     "last_calculated": st.column_config.DatetimeColumn("Last Computed"),
 }

@@ -4,6 +4,7 @@ import streamlit as st
 from frontend.shared.symbols_loader import SymbolGroup
 from frontend.shared.constants import GROWTH_LABEL, MISSING_VALUE, RETURN_HORIZONS
 from frontend.shared.styles import (
+    drop_empty_columns,
     PERFORMANCE_TABLE_CONFIG,
     performance_table_styler,
     with_symbol_links,
@@ -250,7 +251,7 @@ def render_performance_view(
     event = st.dataframe(
         styler,
         hide_index=True,
-        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+        column_order=drop_empty_columns(PERFORMANCE_TABLE_CONFIG, sub_metrics),
         column_config=config,
         height="content",
         **symbol_click_kwargs(
@@ -274,7 +275,9 @@ def render_performance_view(
             performance_table_styler(portfolio_metrics),
             hide_index=True,
             height="content",
-            column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+            column_order=drop_empty_columns(
+                PERFORMANCE_TABLE_CONFIG, portfolio_metrics
+            ),
             column_config=PERFORMANCE_TABLE_CONFIG,
             key=f"table-{key_prefix}-portfolio-performance",
         )
@@ -287,7 +290,7 @@ def render_performance_view(
         styler,
         hide_index=True,
         height="content",
-        column_order=PERFORMANCE_TABLE_CONFIG.keys(),
+        column_order=drop_empty_columns(PERFORMANCE_TABLE_CONFIG, benchmark_metrics),
         column_config=config,
         **symbol_click_kwargs(
             f"table-{key_prefix}-benchmark-performance",

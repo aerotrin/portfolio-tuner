@@ -3,6 +3,7 @@ import streamlit as st
 
 from frontend.settings import MOVER_SHOW_COUNT
 from frontend.shared.styles import (
+    drop_empty_columns,
     QUOTE_TABLE_CONFIG,
     quote_table_styler,
     with_symbol_links,
@@ -43,7 +44,7 @@ def _render_quote_table(df: pd.DataFrame, key: str) -> None:
         styler,
         hide_index=True,
         height="content",
-        column_order=QUOTE_TABLE_CONFIG.keys(),
+        column_order=drop_empty_columns(QUOTE_TABLE_CONFIG, df),
         column_config=config,
         **symbol_click_kwargs(key, df["symbol"].tolist()),
     )

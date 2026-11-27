@@ -129,7 +129,7 @@ The `AccountManager` use case builds a richer in-memory account representation (
 A `Security` aggregate combines everything known about a market instrument:
 
 - **Quote** — current price data (open, high, low, close, change, volume, timestamp)
-- **Profile** — slow-moving metadata (name, exchange, currency, sector, industry, market cap, year-high/low) plus the inputs for fundamentals: trailing and forward EPS, annual dividend rate, shares outstanding (all share classes, stocks only) and net assets (funds). `domain/analytics/fundamentals.py` divides these by the current price to give trailing P/E, forward P/E, dividend yield and market cap, so the ratios follow the quote without extra provider requests. Only the yfinance adapter supplies the inputs; with FMP as primary the ratios are empty
+- **Profile** — slow-moving metadata (name, exchange, currency, sector, industry, market cap, year-high/low) plus the inputs for fundamentals: trailing and forward EPS, annual dividend rate, shares outstanding (all share classes, stocks only) and net assets (funds). `domain/analytics/fundamentals.py` divides these by the current price to give trailing P/E, forward P/E, dividend yield and market cap, so the ratios follow the quote without extra provider requests. The derived figures travel on each security's `PerformanceMetric` (for the tables) and on `PriceChartSummary` (for the price chart dialog). Only the yfinance adapter supplies the inputs; with FMP as primary the ratios are empty
 - **Bars** — OHLCV history as a list of daily records
 - **Indicators** — computed timeseries (normalised close, daily return, and other derived series)
 - **Metrics** — scalar performance statistics (total return, annualised volatility, Sharpe ratio, max drawdown, Sortino ratio)

@@ -13,6 +13,7 @@ from frontend.shared.styles import (
     POSITIONS_EQUITY_TABLE_CONFIG,
     POSITIONS_FIXED_INCOME_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
+    drop_empty_columns,
     balance_safe_column_order,
     cash_table_styler,
     positions_table_styler,
@@ -269,7 +270,9 @@ def render_portfolio_positions(
             st.dataframe(
                 styler,
                 hide_index=True,
-                column_order=balance_safe_column_order(equity_config, hide_balances),
+                column_order=drop_empty_columns(
+                    balance_safe_column_order(equity_config, hide_balances), equity_df
+                ),
                 column_config=config,
                 height="content",
                 **symbol_click_kwargs(

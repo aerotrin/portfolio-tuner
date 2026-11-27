@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from backend.domain.analytics.fundamentals import derive_fundamentals
 from backend.domain.analytics.security import (
     compute_performance_metrics,
     compute_timeseries_indicators,
@@ -85,6 +86,12 @@ class Security:
             mdf = self.metrics_df.rename_axis("symbol").reset_index()
             met_records = mdf.to_dict(orient="records")
 
+            # A quote with no price yet comes through as 0
+            priced = bars_df["close"][bars_df["close"] > 0]
+            last_price = float(priced.iloc[-1]) if not priced.empty else None
+            highs = bars_df["high"][bars_df["high"] > 0]
+            lows = bars_df["low"][bars_df["low"] > 0]
+
             self.metrics = PerformanceMetric.model_construct(
                 # symbol=self.quote.symbol,
                 name=self.quote.name,
@@ -95,6 +102,9 @@ class Security:
                 dollar_volume=compute_dollar_volume(
                     bars_df["volume"].iloc[-1], bars_df["close"].iloc[-1]
                 ),
+                high_52w=float(highs.max()) if not highs.empty else None,
+                low_52w=float(lows.min()) if not lows.empty else None,
+                **derive_fundamentals(self.profile, last_price).model_dump(),
             )
         except Exception as e:
             logger.error(

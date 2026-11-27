@@ -4,6 +4,8 @@ import pytest
 
 from frontend.settings import GREEN, RED
 from frontend.shared.styles import (
+    FUNDAMENTALS_CONFIG,
+    drop_empty_columns,
     PERFORMANCE_TABLE_CONFIG,
     POSITIONS_EQUITY_TABLE_CONFIG,
     POSITIONS_OPTION_TABLE_CONFIG,
@@ -135,3 +137,60 @@ def test_option_table_leads_with_the_underlying():
 
     start = columns.index("sparkline")
     assert columns[start + 1 : start + 3] == ["close", "change_percent"]
+
+
+# ── Fundamentals columns ────────────────────────────────────────────────────
+
+
+def test_quote_table_shows_all_fundamentals_after_dollar_volume() -> None:
+    order = list(QUOTE_TABLE_CONFIG)
+    start = order.index("dollar_volume") + 1
+
+    assert order[start : start + 6] == list(FUNDAMENTALS_CONFIG)
+    assert order[start + 6] == "previousClose"
+
+
+def test_holdings_and_performance_tables_show_pe_and_yield() -> None:
+    equity = list(POSITIONS_EQUITY_TABLE_CONFIG)
+    at = equity.index("relative_volume")
+    assert equity[at + 1 : at + 4] == [
+        "trailing_pe",
+        "dividend_yield",
+        "intraday_change",
+    ]
+
+    performance = list(PERFORMANCE_TABLE_CONFIG)
+    at = performance.index("max_drawdown_date")
+    assert performance[at + 1 : at + 4] == ["trailing_pe", "dividend_yield", "exchange"]
+
+    assert "trailing_pe" not in POSITIONS_OPTION_TABLE_CONFIG
+
+
+def test_fundamentals_columns_with_no_values_are_left_out() -> None:
+    funds = pd.DataFrame(
+        {
+            "symbol": ["XIU", "SPY"],
+            "name": [None, None],
+            "market_cap": [None, None],
+            "net_assets": [2.3e10, np.nan],
+            "trailing_pe": [18.0, 22.8],
+        }
+    )
+
+    order = drop_empty_columns(QUOTE_TABLE_CONFIG, funds)
+
+    assert "market_cap" not in order
+    # Missing from the frame altogether
+    assert "forward_pe" not in order
+    assert "net_assets" in order
+    assert "trailing_pe" in order
+    # Only fundamentals are dropped
+    assert "name" in order
+    assert "volume" in order
+
+
+def test_quote_table_shows_the_52_week_range_after_the_day_range() -> None:
+    order = list(QUOTE_TABLE_CONFIG)
+    at = order.index("high")
+
+    assert order[at : at + 5] == ["high", "low", "high_52w", "low_52w", "volatility"]

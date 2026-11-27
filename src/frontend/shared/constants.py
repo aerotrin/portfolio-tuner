@@ -72,6 +72,10 @@ BOLLINGER_LABEL = f"Bollinger ({BOLLINGER_WINDOW}, {BOLLINGER_STD})"
 REL_VOLUME_HELP = f"Today's volume ÷ {REL_VOLUME_WINDOW}-day average volume"
 GROWTH_LABEL = f"Growth of ${HYP_GROWTH_START:,}"
 DAY_CHANGE_HELP = "Change since the previous close"
+FUNDAMENTALS_HELP = (
+    "P/E, yield and market cap use the last price with earnings, dividend and "
+    "share figures refreshed weekly"
+)
 
 # ── Internals ───────────────────────────────────────────────────────────────
 NO_STYLE = ""
